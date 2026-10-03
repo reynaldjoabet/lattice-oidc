@@ -36,6 +36,18 @@ public class IdentityProvidersTest {
   }
 
   @Test
+  public void theExampleFileLoadsEveryProvider() {
+    IdentityProviders providers =
+        new IdentityProviders(
+            new LatticeConfig(
+                TestSettings.config(
+                    Map.of("lattice.identity-providers.file", "conf/identity-providers.example.json"))));
+    assertEquals(
+        List.of("okta", "azure", "google", "keycloak", "pingfederate", "partner-es256"),
+        providers.links().stream().map(IdentityProviders.Link::id).toList());
+  }
+
+  @Test
   public void acceptsTheFederationsKeyOfJavaOauthServerFiles() throws Exception {
     IdentityProviders providers = load("{\"federations\":[" + OKTA + "]}");
     assertTrue(providers.get("okta").isPresent());

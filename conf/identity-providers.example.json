@@ -1,0 +1,77 @@
+{
+  "identityProviders": [
+    {
+      "id": "okta",
+      "server": {
+        "name": "Okta",
+        "issuer": "https://your-org.okta.com"
+      },
+      "client": {
+        "clientId": "0oa1b2c3d4e5f6g7h8i9",
+        "clientSecret": "replace-with-the-okta-client-secret",
+        "redirectUri": "https://lattice.example.com/api/federation/callback/okta"
+      }
+    },
+    {
+      "id": "azure",
+      "server": {
+        "name": "Microsoft",
+        "issuer": "https://login.microsoftonline.com/00000000-0000-0000-0000-000000000000/v2.0"
+      },
+      "client": {
+        "clientId": "11111111-2222-3333-4444-555555555555",
+        "clientSecret": "replace-with-the-azure-client-secret",
+        "redirectUri": "https://lattice.example.com/api/federation/callback/azure"
+      }
+    },
+    {
+      "id": "google",
+      "server": {
+        "name": "Google",
+        "issuer": "https://accounts.google.com"
+      },
+      "client": {
+        "clientId": "1234567890-abcdef.apps.googleusercontent.com",
+        "clientSecret": "replace-with-the-google-client-secret",
+        "redirectUri": "https://lattice.example.com/api/federation/callback/google"
+      }
+    },
+    {
+      "id": "keycloak",
+      "server": {
+        "name": "Company SSO",
+        "issuer": "https://sso.example.com/realms/employees"
+      },
+      "client": {
+        "clientId": "lattice",
+        "clientSecret": "replace-with-the-keycloak-client-secret",
+        "redirectUri": "https://lattice.example.com/api/federation/callback/keycloak"
+      }
+    },
+    {
+      "id": "pingfederate",
+      "server": {
+        "name": "PingFederate",
+        "issuer": "https://pingfederate.example.com:9031"
+      },
+      "client": {
+        "clientId": "lattice",
+        "clientSecret": "replace-with-the-pingfederate-client-secret",
+        "redirectUri": "https://lattice.example.com/api/federation/callback/pingfederate",
+        "idTokenSignedResponseAlg": "RS256"
+      }
+    },
+    {
+      "id": "partner-es256",
+      "server": {
+        "name": "Partner (ES256 ID tokens)",
+        "issuer": "https://idp.partner.example"
+      },
+      "client": {
+        "clientId": "lattice-partner",
+        "redirectUri": "https://lattice.example.com/api/federation/callback/partner-es256",
+        "idTokenSignedResponseAlg": "ES256"
+      }
+    }
+  ]
+}
