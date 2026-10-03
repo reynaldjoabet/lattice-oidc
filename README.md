@@ -311,3 +311,11 @@ sequenceDiagram
     A-->>L: action=LOCATION, redirect with code
     L-->>B: 302 → client redirect_uri?code=...
 ```
+
+## Running the server in production
+```sh
+sbt --client stage
+APPLICATION_SECRET=$(openssl rand -hex 32) \
+AUTHLETE_SERVICE_APIKEY=<id> AUTHLETE_SERVICE_ACCESSTOKEN=<token> \
+target/universal/stage/bin/lattice-oidc -Dhttp.port=9000
+```

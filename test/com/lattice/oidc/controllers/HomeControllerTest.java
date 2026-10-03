@@ -24,7 +24,7 @@ public class HomeControllerTest {
           Result r = route(app, get("/"));
           assertEquals(200, r.status());
           String html = contentAsString(r);
-          assertTrue(html.contains("Lattice sign-in"));
+          assertTrue(html.contains("Sign-in service"));
           assertTrue(html.contains("noindex"));
           assertTrue(!html.contains("Welcome to Play"));
         });

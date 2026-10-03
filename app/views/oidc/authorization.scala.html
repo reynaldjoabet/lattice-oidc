@@ -6,7 +6,7 @@
 @import scala.jdk.CollectionConverters._
 @import scala.jdk.OptionConverters._
 @(page: AuthorizationPage)(implicit request: Http.Request)
-@layout("Sign in to " + page.clientName()) {
+@layout("Sign in to " + page.clientName(), wide = true) {
   <div class="client">
     @page.logoUri().toScala match {
       case Some(logo) => { <img class="logo" src="@logo" alt="@page.clientName() logo" referrerpolicy="no-referrer"> }
@@ -30,12 +30,12 @@
     @helper.CSRF.formField
     <input type="hidden" name="ticket" value="@page.ticket()">
 
-    <h2>Account</h2>
+    <h2>Your account</h2>
     @for(e <- page.error().toScala) { <div class="alert alert-error" role="alert" id="login-error">@e</div> }
     @page.loggedInAs().toScala match {
       case Some(user) => {
         <div class="account">
-          <span>Signed in as <strong>@user</strong></span>
+          <span><span class="avatar" aria-hidden="true">@user.take(1)</span>Signed in as <strong>@user</strong></span>
           <button type="submit" name="switchAccount" value="true" class="link" formnovalidate>Use a different account</button>
         </div>
       }
@@ -45,12 +45,15 @@
           <input type="text" id="loginId" name="loginId" value="@page.loginId()" autocomplete="username"
                  autocapitalize="off" spellcheck="false" required
                  @if(page.loginIdReadOnly()){readonly} else {autofocus}
-                 @if(page.error().isPresent()){aria-describedby="login-error"}>
+                 @if(page.error().isPresent()){aria-describedby="login-error" aria-invalid="true"}>
         </div>
         <div class="field">
           <label for="password">Password</label>
-          <input type="password" id="password" name="password" autocomplete="current-password" required
-                 @if(page.loginIdReadOnly()){autofocus}>
+          <div class="password">
+            <input type="password" id="password" name="password" autocomplete="current-password" required
+                   @if(page.loginIdReadOnly()){autofocus}
+                   @if(page.error().isPresent()){aria-invalid="true"}>
+          </div>
         </div>
       }
     }

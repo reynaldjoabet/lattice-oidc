@@ -5,8 +5,9 @@
 @(title: String, text: String, status: Int)(implicit request: Http.Request)
 @layout(title) {
   <h1>@title</h1>
-  <p>@text</p>
+  <p class="lead">@text</p>
   @if(status >= 400) {
-    <p class="muted">Reference: <code>@com.lattice.oidc.filters.RequestIdFilter.of(request)</code></p>
+    <p class="muted">Reference <code>@com.lattice.oidc.filters.RequestIdFilter.of(request)</code></p>
   }
+  <div class="stack"><a class="button" href="@com.lattice.oidc.controllers.routes.HomeController.index()">Done</a></div>
 }

@@ -1,10 +1,10 @@
 @*
  * Errors raised outside controllers (unknown page, rejected form, unexpected failure).
  *@
-@(status: Int, description: String, reference: String)
+@(status: Int, description: String, reference: String)(implicit request: Http.RequestHeader)
 @layout("Something went wrong") {
   <h1>Something went wrong</h1>
-  <p>@description</p>
-  <p class="muted">Error @status · Reference: <code>@reference</code></p>
-  <p><a href="/">Go to the start page</a></p>
+  <p class="lead">@description</p>
+  <p class="muted">Error @status · Reference <code>@reference</code></p>
+  <div class="stack"><a class="button" href="/">Go to the start page</a></div>
 }

@@ -104,7 +104,7 @@ public final class ErrorHandler extends DefaultHttpErrorHandler {
     if (isBrowserPage(request.path())) {
       return Responses.of(
           status,
-          views.html.oidc.error.render(status, description, reference).body(),
+          views.html.oidc.error.render(status, description, reference, request).body(),
           Responses.HTML,
           null);
     }

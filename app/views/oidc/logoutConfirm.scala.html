@@ -6,7 +6,7 @@
 @(req: LogoutRequest)(implicit request: Http.Request)
 @layout("Sign out") {
   <h1>Sign out?</h1>
-  <p class="lead">You will be signed out of Lattice and of the applications you used with it.</p>
+  <p class="lead">You will be signed out here and from the applications you used with this account.</p>
   <form method="post" action="@com.lattice.oidc.controllers.routes.LogoutController.confirm()">
     @helper.CSRF.formField
     @for(v <- req.idTokenHint().toScala) { <input type="hidden" name="id_token_hint" value="@v"> }

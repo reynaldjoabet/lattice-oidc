@@ -10,17 +10,17 @@
   <form method="post" action="@com.lattice.oidc.controllers.routes.DeviceController.verify()">
     @helper.CSRF.formField
     <div class="field">
-      <label for="userCode">Code</label>
-      <input type="text" id="userCode" name="userCode" class="code-input" value="@userCode"
+      <label for="userCode">Device code</label>
+      <input type="text" id="userCode" name="userCode" class="code-input" value="@userCode" placeholder="XXXX-XXXX"
              autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" maxlength="32" required
              @if(userCode.isEmpty()){autofocus}
-             @if(notice.isPresent()){aria-describedby="code-error"}>
+             @if(notice.isPresent()){aria-describedby="code-error" aria-invalid="true"}>
     </div>
     @user.toScala match {
       case Some(name) => {
         <div class="account">
-          <span>Signed in as <strong>@name</strong></span>
-          <a href="@com.lattice.oidc.controllers.routes.LogoutController.get()">Not you? Sign out</a>
+          <span><span class="avatar" aria-hidden="true">@name.take(1)</span>Signed in as <strong>@name</strong></span>
+          <a href="@com.lattice.oidc.controllers.routes.LogoutController.get()">Not you?</a>
         </div>
       }
       case None => {
@@ -31,10 +31,12 @@
         </div>
         <div class="field">
           <label for="password">Password</label>
-          <input type="password" id="password" name="password" autocomplete="current-password" required>
+          <div class="password">
+            <input type="password" id="password" name="password" autocomplete="current-password" required>
+          </div>
         </div>
       }
     }
-    <div class="buttons"><button type="submit" class="primary">Continue</button></div>
+    <div class="stack"><button type="submit" class="primary">Continue</button></div>
   </form>
 }

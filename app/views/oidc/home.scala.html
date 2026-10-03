@@ -1,23 +1,28 @@
 @*
  * Start page of the sign-in service. Applications send users to the authorization endpoint; this
- * page only explains where they are and lets a signed-in user sign out.
+ * page explains where they are, offers device sign-in and lets a signed-in user sign out.
  *@
 @import scala.jdk.OptionConverters._
 @(user: java.util.Optional[String])(implicit request: Http.Request)
-@layout("Lattice sign-in") {
-  <h1>Lattice sign-in</h1>
+@layout("Sign-in") {
   @user.toScala match {
     case Some(name) => {
+      <h1>You're signed in</h1>
+      <p class="lead">Applications that use this service will sign you in with this account.</p>
       <div class="account">
-        <span>Signed in as <strong>@name</strong></span>
-        <a href="@com.lattice.oidc.controllers.routes.LogoutController.get()">Sign out</a>
+        <span><span class="avatar" aria-hidden="true">@name.take(1)</span><strong>@name</strong></span>
       </div>
-      <p class="muted">Applications that use Lattice will sign you in with this account.</p>
+      <div class="stack">
+        <a class="button" href="@com.lattice.oidc.controllers.routes.DeviceController.verificationPage()">Connect a device</a>
+        <a class="button" href="@com.lattice.oidc.controllers.routes.LogoutController.get()">Sign out</a>
+      </div>
     }
     case None => {
-      <p class="lead">This is the sign-in service used by applications connected to Lattice.</p>
-      <p class="muted">To sign in, start from the application you want to use.</p>
+      <h1>Sign-in service</h1>
+      <p class="lead">To sign in, start from the application you want to use. It will bring you here.</p>
+      <div class="stack">
+        <a class="button primary" href="@com.lattice.oidc.controllers.routes.DeviceController.verificationPage()">Connect a device</a>
+      </div>
     }
   }
-  <p class="muted">Connecting a TV or other device? <a href="@com.lattice.oidc.controllers.routes.DeviceController.verificationPage()">Enter a device code</a></p>
 }
