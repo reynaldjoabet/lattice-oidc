@@ -83,12 +83,6 @@ public final class CibaHandler {
     // Identify a user based on the hint contained in the backchannel authentication request. If no
     // user can be identified by the hint, the request fails with "unknown_user_id".
     User user = userByHint(ba).orElseThrow(() -> fail(ba.getTicket(), Reason.UNKNOWN_USER_ID));
-    // Check the expiration of the login hint token if necessary. login_hint_token formats are
-    // deployment-specific; none is accepted by default, so such requests fail as expired.
-    if (ba.getHintType() == com.authlete.common.types.UserIdentificationHintType.LOGIN_HINT_TOKEN) {
-      // login_hint_token formats are deployment-specific; none is accepted by default.
-      throw fail(ba.getTicket(), Reason.EXPIRED_LOGIN_HINT_TOKEN);
-    }
     // Check the user code contained in the backchannel authentication request if necessary
     // (backchannel_user_code_parameter). The user code is stored as the "code" attribute of the user.
     if (ba.isUserCodeRequired()) {
@@ -120,7 +114,9 @@ public final class CibaHandler {
   /**
    * Gets a user by the hint. A {@code login_hint} may be a subject, an email address or a phone
    * number; for an {@code id_token_hint}, Authlete has already validated the ID token and extracted
-   * its subject.
+   * its subject. {@code login_hint_token} formats are deployment-specific and none is supported, so
+   * such requests fail with {@code unknown_user_id} (a deployment that adds one must also check its
+   * expiry and fail with {@code expired_login_hint_token}).
    */
   private Optional<User> userByHint(BackchannelAuthenticationResponse ba) {
     if (ba.getHintType() == null) {
