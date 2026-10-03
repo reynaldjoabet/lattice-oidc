@@ -41,21 +41,21 @@ public final class IdentityProviders {
     } catch (IOException | RuntimeException e) {
       throw new IllegalStateException("Cannot load identity providers file " + file, e);
     }
-    if (parsed.federations() == null) {
+    if (parsed.identityProviders() == null) {
       return;
     }
-    for (IdentityProviderConfig.Entry e : parsed.federations()) {
-      if (e.id() == null
-          || e.server() == null
-          || e.server().issuer() == null
-          || e.client() == null
-          || e.client().clientId() == null
-          || e.client().redirectUri() == null) {
-        LOG.warn("Ignoring incomplete identity provider entry: {}", e.id());
+    for (IdentityProviderConfig.Entry entry : parsed.identityProviders()) {
+      if (entry.id() == null
+          || entry.server() == null
+          || entry.server().issuer() == null
+          || entry.client() == null
+          || entry.client().clientId() == null
+          || entry.client().redirectUri() == null) {
+        LOG.warn("Ignoring incomplete identity provider entry: {}", entry.id());
         continue;
       }
-      providers.put(e.id(), new IdentityProvider(e));
-      LOG.info("Loaded identity provider {} ({})", e.id(), e.server().issuer());
+      providers.put(entry.id(), new IdentityProvider(entry));
+      LOG.info("Loaded identity provider {} ({})", entry.id(), entry.server().issuer());
     }
   }
 

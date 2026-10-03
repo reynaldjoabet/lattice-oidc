@@ -200,7 +200,7 @@ Each instance is the relying-party client for a single OpenID Provider (one entr
 
 A `@Singleton `that holds every configured provider:
 
-- At startup: reads the JSON file named by `lattice.identity-providers.file` (`IDENTITY_PROVIDERS_FILE`; `FEDERATIONS_FILE` is still accepted), skips incomplete entries with a warning, and creates one `IdentityProvider` per valid entry. The file format is java-oauth-server's `federations.json`.
+- At startup: reads the JSON file named by `lattice.identity-providers.file` (`IDENTITY_PROVIDERS_FILE`; `FEDERATIONS_FILE` is still accepted), skips incomplete entries with a warning, and creates one `IdentityProvider` per valid entry. The file has a top-level `identityProviders` array; entries use the format of java-oauth-server's `federations.json`, and its top-level `federations` key is still accepted.
 - `get(id)`: looks up the `IdentityProvider` for an ID such as "okta". `IdentityBrokerController` uses it in `/api/federation/initiation/:id` and `/api/federation/callback/:id`.
 - `links()`: returns (id, name) pairs so the consent page can show "Or sign in with: Okta, …".
 
@@ -266,7 +266,7 @@ flowchart TD
   - `GET /.well-known/openid-federation` returns Lattice's entity configuration, a signed JWT describing it as a provider and credential issuer.
   - `POST /api/federation/register` handles explicit registration: a client sends its entity configuration or trust chain, and Authlete verifies it and creates the client.
 - `Code`: `FederationController.configuration()` and `register()`. Authlete does the verification.
-Configured in: the Authlete service settings (trust anchors, entity ID, keys), not federations.json.
+Configured in: the Authlete service settings (trust anchors, entity ID, keys), not the identity providers file.
 - `Spec`: OpenID Federation 1.0.
 
 

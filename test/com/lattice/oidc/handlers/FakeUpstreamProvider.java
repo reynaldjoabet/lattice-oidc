@@ -136,7 +136,7 @@ public final class FakeUpstreamProvider implements AutoCloseable {
     file.toFile().deleteOnExit();
     Files.writeString(
         file,
-        "{\"federations\":[{\"id\":\"" + id + "\","
+        "{\"identityProviders\":[{\"id\":\"" + id + "\","
             + "\"server\":{\"name\":\"Upstream\",\"issuer\":\"" + issuer + "\"},"
             + "\"client\":{\"clientId\":\"" + CLIENT_ID + "\",\"clientSecret\":\"s3cret\","
             + "\"redirectUri\":\"" + redirectUri + "\"}}]}");
