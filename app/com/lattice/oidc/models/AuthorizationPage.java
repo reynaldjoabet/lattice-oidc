@@ -6,7 +6,7 @@ import com.authlete.common.dto.Client;
 import com.authlete.common.dto.DynamicScope;
 import com.authlete.common.dto.Scope;
 import com.lattice.oidc.common.Jsons;
-import com.lattice.oidc.handlers.Federations;
+import com.lattice.oidc.handlers.IdentityProviders;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -34,7 +34,7 @@ public record AuthorizationPage(
     String loginId,
     boolean loginIdReadOnly,
     Optional<String> loggedInAs,
-    List<Federations.Link> federations,
+    List<IdentityProviders.Link> identityProviders,
     Optional<String> error) {
 
   public record ScopeItem(String name, String description) {}
@@ -42,7 +42,7 @@ public record AuthorizationPage(
   public record ClaimPurpose(String claim, String purpose) {}
 
   public static AuthorizationPage from(
-      AuthorizationResponse info, Optional<String> loggedInAs, List<Federations.Link> federations) {
+      AuthorizationResponse info, Optional<String> loggedInAs, List<IdentityProviders.Link> identityProviders) {
     Client client = info.getClient();
     String clientName =
         client.getClientName() != null
@@ -75,7 +75,7 @@ public record AuthorizationPage(
         loginId,
         info.getSubject() != null,
         loggedInAs,
-        federations,
+        identityProviders,
         Optional.empty());
   }
 
@@ -84,7 +84,7 @@ public record AuthorizationPage(
         ticket, serviceName, clientName, description, logoUri, clientUri, policyUri, tosUri, scopes,
         claimsForIdToken, claimsForUserInfo, purpose, verifiedClaimsForIdToken,
         verifiedClaimsForUserInfo, authorizationDetails, loginId, loginIdReadOnly, loggedInAs,
-        federations, Optional.ofNullable(message));
+        identityProviders, Optional.ofNullable(message));
   }
 
   public AuthorizationPage withLoggedInAs(Optional<String> user) {
@@ -92,7 +92,7 @@ public record AuthorizationPage(
         ticket, serviceName, clientName, description, logoUri, clientUri, policyUri, tosUri, scopes,
         claimsForIdToken, claimsForUserInfo, purpose, verifiedClaimsForIdToken,
         verifiedClaimsForUserInfo, authorizationDetails, loginId, loginIdReadOnly, user,
-        federations, error);
+        identityProviders, error);
   }
 
   public boolean identityAssuranceRequested() {

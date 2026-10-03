@@ -7,7 +7,7 @@ import com.authlete.common.types.Prompt;
 import com.lattice.oidc.common.Requests;
 import com.lattice.oidc.common.Responses;
 import com.lattice.oidc.handlers.AuthorizationHandler;
-import com.lattice.oidc.handlers.Federations;
+import com.lattice.oidc.handlers.IdentityProviders;
 import com.lattice.oidc.models.AuthorizationInteraction;
 import com.lattice.oidc.models.AuthorizationPage;
 import com.lattice.oidc.security.AuditService;
@@ -46,7 +46,7 @@ public final class AuthorizationController extends BaseController {
   private final Interactions interactions;
   private final LoginService login;
   private final AuthorizationHandler service;
-  private final Federations federations;
+  private final IdentityProviders identityProviders;
 
   @Inject
   public AuthorizationController(
@@ -54,12 +54,12 @@ public final class AuthorizationController extends BaseController {
       Interactions interactions,
       LoginService login,
       AuthorizationHandler service,
-      Federations federations) {
+      IdentityProviders identityProviders) {
     this.sessions = sessions;
     this.interactions = interactions;
     this.login = login;
     this.service = service;
-    this.federations = federations;
+    this.identityProviders = identityProviders;
   }
 
   /**
@@ -128,7 +128,7 @@ public final class AuthorizationController extends BaseController {
   private Result interaction(Http.Request request, AuthorizationResponse info) {
     Optional<LoginState> current = reusableSession(request, info);
     Optional<String> shown = current.map(s -> s.user().displayName());
-    AuthorizationPage page = AuthorizationPage.from(info, shown, federations.links());
+    AuthorizationPage page = AuthorizationPage.from(info, shown, identityProviders.links());
     String bid = sessions.bid(request);
     interactions.put(
         KIND,

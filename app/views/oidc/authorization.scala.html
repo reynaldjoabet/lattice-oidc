@@ -66,11 +66,11 @@
           <label>Login ID <input type="text" name="loginId" value="@page.loginId()" autocomplete="username" autocapitalize="off" spellcheck="false" @if(page.loginIdReadOnly()){readonly} required></label>
           <label>Password <input type="password" name="password" autocomplete="current-password" required></label>
         </div>
-        @if(!page.federations().isEmpty()) {
+        @if(!page.identityProviders().isEmpty()) {
           <p>Or sign in with:</p>
           <ul class="federations">
-            @for(f <- page.federations().asScala) {
-              <li><a href="@com.lattice.oidc.controllers.routes.FederationController.initiation(f.id(), page.ticket())">@f.name()</a></li>
+            @for(f <- page.identityProviders().asScala) {
+              <li><a href="@com.lattice.oidc.controllers.routes.IdentityBrokerController.initiation(f.id(), page.ticket())">@f.name()</a></li>
             }
           </ul>
         }

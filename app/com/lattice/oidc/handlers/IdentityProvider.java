@@ -1,6 +1,6 @@
 package com.lattice.oidc.handlers;
 
-import com.lattice.oidc.models.FederationConfig;
+import com.lattice.oidc.models.IdentityProviderConfig;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.proc.BadJOSEException;
@@ -42,18 +42,20 @@ import java.net.URI;
 import java.net.URISyntaxException;
 
 /**
- * Relying-party side of login through an external OpenID Provider: authorization code flow with
- * PKCE, nonce and state; ID token validation; and a UserInfo call whose subject must match.
+ * An upstream OpenID Provider (Okta, Azure AD, Google, ...) that end-users can sign in with
+ * through identity brokering. Lattice acts as a relying party of this provider: authorization code
+ * flow with PKCE, state and nonce; ID token validation against the provider's keys; and a UserInfo
+ * call whose subject must match the ID token. Keycloak's equivalent is {@code OIDCIdentityProvider}.
  */
-public final class Federation {
+public final class IdentityProvider {
 
   private static final int TIMEOUT_MILLIS = 10_000;
 
-  private final FederationConfig.Entry config;
+  private final IdentityProviderConfig.Entry config;
   private volatile OIDCProviderMetadata metadata;
   private volatile IDTokenValidator validator;
 
-  Federation(FederationConfig.Entry config) {
+  IdentityProvider(IdentityProviderConfig.Entry config) {
     this.config = config;
   }
 
@@ -206,7 +208,7 @@ public final class Federation {
     try {
       return new URI(config.client().redirectUri());
     } catch (URISyntaxException e) {
-      throw new IOException("Invalid redirectUri for federation " + config.id(), e);
+      throw new IOException("Invalid redirectUri for identity provider " + config.id(), e);
     }
   }
 }

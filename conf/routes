@@ -18,12 +18,14 @@ GET     /api/authorization                          com.lattice.oidc.controllers
 POST    /api/authorization                          com.lattice.oidc.controllers.AuthorizationController.post(request: Request)
 POST    /api/authorization/decision                 com.lattice.oidc.controllers.AuthorizationController.decision(request: Request)
 
-# OpenID Federation and login via external OpenID Providers
+# OpenID Federation 1.0
 GET     /.well-known/openid-federation              com.lattice.oidc.controllers.FederationController.configuration()
 + nocsrf
 POST    /api/federation/register                    com.lattice.oidc.controllers.FederationController.register(request: Request)
-GET     /api/federation/initiation/:id              com.lattice.oidc.controllers.FederationController.initiation(request: Request, id: String, ticket: String)
-GET     /api/federation/callback/:id                com.lattice.oidc.controllers.FederationController.callback(request: Request, id: String)
+
+# Identity brokering: sign in with an upstream identity provider (paths kept for registered redirect URIs)
+GET     /api/federation/initiation/:id              com.lattice.oidc.controllers.IdentityBrokerController.initiation(request: Request, id: String, ticket: String)
+GET     /api/federation/callback/:id                com.lattice.oidc.controllers.IdentityBrokerController.callback(request: Request, id: String)
 
 # Token endpoint (RFC 6749, 8693, 7523, OIDC Native SSO)
 + nocsrf

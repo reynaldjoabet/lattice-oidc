@@ -57,7 +57,7 @@ public final class LatticeConfig {
   private final List<TrustedIssuer> trustedIssuers;
   private final List<ResourceServer> resourceServers;
   private final Ciba ciba;
-  private final Optional<String> federationsFile;
+  private final Optional<String> identityProvidersFile;
   private final String credentialOfferEndpoint;
   private final boolean obbEnabled;
   private final List<String> obbRootCertificates;
@@ -108,7 +108,7 @@ public final class LatticeConfig {
             ad.getDuration("poll-interval"),
             ad.getInt("poll-max-count"),
             ad.getDuration("notification-timeout"));
-    federationsFile = opt(c, "federation.file");
+    identityProvidersFile = opt(c, "identity-providers.file");
     credentialOfferEndpoint = c.getString("vci.credential-offer-endpoint");
     obbEnabled = c.getBoolean("obb.enabled");
     obbRootCertificates = c.getStringList("obb.root-certificates");
@@ -184,8 +184,8 @@ public final class LatticeConfig {
     return ciba;
   }
 
-  public Optional<String> federationsFile() {
-    return federationsFile;
+  public Optional<String> identityProvidersFile() {
+    return identityProvidersFile;
   }
 
   public String credentialOfferEndpoint() {
