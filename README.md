@@ -189,6 +189,10 @@ com.lattice.oidc
 └── modules/       AuthleteModule
 ```
 
+## Design and screens
+
+Designs for all 15 end-user and operator screens (sign-in, consent, device flow, CIBA, logout, account, wallets, open banking and the operator console) are in [docs/screens](docs/screens/README.md), with the design language, the flow each screen belongs to, and whether it is built yet.
+
 ## Running the server in production
 
 ```sh
