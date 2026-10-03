@@ -351,3 +351,356 @@ sequenceDiagram
     L->>A: /auth/authorization/issue (subject = sub@okta)
     L-->>B: 302 to client with code
 ```
+
+# OpenID Federation 1.0
+1. ## The problem it solves
+In plain OpenID Connect, trust is set up one pair at a time. Before a relying party (RP, the client app) can use an OpenID Provider (OP), the two have to know each other:
+
+| Approach | How the RP gets known to the OP | What's still missing |
+| --- | --- | --- |
+| Static registration | An admin registers the client by hand at each OP | Doesn't scale: 1,000 RPs × 50 OPs means 50,000 manual registrations |
+| Dynamic Client Registration (RFC 7591) | The RP registers itself through an API | It solves the mechanics, not trust: the OP still can't tell whether the client is a real, approved organisation or an attacker put in a table |
+
+Large ecosystems hit this immediately: national eID schemes (Italy's SPID/CIE run on OpenID Federation), university networks, open banking, health networks and EU digital identity wallets. Thousands of parties that have never met still need to trust each other automatically.
+
+`OpenID Federation's answer is to make trust hierarchical, the way TLS certificates work`. A single authority (the Trust Anchor) vouches for a set of intermediates, which in turn vouch for the relying parties and providers. The relying party can verify the chain of trust up to the anchor, and the provider can do the same. That way, a relying party can be registered automatically without any prior relationship with the provider. Trust Anchors vouch for intermediates, intermediates vouch for the actual OPs and RPs, and each of these "vouches" is a signed JWT. Two parties that have never met can each follow a chain of these JWTs up to a Trust Anchor they both trust. If both chains reach it, they trust each other, with no prior registration
+
+Real ecosystems hit that scale whenever many relying parties each have to accept many identity providers, usually because the user picks their own provider from a list. Every RP then needs a working relationship with every OP.Here are the real-world cases.
+
+### National digital identity: the best-known case
+Italy's SPID is the textbook example, and it's one of the first large deployments of OpenID Federation.
+
+  - Citizens get their digital identity from one of about a dozen accredited private identity providers (Poste, Aruba, InfoCert and others).
+  - Thousands of relying parties (municipalities, ministries, tax and health services, universities, plus private companies) all show a "Sign in with SPID" button listing every provider.
+  - That's thousands × about a dozen pairwise relationships, all of which must carry correct keys and metadata, stay current through key rotation, and be cut off immediately when a party is suspended
+
+  The real burden isn't the first registration but keeping all those pairs correct afterwards. That's what moved Italy to a Trust Anchor run by the government: a service joins once, and every provider trusts it automatically.
+
+
+### Research and education
+Universities worldwide run identity providers, and services such as journal publishers, research tools, eduroam and cloud computing grants want to accept users from any university. The eduGAIN federation is the trust framework that makes this work, and it uses OpenID Federation 1.0 to let relying parties and providers trust each other through a shared authority.  
+
+### Open banking and open finance
+Every bank (acting as the OP for its customers) must accept every licensed third-party provider (budgeting apps, payment initiators), and every provider wants to connect to every bank.
+
+Brazil's Open Finance has hundreds of participating institutions, any of which may need to connect to any other.
+
+This is already in Lattice. `ObbDcrHandler` handles the open banking solution to this exact problem. A central directory signs a software statement for every licensed provider, and banks trust the directory instead of each provider. That's a one-level version of federation: the directory plays the Trust Anchor and the software statement plays the Subordinate Statement. OpenID Federation generalises it with intermediates, metadata policies and trust marks
+
+### Digital identity wallets (EU and others)
+
+- Millions of wallets, many credential issuers (governments, universities, banks, employers) and very many verifiers (any shop, rental company or website checking an ID or diploma).
+- A verifier needs to know whether an issuer is legitimate, and a wallet needs to know whether the verifier asking for your passport data is allowed to ask.
+- This is the newest and biggest use case. OpenID Federation is one of the trust frameworks being used or considered with OID4VCI and OID4VP
+
+### Health care
+Hospitals, labs, insurers and patient apps across a region or country need to trust each other's systems for patient login and data exchange. Many independent organisations, each acting as both provider and consumer, again produce the many-to-many shape
+
+
+The deciding factor isn't raw numbers. It's whether there's an ecosystem with a governing authority (a government, a banking regulator, a research network) that sets the rules and decides who's in. That authority becomes the Trust Anchor. Without one, there's nobody to anchor the trust to
+
+2. ## The building blocks
+### Entities and roles
+
+Every participant is an entity, identified by an Entity ID, which is an HTTPS URL (for example `https://op.lattice.example`).
+
+```mermaid
+flowchart TD
+    TA[Trust Anchor<br/>e.g. national federation operator]
+    IA1[Intermediate<br/>e.g. Ministry of Health]
+    IA2[Intermediate<br/>e.g. Universities consortium]
+    OP[Leaf: OpenID Provider<br/>e.g. Lattice]
+    RP1[Leaf: Relying Party<br/>hospital portal]
+    RP2[Leaf: Relying Party<br/>university app]
+    TA --> IA1
+    TA --> IA2
+    IA1 --> OP
+    IA1 --> RP1
+    IA2 --> RP2
+```
+
+
+| Role | What it does |
+| --- | --- |
+| Trust Anchor (TA) | The root of trust. Its keys are configured out-of-band, the way root CA certificates ship in a browser |
+| Intermediate Authority | Vouches for entities below it. Lets an ecosystem delegate, for example "the Ministry approves health apps" |
+| Leaf entity | Does the real work: an OP, an RP, a credential issuer, a wallet provider |
+| Trust Mark Issuer | Issues signed badges such as "certified for the health sector" or "passed the security audit" |
+
+#### Entity Configuration: what an entity says about itself
+
+Every entity publishes a self-signed JWT at `<entity-id>/.well-known/openid-federation`. Its media type is `application/entity-statement+jwt`, and its payload looks like this:
+
+```json
+{
+  "iss": "https://op.lattice.example",
+  "sub": "https://op.lattice.example",
+  "iat": 1760000000,
+  "exp": 1760086400,
+  "jwks": { "keys": [ { "kty": "EC", "kid": "fed-1", ... } ] },
+  "authority_hints": [ "https://health.gov.example" ],
+  "metadata": {
+    "federation_entity": { "organization_name": "Lattice" },
+    "openid_provider": {
+      "issuer": "https://op.lattice.example",
+      "authorization_endpoint": "https://op.lattice.example/api/authorization",
+      "token_endpoint": "https://op.lattice.example/api/token",
+      "client_registration_types_supported": ["automatic", "explicit"],
+      "federation_registration_endpoint": "https://op.lattice.example/api/federation/register"
+    },
+    "openid_credential_issuer": { ... }
+  },
+  "trust_marks": [ { "id": "https://health.gov.example/certified", "trust_mark": "eyJ..." } ]
+}
+```
+- `iss = sub`: marks it as self-signed: the entity is talking about itself.
+- `jwks`: holds the entity's federation keys. These sign federation statements only. They are separate from its normal OIDC signing keys, which go in the metadata as usual.
+- `authority_hints`: says "my superiors are here", so others know where to look next.
+- `metadata`: holds the normal OIDC/OAuth metadata, grouped by entity type, because one entity can play several roles. Ours is both an OP and a credential issuer.
+
+On its own this proves nothing, since anyone can sign a statement about themselves. A superior has to vouch for it.
+
+#### Subordinate Statement: what a superior says about you
+A superior publishes a Subordinate Statement about each entity it vouches for. It's served from the superior's fetch endpoint (`federation_fetch_endpoint?sub=<entity-id>`):
+```json
+{
+  "iss": "https://health.gov.example",
+  "sub": "https://op.lattice.example",
+  "exp": 1760086400,
+  "jwks": { "keys": [ { "kid": "fed-1", ... } ] },
+  "metadata_policy": {
+    "openid_provider": {
+      "id_token_signing_alg_values_supported": { "subset_of": ["ES256", "PS256"] },
+      "token_endpoint_auth_methods_supported": { "subset_of": ["private_key_jwt", "tls_client_auth"] }
+    }
+  },
+  "constraints": { "max_path_length": 1 }
+}
+```
+
+- It is signed by the superior's key (`iss ≠ sub`).
+- Its `jwks` pins the subordinate's federation keys: "the real Lattice signs with key fed-1". This is what stops an impostor from publishing a fake Entity Configuration, because the impostor's key won't match the one the superior pinned.
+- `metadata_policy` lets the superior restrict or modify the subordinate's metadata
+- `constraints` limits what can happen further down the tree, such as path length or allowed entity types
+
+3. ## How a trust chain is built and checked
+Suppose a hospital portal (RP) wants to trust Lattice (OP), and the RP is configured to trust `https://federation.gov.example` as its Trust Anchor.
+
+```mermaid
+sequenceDiagram
+    participant RP as Hospital portal (RP)
+    participant OP as Lattice (OP)
+    participant IA as health.gov (Intermediate)
+    participant TA as federation.gov (Trust Anchor)
+
+    RP->>OP: GET /.well-known/openid-federation
+    OP-->>RP: Entity Configuration (self-signed)<br/>authority_hints: health.gov
+    RP->>IA: GET /.well-known/openid-federation
+    IA-->>RP: IA's Entity Configuration<br/>authority_hints: federation.gov
+    RP->>IA: GET /fetch?sub=https://op.lattice.example
+    IA-->>RP: Subordinate Statement about Lattice (signed by IA)
+    RP->>TA: GET /fetch?sub=https://health.gov.example
+    TA-->>RP: Subordinate Statement about IA (signed by TA)
+    RP->>RP: verify the chain bottom-up, apply policies,<br/>take the earliest exp
+```
+
+The resulting trust chain, a list of JWTs, is:
+
+```sh
+[0] Lattice's Entity Configuration                     signed by Lattice key fed-1
+[1] health.gov's statement about Lattice              signed by health.gov key
+[2] federation.gov's statement about health.gov 
+```
+
+`Verification runs from the top, which is the end you already trust`:
+
+- `Statement [2]` is checked with the Trust Anchor's key, which the RP already has. Now `health.gov`'s keys are trusted.
+- `Statement [1]` is checked with health.gov's keys taken from `[2]`. Now `Lattice`'s federation key `fed-1` is trusted.
+- `Statement [0]` is checked with `fed-1` taken from `[1]`. Now `Lattice`'s own metadata is trusted.
+- The chain expires at the earliest `exp` in it, so trust is re-checked regularly.
+
+If any link fails (a bad signature, an expired statement, or a superior that no longer issues a statement about you), the chain breaks and trust is gone. This is how revocation works: a superior simply stops vouching. Statements are short-lived, so removal spreads quickly without CRLs.
+
+Leaves don't have to do all this fetching themselves. A federation can run a resolve endpoint that returns the already-verified chain and the final metadata in one call.
+
+4. ## Metadata policy: the ecosystem's rules, enforced automatically
+Every superior in the chain can attach a metadata_policy. The policies are combined from the Trust Anchor down and then applied to the leaf's metadata. What comes out is the leaf's resolved metadata, the only metadata anyone actually uses.
+
+| Operator | Meaning | Example |
+| --- | --- | --- |
+| `value` | Force this value | `"subject_type": {"value": "pairwise"}` |
+| `default` | Use this value if none is given | `"default_max_age": {"default": 3600}` |
+| `add` | Always include these | `"contacts": {"add": ["soc@gov.example"]}` |
+| `one_of` | Must be one of these | `"token_endpoint_auth_method": {"one_of": ["private_key_jwt"]}` |
+| `subset_of` | Keep only the allowed values | Signing algorithms limited to `ES256` and `PS256` |
+| `superset_of` | Must include at least these | Must support `S256` PKCE |
+| `essential` | Must be present | `"jwks_uri": {"essential": true}` |
+
+So a Trust Anchor can say "no RS256 anywhere in this federation" once, and it applies to every member automatically. A lower level can only tighten a rule from above, never loosen it. If two levels' policies conflict, the chain is invalid.
+
+5. ## How an RP registers with an OP
+OpenID Federation offers two ways for an RP to start using an OP without manual setup.
+
+### Automatic registration (no registration step at all)
+
+- The RP uses its Entity ID as its `client_id`.
+- It sends a signed request object, so the authorization request proves it holds the RP's keys.
+- The OP sees a `client_id` it has never seen before, builds the RP's trust chain up to a Trust Anchor it trusts, applies the policies, and checks the request signature against the resolved keys.
+- If everything checks out, the flow continues as normal OIDC. The OP may cache the result until the chain expires.
+
+### Explicit registration (one call, then a normal client)
+
+```mermaid
+sequenceDiagram
+    participant RP as Relying Party
+    participant L as Lattice (FederationController)
+    participant A as Authlete
+
+    RP->>L: POST /api/federation/register<br/>Content-Type: application/entity-statement+jwt<br/>(its Entity Configuration)<br/>or application/trust-chain+json (a whole chain)
+    L->>A: /federation/registration
+    A->>A: resolve and verify the trust chain,<br/>apply metadata policy,<br/>register the client
+    A-->>L: OK + entity statement
+    L-->>RP: 200, application/entity-statement+jwt<br/>(registered metadata, client_id)
+    RP->>L: normal OIDC flows with that client_id
+```
+
+The OP's response is itself a signed entity statement containing the metadata it actually registered. The registration expires along with the trust chain.
+
+6. ## Trust goes both ways
+The RP uses the same process to check the OP: it resolves Lattice's chain to its own Trust Anchor before sending users there. That protects users from fake identity providers, which plain OIDC discovery doesn't, because discovery just believes whatever `/.well-known/openid-configuration` returns.
+
+7. ## Keys and rotation
+
+- Federation keys (jwks in the Entity Configuration) sign federation statements. They're pinned by your superior, so rotating them means your superior publishing a new statement. Rotation should be rare and coordinated.
+- Protocol keys (`jwks / jwks_uri` inside `metadata.openid_provider`) sign ID tokens and similar. They're protected by the chain, so you can rotate them freely by publishing new metadata.
+- There's a historical keys endpoint, so old signatures can still be checked after a rotation.
+
+8. ## Endpoints a federation uses
+
+| Endpoint | Who serves it | Purpose |
+| --- | --- | --- |
+| `/.well-known/openid-federation` | Every entity | Its own Entity Configuration |
+| `federation_fetch_endpoint` | Superiors | Subordinate Statement about a given `sub` |
+| `federation_list_endpoint` | Superiors | List of the subordinates it vouches for |
+| `federation_resolve_endpoint` | Usually TAs or resolvers | Returns a verified chain and resolved metadata |
+| `federation_trust_mark_status_endpoint` | Trust Mark Issuers | Is this trust mark still valid? |
+| `federation_registration_endpoint` | OPs | Explicit client registration |
+| `federation_historical_keys_endpoint` | Any | Retired federation keys |
+
+Lattice is a leaf entity that acts as an OP and a credential issuer. `FederationController.java` serves two endpoints:
+
+| Endpoint | What our code does | What Authlete does |
+| --- | --- | --- |
+| `GET /.well-known/openid-federation` | Asks Authlete for the Entity Configuration with entity types `OPENID_PROVIDER` and `OPENID_CREDENTIAL_ISSUER`, and returns it as `application/entity-statement+jwt` | Builds and signs the JWT from the service settings: Entity ID, federation keys, `authority_hints`, metadata, trust marks |
+| `POST /api/federation/register` | Accepts only `application/entity-statement+jwt` (an RP's Entity Configuration) or `application/trust-chain+json` (a full chain); anything else gets 415. Passes it to Authlete and maps the result | Resolves the RP's trust chain, verifies every signature up to a configured Trust Anchor, applies the metadata policies, registers the client and returns the signed result |
+
+ Every participant in the federation is an entity: Trust Anchors, Intermediates, leaves, Trust Mark Issuers and resolvers
+
+- `A leaf`   is an entity with no subordinates. It does the actual OIDC work.
+- `A Trust Anchor` is an entity with no superior. Its Entity Configuration has no `authority_hints`, and its keys are trusted because you configured them, not because anyone vouched for it.
+- `An Intermediate` has both: a superior above it and subordinates below it.
+
+
+1. `The Trust Anchor publishes a self-signed Entity Configuration, like everyone else`. That's how others discover its fetch endpoint and current keys. But you don't trust it because of that file: you check that the keys in it match the ones you were configured with.
+2. `Roles are relative to the chain`. An entity that is the Trust Anchor in one federation can be an Intermediate in another, for example a national federation that is itself a member of an EU-wide one. A trust chain always ends at whichever Trust Anchor you chose to trust.
+3. `One entity can play several protocol roles at once`. Lattice is a single leaf entity that is both an `openid_provider` and an `openid_credential_issuer`. That's why `FederationController.java` asks Authlete for an Entity Configuration with both entity types.
+
+In Lattice's case, the GET `/.well-known/openid-federation` endpoint is Lattice publishing its Entity Configuration as a leaf. 
+
+Each JWT in the chain is signed by a different entity, and the chain is simply those JWTs collected together.
+
+| Piece | Produced (signed) by | Where it's published |
+| --- | --- | --- |
+| [0] Lattice's Entity Configuration | **Lattice** (self-signed) | `https://op.lattice.example/.well-known/openid-federation` |
+| [1] Statement about Lattice | **health.gov** | health.gov's fetch endpoint `?sub=https://op.lattice.example` |
+| [2] Statement about health.gov | **federation.gov** (the Trust Anchor) | federation.gov's fetch endpoint `?sub=https://health.gov.example` |
+
+Collecting the pieces into a chain is a separate job. Three different parties can do it:
+
+- `The verifier assembles it`. This is the usual case. The party that wants to trust someone follows `authority_hints` upwards and fetches each piece, as in the sequence diagram earlier. When an unknown RP sends Lattice an authorization request, Authlete does this for Lattice.
+
+- `The subject assembles it and presents it`. The RP fetches its own chain in advance and hands it over. Lattice's registration endpoint accepts exactly this: POST `/api/federation/register` with Content-Type: `application/trust-chain+json` (`FederationController.java`). This saves the verifier the network round trips.
+
+- `A resolver assembles it`. A federation service with a resolve endpoint builds and verifies the chain, then returns the result.
+
+Even when the subject hands over its own chain, the verifier still checks everything. It can't be faked: every piece carries a signature, and the top must be checked against a Trust Anchor key the verifier already has configured.
+
+- `Finding the chain goes bottom-up`. The client starts from the leaf, because that's all it has.
+- `Trust flows top-down`. The root is the only thing trusted to begin with, so trust is passed down from it, one signature at a time.
+
+#### *Example: a browser visiting https://example.com*
+##### Phase 1: build the path, bottom-up
+
+The server sends its certificate plus the intermediate (leaf first):
+```sh
+example.com     issued by "R11"
+R11             issued by "ISRG Root X1"
+```
+The browser follows the issuer names upwards:
+- The leaf says its issuer is "R11", and that certificate was sent along.
+- R11 says its issuer is "ISRG Root X1", and that one is in the trust store that ships with the OS or browser. The search stops there.
+
+##### Phase 2: verify, trust flowing top-down
+
+```mermaid
+flowchart TD
+    R["ISRG Root X1<br/>(in the trust store: trusted from the start)"]
+    I["R11 intermediate"]
+    L["example.com"]
+    R -->|root's key verifies R11's signature<br/>so R11's key is now trusted| I
+    I -->|R11's key verifies the leaf's signature<br/>so the leaf's key is now trusted| L
+```
+- The root's key checks the signature on R11's certificate, so R11's key can be trusted.
+- R11's key checks the signature on the leaf certificate, so the leaf's key can be trusted.
+- Then the leaf-specific checks: does the name match `example.com`, is it within its dates, is it allowed for TLS servers, has it been revoked?
+
+
+#### Phase 1: build the path (bottom-up)
+In `SunCertPathBuilder.java`, `depthFirstSearchForward`  starts at the leaf and looks up each cert's issuer.
+
+```java
+// SunCertPathBuilder.java:269-296 (abridged)
+builder.getMatchingCerts(currentState, buildParams.certStores());   // find candidate issuers
+...
+builder.verifyCert(cert, nextState, cpList);                        // quick checks on each candidate
+...
+if (builder.isPathCompleted(cert)) { ... }                          // line 316: reached a trust anchor?
+...
+depthFirstSearchForward(cert.getIssuerX500Principal(), nextState, ...); // line 540: recurse upward
+```
+
+The stopping test is ForwardBuilder.isPathCompleted (`ForwardBuilder.java:748`):
+
+```java
+for (TrustAnchor anchor : trustAnchors) {
+    if (anchor.getTrustedCert() != null) {
+        if (cert.equals(anchor.getTrustedCert())) {   // the cert IS a trusted root
+            this.trustAnchor = anchor;
+            return true;
+        }
+        ...
+```        
+
+
+#### Phase 2: verify (trust flows top-down)
+`PKIXCertPathValidator.validate `(`PKIXCertPathValidator.java:162`) is given one trust anchor and builds a list of checkers. BasicChecker is the key one:
+```java
+BasicChecker bc = new BasicChecker(anchor, params.date(), params.sigProvider(), false);
+```
+Its constructor seeds the "previous key" with the anchor's public key (BasicChecker.java:83-93):
+```java
+this.trustedPubKey = anchor.getTrustedCert().getPublicKey();
+this.caName        = anchor.getTrustedCert().getSubjectX500Principal();
+...
+this.prevPubKey    = trustedPubKey;
+```
+`PKIXMasterCertPathValidator.validate` then walks the certificates in order, root side first (it takes a "reversedCertList"), and runs every checker on each. For each cert, `BasicChecker.check` does this (lines 137-150):
+
+```java
+verifyValidity(currCert);       // cert.checkValidity(date)      — dates
+verifyNameChaining(currCert);   // cert issuer DN must equal prevSubject
+verifySignature(currCert);      // cert.verify(prevPubKey, ...)  — the key above verifies this cert
+updateState(currCert);          // prevPubKey = currCert.getPublicKey(); prevSubject = currCert's subject
+```
+
+the initial "previous key" is the root's public key. The first certificate that gets checked is not the root
