@@ -1,6 +1,5 @@
-import Dependencies.{bouncycastle, flyway, hikaricp, password4j, postgres, slf4j}
+import Dependencies.{bouncycastle, flyway, hikaricp, nimbusOauth2Oidc, password4j, postgres, slf4j}
 
-ThisBuild / name         := """lattice-oidc"""
 ThisBuild / organization := "com.lattice"
 
 ThisBuild / scalaVersion := "3.3.8"
@@ -32,7 +31,6 @@ val jackson3Version = "3.2.2"
 
 val jacksonLibs = Seq(
   "com.fasterxml.jackson.core"       % "jackson-core",
-  "com.fasterxml.jackson.core"       % "jackson-annotations",
   "com.fasterxml.jackson.core"       % "jackson-databind",
   "com.fasterxml.jackson.datatype"   % "jackson-datatype-jdk8",
   "com.fasterxml.jackson.datatype"   % "jackson-datatype-jsr310",
@@ -43,7 +41,13 @@ val jacksonLibs = Seq(
   "com.fasterxml.jackson.module"    %% "jackson-module-scala"
 )
 
-val jacksonOverrides = jacksonLibs.map(_ % jacksonVersion)
+// jackson-annotations is shared by both lines: Jackson 3 needs the 2.22 annotations, which stay
+// backward compatible with the 2.19 databind used by Play and Pekko.
+val jacksonAnnotationsVersion = "2.22"
+
+val jacksonOverrides =
+  jacksonLibs.map(_ % jacksonVersion) :+
+    ("com.fasterxml.jackson.core" % "jackson-annotations" % jacksonAnnotationsVersion)
 
 ThisBuild / dependencyOverrides ++= jacksonOverrides
 
@@ -63,6 +67,7 @@ ThisBuild / libraryDependencies ++= Seq(
   hikaricp,
   flyway,
   postgres,
+  nimbusOauth2Oidc,
   "net.minidev"              % "json-smart"             % "2.6.0",
   "com.cronutils"            % "cron-utils"             % "9.2.1",
   "org.mindrot"              % "jbcrypt"                % "0.4",
@@ -79,7 +84,9 @@ ThisBuild / libraryDependencies ++= Seq(
   "com.authlete"             % "authlete-java-common"   % "4.48"
 )
 
-lazy val root = (project in file(".")).enablePlugins(PlayJava)
+lazy val root = (project in file("."))
+  .enablePlugins(PlayJava)
+  .settings(name := "lattice-oidc")
 
 addCommandAlias("fmt", "scalafmtAll; scalafmtSbt")
 addCommandAlias("fmtCheck", "scalafmtCheckAll; scalafmtSbtCheck")

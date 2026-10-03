@@ -1,0 +1,84 @@
+@import com.lattice.oidc.authorization.AuthorizationPage
+@import scala.jdk.CollectionConverters._
+@import scala.jdk.OptionConverters._
+@(page: AuthorizationPage)(implicit request: Http.Request)
+@layout(page.serviceName() + " | Authorization") {
+  <p class="service">@page.serviceName()</p>
+  <header class="client">
+    @for(logo <- page.logoUri().toScala) { <img class="logo" src="@logo" alt=""> }
+    <div>
+      <h1>@page.clientName()</h1>
+      @for(d <- page.description().toScala) { <p>@d</p> }
+      <ul class="links">
+        @for(u <- page.clientUri().toScala) { <li><a href="@u" target="_blank" rel="noopener">Homepage</a></li> }
+        @for(u <- page.policyUri().toScala) { <li><a href="@u" target="_blank" rel="noopener">Privacy policy</a></li> }
+        @for(u <- page.tosUri().toScala) { <li><a href="@u" target="_blank" rel="noopener">Terms of service</a></li> }
+      </ul>
+    </div>
+  </header>
+
+  @if(!page.scopes().isEmpty()) {
+    <h2>Permissions</h2>
+    <dl class="scopes">
+      @for(s <- page.scopes().asScala) { <dt>@s.name()</dt><dd>@s.description()</dd> }
+    </dl>
+  }
+  @if(!page.claimsForIdToken().isEmpty()) {
+    <h2>Claims for the ID token</h2>
+    <ul>@for(c <- page.claimsForIdToken().asScala) { <li>@c</li> }</ul>
+  }
+  @if(!page.claimsForUserInfo().isEmpty()) {
+    <h2>Claims for UserInfo</h2>
+    <ul>@for(c <- page.claimsForUserInfo().asScala) { <li>@c</li> }</ul>
+  }
+  @if(page.identityAssuranceRequested()) {
+    <h2>Identity assurance</h2>
+    @for(p <- page.purpose().toScala) { <p>Purpose: @p</p> }
+    @if(!page.verifiedClaimsForIdToken().isEmpty()) {
+      <h3>Verified claims for the ID token</h3>
+      <table><tr><th>Claim</th><th>Purpose</th></tr>
+        @for(c <- page.verifiedClaimsForIdToken().asScala) { <tr><td>@c.claim()</td><td>@c.purpose()</td></tr> }
+      </table>
+    }
+    @if(!page.verifiedClaimsForUserInfo().isEmpty()) {
+      <h3>Verified claims for UserInfo</h3>
+      <table><tr><th>Claim</th><th>Purpose</th></tr>
+        @for(c <- page.verifiedClaimsForUserInfo().asScala) { <tr><td>@c.claim()</td><td>@c.purpose()</td></tr> }
+      </table>
+    }
+  }
+  @for(details <- page.authorizationDetails().toScala) {
+    <h2>Authorization details</h2>
+    <pre>@details</pre>
+  }
+
+  <h2>Authorization</h2>
+  @for(e <- page.error().toScala) { <p class="error" role="alert">@e</p> }
+  <form method="post" action="@com.lattice.oidc.authorization.routes.AuthorizationController.decision()">
+    @helper.CSRF.formField
+    <input type="hidden" name="ticket" value="@page.ticket()">
+    @page.loggedInAs().toScala match {
+      case Some(user) => {
+        <p>Logged in as <strong>@user</strong>. To use another account, append <code>prompt=login</code> to the request.</p>
+      }
+      case None => {
+        <div class="login">
+          <label>Login ID <input type="text" name="loginId" value="@page.loginId()" autocomplete="username" autocapitalize="off" spellcheck="false" @if(page.loginIdReadOnly()){readonly} required></label>
+          <label>Password <input type="password" name="password" autocomplete="current-password" required></label>
+        </div>
+        @if(!page.federations().isEmpty()) {
+          <p>Or sign in with:</p>
+          <ul class="federations">
+            @for(f <- page.federations().asScala) {
+              <li><a href="@com.lattice.oidc.federation.routes.FederationController.initiation(f.id(), page.ticket())">@f.name()</a></li>
+            }
+          </ul>
+        }
+      }
+    }
+    <div class="buttons">
+      <button type="submit" name="authorized" value="true" class="primary">Authorize</button>
+      <button type="submit" name="denied" value="true" formnovalidate>Deny</button>
+    </div>
+  </form>
+}

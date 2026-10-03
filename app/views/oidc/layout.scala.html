@@ -1,0 +1,15 @@
+@(title: String)(content: Html)
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>@title</title>
+    <link rel="stylesheet" href="@routes.Assets.versioned("stylesheets/oidc.css")">
+  </head>
+  <body>
+    <main class="card">
+      @content
+    </main>
+  </body>
+</html>
