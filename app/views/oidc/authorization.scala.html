@@ -1,4 +1,4 @@
-@import com.lattice.oidc.authorization.AuthorizationPage
+@import com.lattice.oidc.models.AuthorizationPage
 @import scala.jdk.CollectionConverters._
 @import scala.jdk.OptionConverters._
 @(page: AuthorizationPage)(implicit request: Http.Request)
@@ -54,7 +54,7 @@
 
   <h2>Authorization</h2>
   @for(e <- page.error().toScala) { <p class="error" role="alert">@e</p> }
-  <form method="post" action="@com.lattice.oidc.authorization.routes.AuthorizationController.decision()">
+  <form method="post" action="@com.lattice.oidc.controllers.routes.AuthorizationController.decision()">
     @helper.CSRF.formField
     <input type="hidden" name="ticket" value="@page.ticket()">
     @page.loggedInAs().toScala match {
@@ -70,7 +70,7 @@
           <p>Or sign in with:</p>
           <ul class="federations">
             @for(f <- page.federations().asScala) {
-              <li><a href="@com.lattice.oidc.federation.routes.FederationController.initiation(f.id(), page.ticket())">@f.name()</a></li>
+              <li><a href="@com.lattice.oidc.controllers.routes.FederationController.initiation(f.id(), page.ticket())">@f.name()</a></li>
             }
           </ul>
         }

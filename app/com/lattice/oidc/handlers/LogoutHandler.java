@@ -1,0 +1,222 @@
+package com.lattice.oidc.handlers;
+
+import com.authlete.common.api.AuthleteApi;
+import com.authlete.common.dto.BackchannelLogoutTokenRequest;
+import com.authlete.common.dto.BackchannelLogoutTokenResponse;
+import com.authlete.common.dto.Client;
+import com.authlete.common.dto.NativeSsoLogoutRequest;
+import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.LatticeConfig;
+import com.lattice.oidc.common.Requests;
+import com.lattice.oidc.models.LogoutRequest;
+import com.lattice.oidc.security.JwtVerifier;
+import com.lattice.oidc.security.UserSessions.LoginState;
+import com.lattice.oidc.security.UserSessions;
+import com.nimbusds.jwt.JWTClaimsSet;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import javax.inject.Inject;
+import javax.inject.Provider;
+import javax.inject.Singleton;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import play.libs.ws.WSClient;
+
+/**
+ * Protocol logic of OpenID Connect RP-Initiated Logout 1.0 and Back-Channel Logout 1.0: validates
+ * logout requests and ends login sessions everywhere (clients and native SSO).
+ */
+@Singleton
+public final class LogoutHandler {
+
+  /** Thrown when the logout request is invalid; the message is safe to show to the end-user. */
+  public static final class InvalidLogoutRequest extends Exception {
+    private static final long serialVersionUID = 1L;
+
+    InvalidLogoutRequest(String message) {
+      super(message);
+    }
+  }
+
+  private static final Logger LOG = LoggerFactory.getLogger(LogoutHandler.class);
+
+  private final Provider<AuthleteApi> api;
+  private final JwtVerifier jwts;
+  private final UserSessions sessions;
+  private final WSClient ws;
+  private final LatticeConfig config;
+
+  @Inject
+  public LogoutHandler(
+      Provider<AuthleteApi> api,
+      JwtVerifier jwts,
+      UserSessions sessions,
+      WSClient ws,
+      LatticeConfig config) {
+    this.api = api;
+    this.jwts = jwts;
+    this.sessions = sessions;
+    this.ws = ws;
+    this.config = config;
+  }
+
+  /** Validates the logout request parameters. */
+  public LogoutRequest validate(Map<String, String[]> params) throws InvalidLogoutRequest {
+    Optional<String> hint = opt(params, "id_token_hint");
+    Optional<String> clientId = opt(params, "client_id");
+    Optional<String> redirect = opt(params, "post_logout_redirect_uri");
+    Optional<String> state = opt(params, "state");
+
+    // id_token_hint: an ID token previously issued by this server (it may have expired). It
+    // identifies the end-user and the client (aud/azp).
+    Optional<JWTClaimsSet> hintClaims = Optional.empty();
+    if (hint.isPresent()) {
+      try {
+        hintClaims = Optional.of(jwts.verify(hint.get(), null, true));
+      } catch (JwtVerifier.InvalidJwtException e) {
+        throw new InvalidLogoutRequest("The id_token_hint is invalid.");
+      }
+      Optional<String> aud = hintClaims.flatMap(LogoutHandler::audience);
+      if (clientId.isPresent() && aud.isPresent() && !clientId.equals(aud)) {
+        throw new InvalidLogoutRequest("client_id does not match the id_token_hint.");
+      }
+      clientId = clientId.or(() -> aud);
+    }
+
+    // post_logout_redirect_uri must exactly match a URI registered for the client; otherwise the
+    // end-user is not redirected (open redirector protection).
+    if (redirect.isPresent()
+        && (clientId.isEmpty() || !allowedRedirect(clientId.get(), redirect.get()))) {
+      throw new InvalidLogoutRequest("post_logout_redirect_uri is not registered for the client.");
+    }
+
+    return new LogoutRequest(
+        hint,
+        clientId,
+        redirect,
+        state,
+        hintClaims.map(JWTClaimsSet::getSubject),
+        hintClaims.map(c -> stringClaim(c, "sid")));
+  }
+
+  /**
+   * Whether the request's id_token_hint identifies the current user (or its session). Without
+   * such a hint the end-user must confirm, so that third-party sites cannot silently log users
+   * out.
+   */
+  public boolean hintMatches(LogoutRequest request, LoginState current) {
+    return request.hintSubject().filter(current.user().getSubject()::equals).isPresent()
+        || request.hintSessionId().filter(current.sid()::equals).isPresent();
+  }
+
+  /** The URL to redirect to after logout ({@code state} appended), if any. */
+  public Optional<String> redirectUrl(LogoutRequest request) {
+    return request
+        .postLogoutRedirectUri()
+        .map(
+            url ->
+                request
+                    .state()
+                    .map(
+                        s ->
+                            url
+                                + (url.contains("?") ? "&" : "?")
+                                + "state="
+                                + URLEncoder.encode(s, StandardCharsets.UTF_8))
+                    .orElse(url));
+  }
+
+  /**
+   * Ends the login session everywhere: sends a back-channel logout token (generated by Authlete's
+   * /backchannel/logout/token API) to every client that obtained tokens in the session, then ends
+   * native SSO for it (/nativesso/logout). Notifications are sent asynchronously and failures are
+   * logged, never surfaced to the end-user.
+   */
+  public void endSession(LoginState state) {
+    String sid = state.sid();
+    for (String client : sessions.clients(sid)) {
+      try {
+        BackchannelLogoutTokenResponse r =
+            api.get()
+                .backchannelLogoutToken(
+                    new BackchannelLogoutTokenRequest()
+                        .setClientIdentifier(client)
+                        .setSubject(state.user().getSubject())
+                        .setSessionId(sid),
+                    null);
+        if (r.getAction() == BackchannelLogoutTokenResponse.Action.OK
+            && r.getBackchannelLogoutUri() != null
+            && r.getLogoutToken() != null) {
+          ws.url(r.getBackchannelLogoutUri().toString())
+              .setFollowRedirects(false)
+              .setRequestTimeout(config.backchannelLogoutTimeout())
+              .setContentType("application/x-www-form-urlencoded")
+              .post("logout_token=" + URLEncoder.encode(r.getLogoutToken(), StandardCharsets.UTF_8))
+              .whenComplete(
+                  (resp, err) -> {
+                    if (err != null || resp.getStatus() / 100 != 2) {
+                      LOG.warn(
+                          "Back-channel logout to client {} failed: {}",
+                          client,
+                          err != null ? err.getMessage() : "HTTP " + resp.getStatus());
+                    }
+                  });
+        }
+      } catch (RuntimeException e) {
+        LOG.warn("Back-channel logout token for client {} failed: {}", client, e.getMessage());
+      }
+    }
+    try {
+      api.get().nativeSsoLogout(new NativeSsoLogoutRequest().setSessionId(sid), null);
+    } catch (RuntimeException e) {
+      LOG.warn("Native SSO logout failed: {}", e.getMessage());
+    }
+  }
+
+  /** Exact match against post_logout_redirect_uris (custom client metadata), else redirect_uris. */
+  private boolean allowedRedirect(String clientId, String uri) {
+    Client client;
+    try {
+      client = api.get().getClient(clientId);
+    } catch (RuntimeException e) {
+      return false;
+    }
+    if (client == null) {
+      return false;
+    }
+    List<String> allowed = new ArrayList<>();
+    if (client.getCustomMetadata() != null) {
+      Object v = Jsons.readMap(client.getCustomMetadata()).get("post_logout_redirect_uris");
+      if (v instanceof List<?> l) {
+        l.forEach(o -> allowed.add(String.valueOf(o)));
+      }
+    }
+    if (allowed.isEmpty() && client.getRedirectUris() != null) {
+      allowed.addAll(Arrays.asList(client.getRedirectUris()));
+    }
+    return allowed.contains(uri);
+  }
+
+  private static Optional<String> audience(JWTClaimsSet claims) {
+    String azp = stringClaim(claims, "azp");
+    if (azp != null) {
+      return Optional.of(azp);
+    }
+    List<String> aud = claims.getAudience();
+    return aud != null && aud.size() == 1 ? Optional.of(aud.get(0)) : Optional.empty();
+  }
+
+  private static String stringClaim(JWTClaimsSet claims, String name) {
+    Object v = claims.getClaim(name);
+    return v instanceof String s ? s : null;
+  }
+
+  private static Optional<String> opt(Map<String, String[]> params, String name) {
+    return Optional.ofNullable(Requests.first(params, name)).filter(v -> !v.isEmpty());
+  }
+}

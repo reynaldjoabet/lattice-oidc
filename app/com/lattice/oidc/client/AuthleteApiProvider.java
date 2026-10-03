@@ -2,7 +2,6 @@ package com.lattice.oidc.client;
 
 import com.authlete.common.api.AuthleteApi;
 import com.authlete.common.conf.AuthleteSimpleConfiguration;
-import com.lattice.oidc.client.PlayAuthleteApiV3;
 import javax.inject.Inject;
 import javax.inject.Provider;
 import javax.inject.Singleton;

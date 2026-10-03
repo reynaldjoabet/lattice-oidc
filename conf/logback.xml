@@ -41,6 +41,11 @@
 
   <logger name="play" level="INFO"/>
   <logger name="application" level="DEBUG"/>
+  <logger name="com.lattice.oidc" level="INFO"/>
+  <!-- One line per request (no query strings). -->
+  <logger name="access" level="INFO"/>
+  <!-- Security events as JSON lines; route to a dedicated appender/SIEM in production. -->
+  <logger name="audit" level="INFO"/>
 
   <root level="WARN">
     <appender-ref ref="ASYNCFILE"/>

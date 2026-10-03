@@ -1,10 +1,10 @@
-@import com.lattice.oidc.logout.LogoutController.LogoutRequest
+@import com.lattice.oidc.models.LogoutRequest
 @import scala.jdk.OptionConverters._
 @(req: LogoutRequest)(implicit request: Http.Request)
 @layout("Sign out") {
   <h1>Sign out?</h1>
   <p>Do you want to sign out of this server and the applications you used with it?</p>
-  <form method="post" action="@com.lattice.oidc.logout.routes.LogoutController.confirm()">
+  <form method="post" action="@com.lattice.oidc.controllers.routes.LogoutController.confirm()">
     @helper.CSRF.formField
     @for(v <- req.idTokenHint().toScala) { <input type="hidden" name="id_token_hint" value="@v"> }
     @for(v <- req.clientId().toScala) { <input type="hidden" name="client_id" value="@v"> }

@@ -2,8 +2,6 @@
 package com.lattice.oidc.client;
 
 
-import java.util.LinkedHashMap;
-import java.util.Map;
 import com.authlete.common.api.AuthleteApi;
 import com.authlete.common.api.AuthleteApiException;
 import com.authlete.common.api.Options;
@@ -30,9 +28,9 @@ import com.authlete.common.dto.BackchannelAuthenticationFailResponse;
 import com.authlete.common.dto.BackchannelAuthenticationIssueRequest;
 import com.authlete.common.dto.BackchannelAuthenticationIssueResponse;
 import com.authlete.common.dto.BackchannelAuthenticationRequest;
+import com.authlete.common.dto.BackchannelAuthenticationResponse;
 import com.authlete.common.dto.BackchannelLogoutTokenRequest;
 import com.authlete.common.dto.BackchannelLogoutTokenResponse;
-import com.authlete.common.dto.BackchannelAuthenticationResponse;
 import com.authlete.common.dto.Client;
 import com.authlete.common.dto.ClientAuthorizationDeleteRequest;
 import com.authlete.common.dto.ClientAuthorizationGetListRequest;
@@ -123,6 +121,8 @@ import com.authlete.common.dto.UserInfoIssueResponse;
 import com.authlete.common.dto.UserInfoRequest;
 import com.authlete.common.dto.UserInfoResponse;
 import com.authlete.common.types.TokenStatus;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 
 /**

@@ -4,7 +4,7 @@
   <h1>Connect a device</h1>
   <p>Enter the code shown on your device.</p>
   @for(n <- notice.toScala) { <p class="error" role="alert">@n</p> }
-  <form method="post" action="@com.lattice.oidc.device.routes.DeviceController.verify()">
+  <form method="post" action="@com.lattice.oidc.controllers.routes.DeviceController.verify()">
     @helper.CSRF.formField
     <label>Code <input type="text" name="userCode" value="@userCode" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" required></label>
     @user.toScala match {

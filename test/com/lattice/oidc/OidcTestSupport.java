@@ -34,12 +34,9 @@ public final class OidcTestSupport {
     return new Http.RequestBuilder().method("POST").uri(uri).bodyForm(form);
   }
 
-  /**
-   * Makes a browser-form request pass the CSRF filter (bypass header) while still giving
-   * templates a token to render.
-   */
+  /** Adds a valid CSRF token, as a browser submitting the server's own form would. */
   public static Http.RequestBuilder withCsrf(Http.RequestBuilder builder) {
-    return play.api.test.CSRFTokenHelper.addCSRFToken(builder.header("Csrf-Token", "nocheck"));
+    return play.api.test.CSRFTokenHelper.addCSRFToken(builder);
   }
 
   public static Result route(Application app, Http.RequestBuilder request) {

@@ -1,6 +1,6 @@
-@import com.lattice.oidc.device.DeviceController.Approval
+@import com.lattice.oidc.models.DeviceApproval
 @import scala.jdk.CollectionConverters._
-@(approval: Approval)(implicit request: Http.Request)
+@(approval: DeviceApproval)(implicit request: Http.Request)
 @layout("Authorize device") {
   <h1>@approval.clientName()</h1>
   <p>This device is requesting access to your account.</p>
@@ -8,7 +8,7 @@
     <h2>Permissions</h2>
     <ul>@for(s <- approval.scopes().asScala) { <li>@s</li> }</ul>
   }
-  <form method="post" action="@com.lattice.oidc.device.routes.DeviceController.complete()">
+  <form method="post" action="@com.lattice.oidc.controllers.routes.DeviceController.complete()">
     @helper.CSRF.formField
     <input type="hidden" name="userCode" value="@approval.userCode()">
     <div class="buttons">

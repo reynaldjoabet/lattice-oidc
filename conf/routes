@@ -9,103 +9,103 @@ GET     /                           controllers.HomeController.index()
 GET     /assets/*file               controllers.Assets.versioned(path="/public", file: Asset)
 
 # Health probes
-GET     /health/live                com.lattice.oidc.health.HealthController.live()
-GET     /health/ready               com.lattice.oidc.health.HealthController.ready()
+GET     /health/live                com.lattice.oidc.controllers.HealthController.live()
+GET     /health/ready               com.lattice.oidc.controllers.HealthController.ready()
 
 # Authorization (RFC 6749 / OIDC Core)
-GET     /api/authorization                          com.lattice.oidc.authorization.AuthorizationController.get(request: Request)
+GET     /api/authorization                          com.lattice.oidc.controllers.AuthorizationController.get(request: Request)
 + nocsrf
-POST    /api/authorization                          com.lattice.oidc.authorization.AuthorizationController.post(request: Request)
-POST    /api/authorization/decision                 com.lattice.oidc.authorization.AuthorizationController.decision(request: Request)
+POST    /api/authorization                          com.lattice.oidc.controllers.AuthorizationController.post(request: Request)
+POST    /api/authorization/decision                 com.lattice.oidc.controllers.AuthorizationController.decision(request: Request)
 
 # OpenID Federation and login via external OpenID Providers
-GET     /.well-known/openid-federation              com.lattice.oidc.federation.FederationController.configuration()
+GET     /.well-known/openid-federation              com.lattice.oidc.controllers.FederationController.configuration()
 + nocsrf
-POST    /api/federation/register                    com.lattice.oidc.federation.FederationController.register(request: Request)
-GET     /api/federation/initiation/:id              com.lattice.oidc.federation.FederationController.initiation(request: Request, id: String, ticket: String)
-GET     /api/federation/callback/:id                com.lattice.oidc.federation.FederationController.callback(request: Request, id: String)
+POST    /api/federation/register                    com.lattice.oidc.controllers.FederationController.register(request: Request)
+GET     /api/federation/initiation/:id              com.lattice.oidc.controllers.FederationController.initiation(request: Request, id: String, ticket: String)
+GET     /api/federation/callback/:id                com.lattice.oidc.controllers.FederationController.callback(request: Request, id: String)
 
 # Token endpoint (RFC 6749, 8693, 7523, OIDC Native SSO)
 + nocsrf
-POST    /api/token                                  com.lattice.oidc.token.TokenController.token(request: Request)
+POST    /api/token                                  com.lattice.oidc.controllers.TokenController.token(request: Request)
 
 # Discovery and keys
-GET     /.well-known/openid-configuration           com.lattice.oidc.endpoints.DiscoveryController.configuration(request: Request)
-GET     /.well-known/oauth-authorization-server     com.lattice.oidc.endpoints.DiscoveryController.configuration(request: Request)
-GET     /api/jwks                                   com.lattice.oidc.endpoints.DiscoveryController.jwks()
-GET     /.well-known/apple-app-site-association     com.lattice.oidc.endpoints.DiscoveryController.appleAppSiteAssociation()
+GET     /.well-known/openid-configuration           com.lattice.oidc.controllers.DiscoveryController.configuration(request: Request)
+GET     /.well-known/oauth-authorization-server     com.lattice.oidc.controllers.DiscoveryController.configuration(request: Request)
+GET     /api/jwks                                   com.lattice.oidc.controllers.DiscoveryController.jwks()
+GET     /.well-known/apple-app-site-association     com.lattice.oidc.controllers.DiscoveryController.appleAppSiteAssociation()
 
 # UserInfo, introspection, revocation, PAR, grant management, attestation
-GET     /api/userinfo                               com.lattice.oidc.endpoints.UserInfoController.get(request: Request)
+GET     /api/userinfo                               com.lattice.oidc.controllers.UserInfoController.get(request: Request)
 + nocsrf
-POST    /api/userinfo                               com.lattice.oidc.endpoints.UserInfoController.post(request: Request)
+POST    /api/userinfo                               com.lattice.oidc.controllers.UserInfoController.post(request: Request)
 + nocsrf
-POST    /api/introspection                          com.lattice.oidc.endpoints.IntrospectionController.introspect(request: Request)
+POST    /api/introspection                          com.lattice.oidc.controllers.IntrospectionController.introspect(request: Request)
 + nocsrf
-POST    /api/revocation                             com.lattice.oidc.endpoints.RevocationController.revoke(request: Request)
+POST    /api/revocation                             com.lattice.oidc.controllers.RevocationController.revoke(request: Request)
 + nocsrf
-POST    /api/par                                    com.lattice.oidc.endpoints.PushedAuthorizationController.push(request: Request)
-GET     /api/gm/:grantId                            com.lattice.oidc.endpoints.GrantManagementController.query(request: Request, grantId: String)
+POST    /api/par                                    com.lattice.oidc.controllers.PushedAuthorizationController.push(request: Request)
+GET     /api/gm/:grantId                            com.lattice.oidc.controllers.GrantManagementController.query(request: Request, grantId: String)
 + nocsrf
-DELETE  /api/gm/:grantId                            com.lattice.oidc.endpoints.GrantManagementController.revoke(request: Request, grantId: String)
+DELETE  /api/gm/:grantId                            com.lattice.oidc.controllers.GrantManagementController.revoke(request: Request, grantId: String)
 + nocsrf
-POST    /api/challenge                              com.lattice.oidc.endpoints.AttestationController.challenge()
+POST    /api/challenge                              com.lattice.oidc.controllers.AttestationController.challenge()
 
 # Dynamic client registration (RFC 7591 / 7592)
 + nocsrf
-POST    /api/register                               com.lattice.oidc.endpoints.ClientRegistrationController.register(request: Request)
-GET     /api/register/:id                           com.lattice.oidc.endpoints.ClientRegistrationController.read(request: Request, id: String)
+POST    /api/register                               com.lattice.oidc.controllers.ClientRegistrationController.register(request: Request)
+GET     /api/register/:id                           com.lattice.oidc.controllers.ClientRegistrationController.read(request: Request, id: String)
 + nocsrf
-PUT     /api/register/:id                           com.lattice.oidc.endpoints.ClientRegistrationController.update(request: Request, id: String)
+PUT     /api/register/:id                           com.lattice.oidc.controllers.ClientRegistrationController.update(request: Request, id: String)
 + nocsrf
-DELETE  /api/register/:id                           com.lattice.oidc.endpoints.ClientRegistrationController.delete(request: Request, id: String)
+DELETE  /api/register/:id                           com.lattice.oidc.controllers.ClientRegistrationController.delete(request: Request, id: String)
 
 # Open Banking Brasil resource APIs
 + nocsrf
-POST    /api/obb/consents                           com.lattice.oidc.obb.ObbController.createConsent(request: Request)
-GET     /api/obb/consents/:consentId                com.lattice.oidc.obb.ObbController.readConsent(request: Request, consentId: String)
+POST    /api/obb/consents                           com.lattice.oidc.controllers.ObbController.createConsent(request: Request)
+GET     /api/obb/consents/:consentId                com.lattice.oidc.controllers.ObbController.readConsent(request: Request, consentId: String)
 + nocsrf
-DELETE  /api/obb/consents/:consentId                com.lattice.oidc.obb.ObbController.deleteConsent(request: Request, consentId: String)
-GET     /api/obb/accounts                           com.lattice.oidc.obb.ObbController.accounts(request: Request)
-GET     /api/obb/fapi2base-accounts                 com.lattice.oidc.obb.ObbController.fapi2BaseAccounts(request: Request)
-GET     /api/obb/resources                          com.lattice.oidc.obb.ObbController.resources(request: Request)
+DELETE  /api/obb/consents/:consentId                com.lattice.oidc.controllers.ObbController.deleteConsent(request: Request, consentId: String)
+GET     /api/obb/accounts                           com.lattice.oidc.controllers.ObbController.accounts(request: Request)
+GET     /api/obb/fapi2base-accounts                 com.lattice.oidc.controllers.ObbController.fapi2BaseAccounts(request: Request)
+GET     /api/obb/resources                          com.lattice.oidc.controllers.ObbController.resources(request: Request)
 
 # Diagnostics (lattice.test-endpoints.enabled)
-GET     /api/test/headers                           com.lattice.oidc.endpoints.TestController.headers(request: Request)
-GET     /api/test/obb                               com.lattice.oidc.endpoints.TestController.obb(request: Request)
+GET     /api/test/headers                           com.lattice.oidc.controllers.TestController.headers(request: Request)
+GET     /api/test/obb                               com.lattice.oidc.controllers.TestController.obb(request: Request)
 
 # CIBA (OpenID Connect Client-Initiated Backchannel Authentication)
 + nocsrf
-POST    /api/backchannel/authentication             com.lattice.oidc.ciba.CibaController.authenticate(request: Request)
+POST    /api/backchannel/authentication             com.lattice.oidc.controllers.CibaController.authenticate(request: Request)
 + nocsrf
-POST    /api/backchannel/authentication/callback    com.lattice.oidc.ciba.CibaController.callback(request: Request)
+POST    /api/backchannel/authentication/callback    com.lattice.oidc.controllers.CibaController.callback(request: Request)
 
 # Device authorization grant (RFC 8628)
 + nocsrf
-POST    /api/device/authorization                   com.lattice.oidc.device.DeviceController.authorization(request: Request)
-GET     /api/device/verification                    com.lattice.oidc.device.DeviceController.verificationPage(request: Request)
-POST    /api/device/verification                    com.lattice.oidc.device.DeviceController.verify(request: Request)
-POST    /api/device/complete                        com.lattice.oidc.device.DeviceController.complete(request: Request)
+POST    /api/device/authorization                   com.lattice.oidc.controllers.DeviceController.authorization(request: Request)
+GET     /api/device/verification                    com.lattice.oidc.controllers.DeviceController.verificationPage(request: Request)
+POST    /api/device/verification                    com.lattice.oidc.controllers.DeviceController.verify(request: Request)
+POST    /api/device/complete                        com.lattice.oidc.controllers.DeviceController.complete(request: Request)
 
 # OpenID for Verifiable Credential Issuance
-GET     /.well-known/openid-credential-issuer       com.lattice.oidc.vci.CredentialController.metadata()
-GET     /.well-known/jwt-issuer                     com.lattice.oidc.vci.CredentialController.jwtIssuer()
-GET     /.well-known/jwt-vc-issuer                  com.lattice.oidc.vci.CredentialController.jwtIssuer()
-GET     /api/vci/jwks                               com.lattice.oidc.vci.CredentialController.jwks()
+GET     /.well-known/openid-credential-issuer       com.lattice.oidc.controllers.CredentialController.metadata()
+GET     /.well-known/jwt-issuer                     com.lattice.oidc.controllers.CredentialController.jwtIssuer()
+GET     /.well-known/jwt-vc-issuer                  com.lattice.oidc.controllers.CredentialController.jwtIssuer()
+GET     /api/vci/jwks                               com.lattice.oidc.controllers.CredentialController.jwks()
 + nocsrf
-POST    /api/credential                             com.lattice.oidc.vci.CredentialController.credential(request: Request)
+POST    /api/credential                             com.lattice.oidc.controllers.CredentialController.credential(request: Request)
 + nocsrf
-POST    /api/batch_credential                       com.lattice.oidc.vci.CredentialController.batch(request: Request)
+POST    /api/batch_credential                       com.lattice.oidc.controllers.CredentialController.batch(request: Request)
 + nocsrf
-POST    /api/deferred_credential                    com.lattice.oidc.vci.CredentialController.deferred(request: Request)
+POST    /api/deferred_credential                    com.lattice.oidc.controllers.CredentialController.deferred(request: Request)
 + nocsrf
-POST    /api/nonce                                  com.lattice.oidc.vci.CredentialController.nonce()
-GET     /api/offer/issue                            com.lattice.oidc.vci.CredentialOfferController.form(request: Request)
-POST    /api/offer/issue                            com.lattice.oidc.vci.CredentialOfferController.create(request: Request)
-GET     /api/offer/:identifier                      com.lattice.oidc.vci.CredentialController.offer(identifier: String)
+POST    /api/nonce                                  com.lattice.oidc.controllers.CredentialController.nonce()
+GET     /api/offer/issue                            com.lattice.oidc.controllers.CredentialOfferController.form(request: Request)
+POST    /api/offer/issue                            com.lattice.oidc.controllers.CredentialOfferController.create(request: Request)
+GET     /api/offer/:identifier                      com.lattice.oidc.controllers.CredentialController.offer(identifier: String)
 
 # RP-Initiated Logout 1.0 / Back-Channel Logout 1.0
-GET     /api/logout                                 com.lattice.oidc.logout.LogoutController.get(request: Request)
+GET     /api/logout                                 com.lattice.oidc.controllers.LogoutController.get(request: Request)
 + nocsrf
-POST    /api/logout                                 com.lattice.oidc.logout.LogoutController.post(request: Request)
-POST    /api/logout/confirm                         com.lattice.oidc.logout.LogoutController.confirm(request: Request)
+POST    /api/logout                                 com.lattice.oidc.controllers.LogoutController.post(request: Request)
+POST    /api/logout/confirm                         com.lattice.oidc.controllers.LogoutController.confirm(request: Request)
