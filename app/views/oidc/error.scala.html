@@ -1,5 +1,10 @@
-@(status: Int, description: String)
-@layout("Error " + status) {
+@*
+ * Errors raised outside controllers (unknown page, rejected form, unexpected failure).
+ *@
+@(status: Int, description: String, reference: String)
+@layout("Something went wrong") {
   <h1>Something went wrong</h1>
   <p>@description</p>
+  <p class="muted">Error @status · Reference: <code>@reference</code></p>
+  <p><a href="/">Go to the start page</a></p>
 }

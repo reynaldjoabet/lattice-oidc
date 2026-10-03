@@ -1,84 +1,125 @@
+@*
+ * Consent page: who is asking, which account, what will be shared, then Allow / Deny.
+ * Protocol details stay available but collapsed.
+ *@
 @import com.lattice.oidc.models.AuthorizationPage
 @import scala.jdk.CollectionConverters._
 @import scala.jdk.OptionConverters._
 @(page: AuthorizationPage)(implicit request: Http.Request)
-@layout(page.serviceName() + " | Authorization") {
-  <p class="service">@page.serviceName()</p>
-  <header class="client">
-    @for(logo <- page.logoUri().toScala) { <img class="logo" src="@logo" alt=""> }
+@layout("Sign in to " + page.clientName()) {
+  <div class="client">
+    @page.logoUri().toScala match {
+      case Some(logo) => { <img class="logo" src="@logo" alt="@page.clientName() logo" referrerpolicy="no-referrer"> }
+      case None => { <span class="monogram" aria-hidden="true">@page.clientName().take(1)</span> }
+    }
     <div>
       <h1>@page.clientName()</h1>
-      @for(d <- page.description().toScala) { <p>@d</p> }
-      <ul class="links">
-        @for(u <- page.clientUri().toScala) { <li><a href="@u" target="_blank" rel="noopener">Homepage</a></li> }
-        @for(u <- page.policyUri().toScala) { <li><a href="@u" target="_blank" rel="noopener">Privacy policy</a></li> }
-        @for(u <- page.tosUri().toScala) { <li><a href="@u" target="_blank" rel="noopener">Terms of service</a></li> }
-      </ul>
+      <p class="lead">wants to access your @page.serviceName() account</p>
     </div>
-  </header>
-
-  @if(!page.scopes().isEmpty()) {
-    <h2>Permissions</h2>
-    <dl class="scopes">
-      @for(s <- page.scopes().asScala) { <dt>@s.name()</dt><dd>@s.description()</dd> }
-    </dl>
-  }
-  @if(!page.claimsForIdToken().isEmpty()) {
-    <h2>Claims for the ID token</h2>
-    <ul>@for(c <- page.claimsForIdToken().asScala) { <li>@c</li> }</ul>
-  }
-  @if(!page.claimsForUserInfo().isEmpty()) {
-    <h2>Claims for UserInfo</h2>
-    <ul>@for(c <- page.claimsForUserInfo().asScala) { <li>@c</li> }</ul>
-  }
-  @if(page.identityAssuranceRequested()) {
-    <h2>Identity assurance</h2>
-    @for(p <- page.purpose().toScala) { <p>Purpose: @p</p> }
-    @if(!page.verifiedClaimsForIdToken().isEmpty()) {
-      <h3>Verified claims for the ID token</h3>
-      <table><tr><th>Claim</th><th>Purpose</th></tr>
-        @for(c <- page.verifiedClaimsForIdToken().asScala) { <tr><td>@c.claim()</td><td>@c.purpose()</td></tr> }
-      </table>
-    }
-    @if(!page.verifiedClaimsForUserInfo().isEmpty()) {
-      <h3>Verified claims for UserInfo</h3>
-      <table><tr><th>Claim</th><th>Purpose</th></tr>
-        @for(c <- page.verifiedClaimsForUserInfo().asScala) { <tr><td>@c.claim()</td><td>@c.purpose()</td></tr> }
-      </table>
-    }
-  }
-  @for(details <- page.authorizationDetails().toScala) {
-    <h2>Authorization details</h2>
-    <pre>@details</pre>
+  </div>
+  @for(d <- page.description().toScala) { <p class="muted">@d</p> }
+  @if(page.clientUri().isPresent() || page.policyUri().isPresent() || page.tosUri().isPresent()) {
+    <ul class="links">
+      @for(u <- page.clientUri().toScala) { <li><a href="@u" target="_blank" rel="noopener noreferrer">Website</a></li> }
+      @for(u <- page.policyUri().toScala) { <li><a href="@u" target="_blank" rel="noopener noreferrer">Privacy policy</a></li> }
+      @for(u <- page.tosUri().toScala) { <li><a href="@u" target="_blank" rel="noopener noreferrer">Terms of service</a></li> }
+    </ul>
   }
 
-  <h2>Authorization</h2>
-  @for(e <- page.error().toScala) { <p class="error" role="alert">@e</p> }
   <form method="post" action="@com.lattice.oidc.controllers.routes.AuthorizationController.decision()">
     @helper.CSRF.formField
     <input type="hidden" name="ticket" value="@page.ticket()">
+
+    <h2>Account</h2>
+    @for(e <- page.error().toScala) { <div class="alert alert-error" role="alert" id="login-error">@e</div> }
     @page.loggedInAs().toScala match {
       case Some(user) => {
-        <p>Logged in as <strong>@user</strong>. To use another account, append <code>prompt=login</code> to the request.</p>
+        <div class="account">
+          <span>Signed in as <strong>@user</strong></span>
+          <button type="submit" name="switchAccount" value="true" class="link" formnovalidate>Use a different account</button>
+        </div>
       }
       case None => {
-        <div class="login">
-          <label>Login ID <input type="text" name="loginId" value="@page.loginId()" autocomplete="username" autocapitalize="off" spellcheck="false" @if(page.loginIdReadOnly()){readonly} required></label>
-          <label>Password <input type="password" name="password" autocomplete="current-password" required></label>
+        <div class="field">
+          <label for="loginId">Login ID</label>
+          <input type="text" id="loginId" name="loginId" value="@page.loginId()" autocomplete="username"
+                 autocapitalize="off" spellcheck="false" required
+                 @if(page.loginIdReadOnly()){readonly} else {autofocus}
+                 @if(page.error().isPresent()){aria-describedby="login-error"}>
         </div>
-        @if(!page.identityProviders().isEmpty()) {
-          <p>Or sign in with:</p>
-          <ul class="federations">
-            @for(f <- page.identityProviders().asScala) {
-              <li><a href="@com.lattice.oidc.controllers.routes.IdentityBrokerController.initiation(f.id(), page.ticket())">@f.name()</a></li>
-            }
-          </ul>
-        }
+        <div class="field">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" autocomplete="current-password" required
+                 @if(page.loginIdReadOnly()){autofocus}>
+        </div>
       }
     }
+
+    @if(!page.scopes().isEmpty()) {
+      <h2>This will allow @page.clientName() to</h2>
+      <ul class="checklist">
+        @for(s <- page.scopes().asScala) {
+          <li>@s.description()<span class="scope-name">@s.name()</span></li>
+        }
+      </ul>
+    }
+
+    @if(!page.sharedInformation().isEmpty()) {
+      <h2>Information that will be shared</h2>
+      <ul class="checklist">
+        @for(label <- page.sharedInformation().asScala) { <li>@label</li> }
+      </ul>
+    }
+
+    @for(p <- page.purpose().toScala) {
+      <div class="alert alert-info"><strong>Why this is requested:</strong> @p</div>
+    }
+
+    @if(page.hasTechnicalDetails()) {
+      <details>
+        <summary>Technical details</summary>
+        @if(!page.claimsForIdToken().isEmpty()) {
+          <h3>Claims in the ID token</h3>
+          <ul>@for(c <- page.claimsForIdToken().asScala) { <li>@c</li> }</ul>
+        }
+        @if(!page.claimsForUserInfo().isEmpty()) {
+          <h3>Claims from the UserInfo endpoint</h3>
+          <ul>@for(c <- page.claimsForUserInfo().asScala) { <li>@c</li> }</ul>
+        }
+        @if(!page.verifiedClaimsForIdToken().isEmpty()) {
+          <table>
+            <caption>Verified claims in the ID token</caption>
+            <thead><tr><th scope="col">Claim</th><th scope="col">Purpose</th></tr></thead>
+            <tbody>@for(c <- page.verifiedClaimsForIdToken().asScala) { <tr><td><code>@c.claim()</code></td><td>@c.purpose()</td></tr> }</tbody>
+          </table>
+        }
+        @if(!page.verifiedClaimsForUserInfo().isEmpty()) {
+          <table>
+            <caption>Verified claims from UserInfo</caption>
+            <thead><tr><th scope="col">Claim</th><th scope="col">Purpose</th></tr></thead>
+            <tbody>@for(c <- page.verifiedClaimsForUserInfo().asScala) { <tr><td><code>@c.claim()</code></td><td>@c.purpose()</td></tr> }</tbody>
+          </table>
+        }
+        @for(details <- page.authorizationDetails().toScala) {
+          <h3>Authorization details</h3>
+          <pre>@details</pre>
+        }
+      </details>
+    }
+
     <div class="buttons">
-      <button type="submit" name="authorized" value="true" class="primary">Authorize</button>
       <button type="submit" name="denied" value="true" formnovalidate>Deny</button>
+      <button type="submit" name="authorized" value="true" class="primary">Allow</button>
     </div>
+    <p class="notice">Only allow access if you trust @page.clientName(). You can revoke access later.</p>
   </form>
+
+  @if(page.loggedInAs().isEmpty() && !page.identityProviders().isEmpty()) {
+    <div class="divider">or continue with</div>
+    <ul class="providers">
+      @for(p <- page.identityProviders().asScala) {
+        <li><a class="button" href="@com.lattice.oidc.controllers.routes.IdentityBrokerController.initiation(p.id(), page.ticket())">@p.name()</a></li>
+      }
+    </ul>
+  }
 }

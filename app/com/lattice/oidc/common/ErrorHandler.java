@@ -1,5 +1,6 @@
 package com.lattice.oidc.common;
 
+import com.lattice.oidc.filters.RequestIdFilter;
 import com.typesafe.config.Config;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -61,7 +62,8 @@ public final class ErrorHandler extends DefaultHttpErrorHandler {
           default -> "The request is malformed.";
         };
     LOG.debug("Client error {} on {} {}: {}", statusCode, request.method(), request.path(), message);
-    return CompletableFuture.completedFuture(respond(request, statusCode, error, description));
+    return CompletableFuture.completedFuture(
+        respond(request, statusCode, error, description, RequestIdFilter.of(request)));
   }
 
   @Override
@@ -93,14 +95,18 @@ public final class ErrorHandler extends DefaultHttpErrorHandler {
         request,
         500,
         "server_error",
-        "An unexpected error occurred. Incident id: " + exception.id + ".");
+        "An unexpected error occurred. Incident id: " + exception.id + ".",
+        exception.id);
   }
 
   private static Result respond(
-      Http.RequestHeader request, int status, String error, String description) {
+      Http.RequestHeader request, int status, String error, String description, String reference) {
     if (isBrowserPage(request.path())) {
       return Responses.of(
-          status, views.html.oidc.error.render(status, description).body(), Responses.HTML, null);
+          status,
+          views.html.oidc.error.render(status, description, reference).body(),
+          Responses.HTML,
+          null);
     }
     return Responses.json(
         status, Jsons.write(Map.of("error", error, "error_description", description)));

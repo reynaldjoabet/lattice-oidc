@@ -1,19 +1,30 @@
+@*
+ * Device flow, step 2: confirm the device. The code is shown again so the user can check it
+ * matches the device screen (RFC 8628 §5.4, remote phishing).
+ *@
+@import com.lattice.oidc.models.ConsentLabels
 @import com.lattice.oidc.models.DeviceApproval
 @import scala.jdk.CollectionConverters._
 @(approval: DeviceApproval)(implicit request: Http.Request)
-@layout("Authorize device") {
-  <h1>@approval.clientName()</h1>
-  <p>This device is requesting access to your account.</p>
+@layout("Allow " + approval.clientName()) {
+  <h1>Allow @approval.clientName()?</h1>
+  <p class="lead">A device is asking to access your account.</p>
+  <div class="alert alert-info">
+    Make sure the device shows the code <strong><code>@approval.userCode()</code></strong>.
+    If you did not start this on your own device, choose Deny.
+  </div>
   @if(!approval.scopes().isEmpty()) {
-    <h2>Permissions</h2>
-    <ul>@for(s <- approval.scopes().asScala) { <li>@s</li> }</ul>
+    <h2>This will allow the device to</h2>
+    <ul class="checklist">
+      @for(s <- approval.scopes().asScala) { <li>@ConsentLabels.scope(s, null)<span class="scope-name">@s</span></li> }
+    </ul>
   }
   <form method="post" action="@com.lattice.oidc.controllers.routes.DeviceController.complete()">
     @helper.CSRF.formField
     <input type="hidden" name="userCode" value="@approval.userCode()">
     <div class="buttons">
-      <button type="submit" name="authorized" value="true" class="primary">Authorize</button>
       <button type="submit" name="denied" value="true">Deny</button>
+      <button type="submit" name="authorized" value="true" class="primary">Allow</button>
     </div>
   </form>
 }

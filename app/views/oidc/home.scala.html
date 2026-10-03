@@ -1,0 +1,23 @@
+@*
+ * Start page of the sign-in service. Applications send users to the authorization endpoint; this
+ * page only explains where they are and lets a signed-in user sign out.
+ *@
+@import scala.jdk.OptionConverters._
+@(user: java.util.Optional[String])(implicit request: Http.Request)
+@layout("Lattice sign-in") {
+  <h1>Lattice sign-in</h1>
+  @user.toScala match {
+    case Some(name) => {
+      <div class="account">
+        <span>Signed in as <strong>@name</strong></span>
+        <a href="@com.lattice.oidc.controllers.routes.LogoutController.get()">Sign out</a>
+      </div>
+      <p class="muted">Applications that use Lattice will sign you in with this account.</p>
+    }
+    case None => {
+      <p class="lead">This is the sign-in service used by applications connected to Lattice.</p>
+      <p class="muted">To sign in, start from the application you want to use.</p>
+    }
+  }
+  <p class="muted">Connecting a TV or other device? <a href="@com.lattice.oidc.controllers.routes.DeviceController.verificationPage()">Enter a device code</a></p>
+}

@@ -37,6 +37,7 @@ public record AuthorizationPage(
     List<IdentityProviders.Link> identityProviders,
     Optional<String> error) {
 
+  /** A requested scope and its plain-language description. */
   public record ScopeItem(String name, String description) {}
 
   public record ClaimPurpose(String claim, String purpose) {}
@@ -95,6 +96,27 @@ public record AuthorizationPage(
         identityProviders, error);
   }
 
+  /**
+   * What the application will receive about the user, in plain language and without duplicates
+   * (claims for the ID token and for UserInfo, plus verified claims).
+   */
+  public List<String> sharedInformation() {
+    java.util.LinkedHashSet<String> labels = new java.util.LinkedHashSet<>();
+    claimsForIdToken.forEach(c -> labels.add(ConsentLabels.claim(c)));
+    claimsForUserInfo.forEach(c -> labels.add(ConsentLabels.claim(c)));
+    verifiedClaimsForIdToken.forEach(c -> labels.add("Verified: " + ConsentLabels.claim(c.claim())));
+    verifiedClaimsForUserInfo.forEach(c -> labels.add("Verified: " + ConsentLabels.claim(c.claim())));
+    return List.copyOf(labels);
+  }
+
+  /** Whether the protocol-level details section has anything to show. */
+  public boolean hasTechnicalDetails() {
+    return !claimsForIdToken.isEmpty()
+        || !claimsForUserInfo.isEmpty()
+        || authorizationDetails.isPresent()
+        || identityAssuranceRequested();
+  }
+
   public boolean identityAssuranceRequested() {
     return purpose.isPresent()
         || !verifiedClaimsForIdToken.isEmpty()
@@ -113,12 +135,12 @@ public record AuthorizationPage(
     List<ScopeItem> out = new ArrayList<>();
     if (info.getScopes() != null) {
       for (Scope s : info.getScopes()) {
-        out.add(new ScopeItem(s.getName(), s.getDescription() == null ? "" : s.getDescription()));
+        out.add(new ScopeItem(s.getName(), ConsentLabels.scope(s.getName(), s.getDescription())));
       }
     }
     if (info.getDynamicScopes() != null) {
       for (DynamicScope ds : info.getDynamicScopes()) {
-        out.add(new ScopeItem(ds.getValue(), ""));
+        out.add(new ScopeItem(ds.getValue(), ConsentLabels.scope(ds.getValue(), null)));
       }
     }
     return out;

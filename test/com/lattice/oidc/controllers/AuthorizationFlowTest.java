@@ -185,4 +185,65 @@ public class AuthorizationFlowTest {
     assertEquals(400, r.status());
     assertTrue(contentAsString(r).contains("invalid_request"));
   }
+
+  @Test
+  public void consentPageUsesPlainLanguage() {
+    String html = contentAsString(consentPage());
+    assertTrue(html.contains("Sign you in with your account"));
+    assertTrue(html.contains("Your basic profile"));
+    assertTrue(html.contains("Full name"));
+    assertTrue(html.contains("Email address"));
+    assertTrue("protocol jargon stays out of the main text", !html.contains("prompt=login"));
+  }
+
+  @Test
+  public void returningUserCanSwitchToAnotherAccount() {
+    // First authorization: log in as john.
+    Result page = consentPage();
+    Result first =
+        route(
+            app,
+            decision(
+                page,
+                Map.of("ticket", "ticket-1", "loginId", "john", "password", "john", "authorized", "true")));
+    Map<String, String> session = first.session().data();
+
+    // Second authorization in the same browser: john's session is offered.
+    fake.answer("authorization", args -> interaction("ticket-2", null));
+    Result second =
+        route(app, withCsrf(get("/api/authorization?client_id=42")).session(session));
+    assertTrue(contentAsString(second).contains("Signed in as"));
+
+    // "Use a different account" shows the login form instead.
+    Result switched =
+        route(
+            app,
+            withCsrf(post("/api/authorization/decision", Map.of("ticket", "ticket-2", "switchAccount", "true")))
+                .session(session));
+    assertEquals(200, switched.status());
+    String html = contentAsString(switched);
+    assertTrue(html.contains("name=\"password\""));
+    assertTrue(!html.contains("Signed in as"));
+
+    // Approving without credentials now requires a login.
+    Result noLogin =
+        route(
+            app,
+            withCsrf(post("/api/authorization/decision", Map.of("ticket", "ticket-2", "authorized", "true")))
+                .session(session));
+    assertEquals(401, noLogin.status());
+
+    // Logging in as jane issues the code for jane.
+    Result jane =
+        route(
+            app,
+            withCsrf(
+                    post(
+                        "/api/authorization/decision",
+                        Map.of("ticket", "ticket-2", "loginId", "jane", "password", "jane", "authorized", "true")))
+                .session(session));
+    assertEquals(302, jane.status());
+    AuthorizationIssueRequest issue = fake.lastRequest("authorizationIssue");
+    assertEquals("1002", issue.getSubject());
+  }
 }

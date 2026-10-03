@@ -234,6 +234,16 @@ public final class AuthorizationController extends BaseController {
     }
     AuthorizationInteraction ix = found.get();
 
+    // "Use a different account": show the login form for this request. The existing session is
+    // not ended; it is just no longer offered for this authorization request.
+    if (form.containsKey("switchAccount")) {
+      AuthorizationInteraction anonymous =
+          ix.withPage(ix.page().withLoggedInAs(Optional.empty()).withError(null))
+              .withShownSubject(null);
+      interactions.put(KIND, ticket, browserId, anonymous);
+      return rerender(request, anonymous, null, 200);
+    }
+
     // If the end-user did not grant authorization to the client application.
     // The end-user denied the authorization request.
     if (!form.containsKey("authorized")) {

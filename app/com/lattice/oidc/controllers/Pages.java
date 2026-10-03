@@ -10,6 +10,6 @@ public final class Pages {
 
   public static Result message(Http.Request request, int status, String title, String text) {
     return Responses.of(
-        status, views.html.oidc.message.render(title, text, request).body(), Responses.HTML, null);
+        status, views.html.oidc.message.render(title, text, status, request).body(), Responses.HTML, null);
   }
 }

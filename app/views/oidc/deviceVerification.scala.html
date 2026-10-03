@@ -1,17 +1,38 @@
+@*
+ * Device flow, step 1: the user types the code shown on the device (and logs in if needed).
+ *@
 @import scala.jdk.OptionConverters._
 @(userCode: String, user: java.util.Optional[String], notice: java.util.Optional[String])(implicit request: Http.Request)
-@layout("Device login") {
+@layout("Connect a device") {
   <h1>Connect a device</h1>
-  <p>Enter the code shown on your device.</p>
-  @for(n <- notice.toScala) { <p class="error" role="alert">@n</p> }
+  <p class="lead">Enter the code shown on your TV, console or other device.</p>
+  @for(n <- notice.toScala) { <div class="alert alert-error" role="alert" id="code-error">@n</div> }
   <form method="post" action="@com.lattice.oidc.controllers.routes.DeviceController.verify()">
     @helper.CSRF.formField
-    <label>Code <input type="text" name="userCode" value="@userCode" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" required></label>
+    <div class="field">
+      <label for="userCode">Code</label>
+      <input type="text" id="userCode" name="userCode" class="code-input" value="@userCode"
+             autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" maxlength="32" required
+             @if(userCode.isEmpty()){autofocus}
+             @if(notice.isPresent()){aria-describedby="code-error"}>
+    </div>
     @user.toScala match {
-      case Some(name) => { <p>Logged in as <strong>@name</strong>.</p> }
+      case Some(name) => {
+        <div class="account">
+          <span>Signed in as <strong>@name</strong></span>
+          <a href="@com.lattice.oidc.controllers.routes.LogoutController.get()">Not you? Sign out</a>
+        </div>
+      }
       case None => {
-        <label>Login ID <input type="text" name="loginId" autocomplete="username" autocapitalize="off" required></label>
-        <label>Password <input type="password" name="password" autocomplete="current-password" required></label>
+        <div class="field">
+          <label for="loginId">Login ID</label>
+          <input type="text" id="loginId" name="loginId" autocomplete="username" autocapitalize="off" spellcheck="false" required
+                 @if(!userCode.isEmpty()){autofocus}>
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" autocomplete="current-password" required>
+        </div>
       }
     }
     <div class="buttons"><button type="submit" class="primary">Continue</button></div>

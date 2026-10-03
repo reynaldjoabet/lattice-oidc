@@ -1,5 +1,12 @@
-@(title: String, text: String)(implicit request: Http.Request)
+@*
+ * Short outcome pages (device approved, request expired, signed out, ...). Failures show the
+ * request id so users can quote it to support.
+ *@
+@(title: String, text: String, status: Int)(implicit request: Http.Request)
 @layout(title) {
   <h1>@title</h1>
   <p>@text</p>
+  @if(status >= 400) {
+    <p class="muted">Reference: <code>@com.lattice.oidc.filters.RequestIdFilter.of(request)</code></p>
+  }
 }

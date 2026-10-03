@@ -1,15 +1,29 @@
+@*
+ * Shell of all end-user pages. No inline scripts or styles (CSP), not indexed by search engines,
+ * light/dark theme from the operating system.
+ *@
 @(title: String)(content: Html)
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="color-scheme" content="light dark">
     <title>@title</title>
+    <link rel="icon" type="image/svg+xml" href="@routes.Assets.versioned("images/favicon.svg")">
     <link rel="stylesheet" href="@routes.Assets.versioned("stylesheets/oidc.css")">
+    <script src="@routes.Assets.versioned("javascripts/oidc.js")" defer></script>
   </head>
   <body>
-    <main class="card">
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="currentColor" opacity=".12"/><path d="M9 9v14h14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="22" cy="10" r="3" fill="currentColor"/></svg>
+      <span>Lattice</span>
+    </header>
+    <main id="main" class="card">
       @content
     </main>
+    <footer class="site-footer">Secured by Lattice</footer>
   </body>
 </html>
