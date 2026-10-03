@@ -149,9 +149,9 @@ sequenceDiagram
 - Lockout: after `lattice.login.max-failures` wrong passwords (default 5), that login ID is locked for `lattice.login.lockout` (15 minutes). While it's locked, even the correct password is refused, so an attacker can't keep guessing. The user sees "Too many failed attempts".
 
 ### Sessions: rotation, real logout, and pending flows tied to one browser
-Session ID rotation (`UserSessions.login`). Every successful login creates a brand-new session ID (`sid`). This prevents session fixation, where an attacker plants a known session ID in the victim's browser before they log in and then rides on it afterwards.
+Session ID rotation (`UserSessions.login`). Every successful login creates a brand-new session ID (`session_id` in the cookie). This prevents session fixation, where an attacker plants a known session ID in the victim's browser before they log in and then rides on it afterwards.
 
-Server-side invalidation. Play's session cookie is signed, but anyone holding a copy can replay it. So the cookie only carries the `sid`, and a session counts as valid only while that `sid` is registered on the server. Logout removes it there, so a stolen or replayed copy of the old cookie stops working. A test checks this. The `sid` is also what back-channel logout and native SSO key on.
+Server-side invalidation. Play's session cookie is signed, but anyone holding a copy can replay it. So the cookie only carries the session ID, and a session counts as valid only while that session ID is registered on the server. Logout removes it there, so a stolen or replayed copy of the old cookie stops working. A test checks this. The session ID is also what back-channel logout and native SSO key on, and it is sent to clients as the `sid` claim of ID tokens and logout tokens.
 
 Pending flows bound to the browser (`Interactions`). Each browser gets a stable random ID (`browser_id`) in its cookie. Pending consent, device-approval and federation-login state is stored server-side under its ticket or code and tagged with that `browser_id`. Completing a flow requires the same `browser_id`. That stops an attacker who learns or guesses a ticket from completing the consent or device approval from their own browser, and it stops cross-site requests from finishing someone else's flow. CSRF tokens on the forms add a second layer.
 
@@ -207,8 +207,8 @@ A `@Singleton `that holds every configured provider:
 ```mermaid
 flowchart LR
     F[identity providers file] -->|startup| R[IdentityProviders<br/>registry]
-    R -->|"get(&quot;okta&quot;)"| O[IdentityProvider okta]
-    R -->|"get(&quot;azure&quot;)"| A[IdentityProvider azure]
+    R -->|"get('okta')"| O[IdentityProvider okta]
+    R -->|"get('azure')"| A[IdentityProvider azure]
     R -->|"links()"| P[Consent page:<br/>'Sign in with Okta / Azure']
     C[IdentityBrokerController] -->|initiation / callback| R
     O <-->|discovery, code flow,<br/>ID token, UserInfo| X[(Okta)]
@@ -281,7 +281,7 @@ sequenceDiagram
 
     U->>A: open App A
     A-->>U: redirect to Lattice /api/authorization
-    U->>L: log in (password) → session sid created
+    U->>L: log in (password) → session ID created
     L-->>A: code → tokens
     U->>B: later, open App B
     B-->>U: redirect to Lattice /api/authorization
@@ -318,4 +318,36 @@ sbt --client stage
 APPLICATION_SECRET=$(openssl rand -hex 32) \
 AUTHLETE_SERVICE_APIKEY=<id> AUTHLETE_SERVICE_ACCESSTOKEN=<token> \
 target/universal/stage/bin/lattice-oidc -Dhttp.port=9000
+```
+
+## A user signing in with Okta
+
+```mermaid
+sequenceDiagram
+    participant App as Client app
+    participant B as Browser
+    participant L as Lattice
+    participant A as Authlete
+    participant O as Okta (upstream)
+
+    App->>B: redirect to /api/authorization
+    B->>L: GET /api/authorization
+    L->>A: /auth/authorization
+    A-->>L: INTERACTION + ticket
+    L-->>B: consent page with "Continue with Okta"<br/>(ticket stored, bound to browser_id)
+    B->>L: GET /api/federation/initiation/okta?ticket=…
+    L->>L: new state, PKCE verifier, nonce<br/>stored under state + browser_id
+    L-->>B: 302 to Okta /authorize
+    B->>O: user logs in at Okta
+    O-->>B: 302 to /api/federation/callback/okta?code&state
+    B->>L: callback
+    L->>O: token request (code + PKCE verifier)
+    O-->>L: access token + ID token
+    L->>L: verify ID token (signature, iss, aud, exp, nonce)
+    L->>O: UserInfo
+    L->>L: subject must match the ID token<br/>save user "sub@okta", new session ID
+    L-->>B: consent page, "Signed in as Alice"
+    B->>L: Allow
+    L->>A: /auth/authorization/issue (subject = sub@okta)
+    L-->>B: 302 to client with code
 ```

@@ -26,8 +26,8 @@ public final class HstsFilter extends Filter {
   private final String headerValue;
 
   @Inject
-  public HstsFilter(Materializer mat, Config config) {
-    super(mat);
+  public HstsFilter(Materializer materializer, Config config) {
+    super(materializer);
     this.enabled = config.getBoolean("lattice.security.hsts.enabled");
     this.headerValue =
         "max-age=" + config.getDuration("lattice.security.hsts.max-age").toSeconds() + "; includeSubDomains";

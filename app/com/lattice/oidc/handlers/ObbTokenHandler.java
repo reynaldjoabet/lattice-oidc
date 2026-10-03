@@ -44,10 +44,10 @@ public final class ObbTokenHandler {
     Map<String, Object> body = Jsons.readMap(responseJson);
     Object refreshToken = body.get("refresh_token");
     Object scope = body.get("scope");
-    if (!(refreshToken instanceof String rt) || !(scope instanceof String s)) {
+    if (!(refreshToken instanceof String refreshTokenValue) || !(scope instanceof String scopeValue)) {
       return;
     }
-    String consentScope = ObbSupport.consentScope(s.split(" +"));
+    String consentScope = ObbSupport.consentScope(scopeValue.split(" +"));
     if (consentScope == null) {
       return;
     }
@@ -55,9 +55,9 @@ public final class ObbTokenHandler {
     Optional<com.lattice.oidc.models.Consent> consent = consents.find(consentId);
     if (consent.isEmpty()) {
       Object accessToken = body.get("access_token");
-      if (accessToken instanceof String at) {
+      if (accessToken instanceof String accessTokenValue) {
         try {
-          api.get().tokenDelete(at);
+          api.get().tokenDelete(accessTokenValue);
         } catch (RuntimeException e) {
           LOG.warn("Could not delete access token issued for unknown consent: {}", e.getMessage());
         }
@@ -68,6 +68,6 @@ public final class ObbTokenHandler {
                   "invalid_request", "There is no consent corresponding to the consent ID."),
               headers));
     }
-    consents.save(consent.get().withRefreshToken(rt, ObbSupport.now()));
+    consents.save(consent.get().withRefreshToken(refreshTokenValue, ObbSupport.now()));
   }
 }

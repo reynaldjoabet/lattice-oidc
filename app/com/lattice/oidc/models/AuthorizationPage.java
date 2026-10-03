@@ -53,8 +53,8 @@ public record AuthorizationPage(
         info.getSubject() != null
             ? info.getSubject()
             : info.getLoginHint() != null ? info.getLoginHint() : "";
-    List<ClaimPurpose> idt = verifiedClaims(info.getIdTokenClaims());
-    List<ClaimPurpose> ui = verifiedClaims(info.getUserInfoClaims());
+    List<ClaimPurpose> idTokenVerifiedClaims = verifiedClaims(info.getIdTokenClaims());
+    List<ClaimPurpose> userInfoVerifiedClaims = verifiedClaims(info.getUserInfoClaims());
     return new AuthorizationPage(
         info.getTicket(),
         info.getService() != null && info.getService().getServiceName() != null
@@ -70,8 +70,8 @@ public record AuthorizationPage(
         list(info.getClaims()),
         list(info.getClaimsAtUserInfo()),
         Optional.ofNullable(info.getPurpose()),
-        idt,
-        ui,
+        idTokenVerifiedClaims,
+        userInfoVerifiedClaims,
         details(info.getAuthorizationDetails()),
         loginId,
         info.getSubject() != null,
@@ -139,8 +139,8 @@ public record AuthorizationPage(
       }
     }
     if (info.getDynamicScopes() != null) {
-      for (DynamicScope ds : info.getDynamicScopes()) {
-        out.add(new ScopeItem(ds.getValue(), ConsentLabels.scope(ds.getValue(), null)));
+      for (DynamicScope dynamicScope : info.getDynamicScopes()) {
+        out.add(new ScopeItem(dynamicScope.getValue(), ConsentLabels.scope(dynamicScope.getValue(), null)));
       }
     }
     return out;
@@ -159,9 +159,9 @@ public record AuthorizationPage(
     if (claimsRequest == null || claimsRequest.isEmpty()) {
       return List.of();
     }
-    Object vc = Jsons.readMap(claimsRequest).get("verified_claims");
+    Object verified = Jsons.readMap(claimsRequest).get("verified_claims");
     List<Object> entries =
-        vc instanceof List<?> l ? (List<Object>) l : vc == null ? List.of() : List.of(vc);
+        verified instanceof List<?> l ? (List<Object>) l : verified == null ? List.of() : List.of(verified);
     List<ClaimPurpose> out = new ArrayList<>();
     for (Object e : entries) {
       if (e instanceof Map<?, ?> m && m.get("claims") instanceof Map<?, ?> claims) {

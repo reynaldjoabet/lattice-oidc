@@ -63,12 +63,12 @@ public final class DeviceHandler {
                     ? DeviceCompleteRequest.Result.AUTHORIZED
                     : DeviceCompleteRequest.Result.ACCESS_DENIED);
     if (authorized && user.isPresent()) {
-      LoginState s = user.get();
+      LoginState loginState = user.get();
       request
-          .setSubject(s.user().getSubject())
-          .setAuthTime(s.authTime())
+          .setSubject(loginState.user().getSubject())
+          .setAuthTime(loginState.authTime())
           .setAcr(acr(approval.acrs()));
-      Map<String, Object> claims = new ClaimsCollector(s.user()).collect(approval.claimNames(), null);
+      Map<String, Object> claims = new ClaimsCollector(loginState.user()).collect(approval.claimNames(), null);
       if (claims != null) {
         request.setClaims(claims);
       }

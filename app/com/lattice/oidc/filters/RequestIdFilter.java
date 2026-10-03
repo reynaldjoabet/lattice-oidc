@@ -30,8 +30,8 @@ public final class RequestIdFilter extends Filter {
   private static final Pattern VALID = Pattern.compile("[A-Za-z0-9._:-]{1,64}");
 
   @Inject
-  public RequestIdFilter(Materializer mat) {
-    super(mat);
+  public RequestIdFilter(Materializer materializer) {
+    super(materializer);
   }
 
   public static String of(Http.RequestHeader request) {

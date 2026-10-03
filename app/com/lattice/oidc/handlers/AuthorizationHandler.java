@@ -40,11 +40,11 @@ public final class AuthorizationHandler {
    *
    * @param user The end-user who granted authorization.
    * @param authTime The time when the end-user was authenticated, in seconds since the Unix epoch.
-   * @param sid The session ID of the end-user's authentication session. This value is needed for the
+   * @param sessionId The session ID of the end-user's authentication session. This value is needed for the
    *     {@code sid} claim (back-channel logout) and when "OpenID Connect Native SSO for Mobile Apps
    *     1.0" (a.k.a. "Native SSO") needs to be supported.
    */
-  public record Grant(User user, long authTime, String sid) {}
+  public record Grant(User user, long authTime, String sessionId) {}
 
   private final Provider<AuthleteApi> api;
   private final PairwiseSubjects pairwise;
@@ -86,42 +86,42 @@ public final class AuthorizationHandler {
     return null;
   }
 
-  public Result issue(AuthorizationInteraction ix, Grant grant) {
+  public Result issue(AuthorizationInteraction interaction, Grant grant) {
     User user = grant.user();
     // The current user is different from the requested subject.
-    if (ix.requestedSubject() != null && !ix.requestedSubject().equals(user.getSubject())) {
-      return fail(ix.ticket(), AuthorizationFailRequest.Reason.DIFFERENT_SUBJECT);
+    if (interaction.requestedSubject() != null && !interaction.requestedSubject().equals(user.getSubject())) {
+      return fail(interaction.ticket(), AuthorizationFailRequest.Reason.DIFFERENT_SUBJECT);
     }
-    String acr = acr(ix.ticket(), ix.acrs(), ix.acrEssential());
+    String acr = acr(interaction.ticket(), interaction.acrs(), interaction.acrEssential());
 
     // Collect claim values. Values of verified claims ("verified_claims", OpenID Connect for
     // Identity Assurance 1.0) are added when the "id_token" property of the "claims" request
     // parameter requests them.
     ClaimsCollector collector = new ClaimsCollector(user);
-    Map<String, Object> claims = collector.collect(ix.claimNames(), ix.claimLocales());
-    claims = customClaims(ix, claims);
-    claims = collector.withVerifiedClaims(claims, ix.idTokenClaims());
+    Map<String, Object> claims = collector.collect(interaction.claimNames(), interaction.claimLocales());
+    claims = customClaims(interaction, claims);
+    claims = collector.withVerifiedClaims(claims, interaction.idTokenClaims());
     // Collect values of claims that are indirectly requested by transformed claims.
     // See "OpenID Connect Advanced Syntax for Claims (ASC) 1.0" for details.
     Map<String, Object> claimsForTx =
-        collector.collect(ix.requestedClaimsForTx(), ix.claimLocales());
+        collector.collect(interaction.requestedClaimsForTx(), interaction.claimLocales());
     // Values of verified claims that are used to compute values of
     // transformed claims under "verified_claims/claims".
     List<Map<String, Object>> verifiedForTx =
-        collector.verifiedClaimsForTx(ix.idTokenClaims(), ix.requestedVerifiedClaimsForTx());
+        collector.verifiedClaimsForTx(interaction.idTokenClaims(), interaction.requestedVerifiedClaimsForTx());
 
     AuthorizationIssueRequest request =
         new AuthorizationIssueRequest()
-            .setTicket(ix.ticket())
+            .setTicket(interaction.ticket())
             .setSubject(user.getSubject())
             .setAuthTime(grant.authTime())
             .setAcr(acr)
             // The potentially pairwise subject of the end-user.
-            .setSub(pairwise.subFor(ix.subjectType(), ix.sectorIdentifier(), user.getSubject()))
+            .setSub(pairwise.subFor(interaction.subjectType(), interaction.sectorIdentifier(), user.getSubject()))
             .setClaimsForTx(claimsForTx)
             .setVerifiedClaimsForTx(verifiedForTx)
             // The session ID of the user's authentication session (used for the "sid" claim and Native SSO).
-            .setSessionId(grant.sid());
+            .setSessionId(grant.sessionId());
     if (claims != null && !claims.isEmpty()) {
       request.setClaims(claims);
     }
@@ -134,12 +134,12 @@ public final class AuthorizationHandler {
     return switch (response.getAction()) {
       // 302 Found. The client is recorded in the login session so that it can be notified on logout.
       case LOCATION -> {
-        sessions.addClient(grant.sid(), ix.clientIdentifier());
+        sessions.addClient(grant.sessionId(), interaction.clientIdentifier());
         yield Responses.location(content);
       }
       // 200 OK (response_mode=form_post)
       case FORM -> {
-        sessions.addClient(grant.sid(), ix.clientIdentifier());
+        sessions.addClient(grant.sessionId(), interaction.clientIdentifier());
         yield Responses.form(content);
       }
       // 400 Bad Request
@@ -180,11 +180,11 @@ public final class AuthorizationHandler {
    * client).
    */
   @SuppressWarnings("unchecked")
-  private Map<String, Object> customClaims(AuthorizationInteraction ix, Map<String, Object> claims) {
-    List<String> names = ix.claimNames() == null ? List.of() : Arrays.asList(ix.claimNames());
+  private Map<String, Object> customClaims(AuthorizationInteraction interaction, Map<String, Object> claims) {
+    List<String> names = interaction.claimNames() == null ? List.of() : Arrays.asList(interaction.claimNames());
     Map<String, Object> out = claims == null ? new java.util.LinkedHashMap<>() : claims;
     boolean identityAssurance =
-        ix.idTokenClaims() != null && ix.idTokenClaims().contains("verified_claims");
+        interaction.idTokenClaims() != null && interaction.idTokenClaims().contains("verified_claims");
     if (names.contains("txn") || identityAssurance) {
       out.put("txn", UUID.randomUUID().toString());
     }
@@ -192,15 +192,15 @@ public final class AuthorizationHandler {
     // parameter. When it has the form "{clientId}:...", it must belong to the requesting client.
     if (names.contains("openbanking_intent_id")) {
       Object entry =
-          ix.idTokenClaims() == null
+          interaction.idTokenClaims() == null
               ? null
-              : com.lattice.oidc.common.Jsons.readMap(ix.idTokenClaims()).get("openbanking_intent_id");
+              : com.lattice.oidc.common.Jsons.readMap(interaction.idTokenClaims()).get("openbanking_intent_id");
       Object value = entry instanceof Map<?, ?> m ? ((Map<String, Object>) m).get("value") : null;
       if (!(value instanceof String intentId)) {
         throw invalidRequest("The value of 'openbanking_intent_id' is not available.");
       }
       Matcher matcher = OPENBANKING_INTENT_ID.matcher(intentId);
-      if (matcher.matches() && !matcher.group(1).equals(String.valueOf(ix.clientId()))) {
+      if (matcher.matches() && !matcher.group(1).equals(String.valueOf(interaction.clientId()))) {
         throw invalidRequest("The 'openbanking_intent_id' is not for the client.");
       }
       out.put("openbanking_intent_id", intentId);

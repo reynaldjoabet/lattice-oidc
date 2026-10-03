@@ -20,9 +20,12 @@ public record UiSettings(
       new UiSettings("Lattice", Optional.empty(), Optional.empty(), Optional.empty());
 
   public static UiSettings from(Config root) {
-    Config c = root.getConfig("lattice.ui");
+    Config ui = root.getConfig("lattice.ui");
     return new UiSettings(
-        c.getString("brand-name"), opt(c, "privacy-url"), opt(c, "terms-url"), opt(c, "help-url"));
+        ui.getString("brand-name"),
+        optionalString(ui, "privacy-url"),
+        optionalString(ui, "terms-url"),
+        optionalString(ui, "help-url"));
   }
 
   public static UiSettings of(Http.RequestHeader request) {
@@ -33,8 +36,8 @@ public record UiSettings(
     return privacyUrl.isPresent() || termsUrl.isPresent() || helpUrl.isPresent();
   }
 
-  private static Optional<String> opt(Config c, String path) {
-    String v = c.getString(path).trim();
-    return v.isEmpty() ? Optional.empty() : Optional.of(v);
+  private static Optional<String> optionalString(Config config, String path) {
+    String value = config.getString(path).trim();
+    return value.isEmpty() ? Optional.empty() : Optional.of(value);
   }
 }

@@ -41,20 +41,20 @@ public final class InMemoryUserStore implements UserStore {
   @SuppressWarnings("unchecked")
   private void seed(Environment environment) {
     Map<String, Object> root = Jsons.readMap(resource(environment, "demo-users.json"));
-    for (Object o : (List<Object>) root.get("users")) {
-      Map<String, Object> u = (Map<String, Object>) o;
+    for (Object entry : (List<Object>) root.get("users")) {
+      Map<String, Object> account = (Map<String, Object>) entry;
       List<Map<String, Object>> datasets = new ArrayList<>();
-      for (Object file : (List<Object>) u.getOrDefault("verifiedClaims", List.of())) {
+      for (Object file : (List<Object>) account.getOrDefault("verifiedClaims", List.of())) {
         Map<String, Object> doc = Jsons.readMap(resource(environment, (String) file));
         datasets.add((Map<String, Object>) doc.get("verified_claims"));
       }
       save(
           new User(
-              (String) u.get("subject"),
-              (String) u.get("loginId"),
-              Password.hash((String) u.get("password")).addRandomSalt().withArgon2().getResult(),
-              (Map<String, Object>) u.get("claims"),
-              (Map<String, Object>) u.get("attributes"),
+              (String) account.get("subject"),
+              (String) account.get("loginId"),
+              Password.hash((String) account.get("password")).addRandomSalt().withArgon2().getResult(),
+              (Map<String, Object>) account.get("claims"),
+              (Map<String, Object>) account.get("attributes"),
               datasets));
     }
     LOG.warn("Seeded {} DEMO user accounts; disable lattice.demo-users in production.", bySubject.size());
@@ -86,21 +86,21 @@ public final class InMemoryUserStore implements UserStore {
       return Optional.empty();
     }
     String wanted = loginId.toLowerCase(Locale.ROOT);
-    return find(u -> u.loginId() != null && u.loginId().toLowerCase(Locale.ROOT).equals(wanted));
+    return find(user -> user.loginId() != null && user.loginId().toLowerCase(Locale.ROOT).equals(wanted));
   }
 
   @Override
   public Optional<User> byEmail(String email) {
     return email == null
         ? Optional.empty()
-        : find(u -> email.equalsIgnoreCase(String.valueOf(u.getClaim("email", null))));
+        : find(user -> email.equalsIgnoreCase(String.valueOf(user.getClaim("email", null))));
   }
 
   @Override
   public Optional<User> byPhoneNumber(String phoneNumber) {
     return phoneNumber == null
         ? Optional.empty()
-        : find(u -> phoneNumber.equals(u.getClaim("phone_number", null)));
+        : find(user -> phoneNumber.equals(user.getClaim("phone_number", null)));
   }
 
   @Override

@@ -61,8 +61,8 @@ public final class ObbController extends BaseController {
         request,
         "Consent Create",
         "consents",
-        (iid, info) -> {
-          Map<String, Object> data = consentData(body, iid);
+        (interactionId, info) -> {
+          Map<String, Object> data = consentData(body, interactionId);
           @SuppressWarnings("unchecked")
           List<String> permissions =
               data.get("permissions") instanceof List<?> p ? (List<String>) p : List.of();
@@ -70,7 +70,7 @@ public final class ObbController extends BaseController {
           Consent consent =
               consents.create(
                   permissions, expiration instanceof String s ? s : null, info.getClientId());
-          return ObbSupport.json(201, iid, consentBody(consent));
+          return ObbSupport.json(201, interactionId, consentBody(consent));
         });
   }
 
@@ -79,7 +79,7 @@ public final class ObbController extends BaseController {
         request,
         "Consent Read",
         "consents",
-        (iid, info) -> ObbSupport.json(200, iid, consentBody(ownedConsent(consentId, info, iid, "Consent Read"))));
+        (interactionId, info) -> ObbSupport.json(200, interactionId, consentBody(ownedConsent(consentId, info, interactionId, "Consent Read"))));
   }
 
   public CompletionStage<Result> deleteConsent(Http.Request request, String consentId) {
@@ -87,13 +87,13 @@ public final class ObbController extends BaseController {
         request,
         "Consent Delete",
         "consents",
-        (iid, info) -> {
-          Consent consent = ownedConsent(consentId, info, iid, "Consent Delete");
+        (interactionId, info) -> {
+          Consent consent = ownedConsent(consentId, info, interactionId, "Consent Delete");
           if (consent.refreshToken() != null) {
             api().tokenDelete(consent.refreshToken());
           }
           consents.delete(consentId);
-          return ObbSupport.json(204, iid, null);
+          return ObbSupport.json(204, interactionId, null);
         });
   }
 
@@ -110,11 +110,11 @@ public final class ObbController extends BaseController {
         request,
         "Accounts Read",
         scope,
-        (iid, info) -> {
-          requireConsentScope(info, iid, "Accounts Read");
+        (interactionId, info) -> {
+          requireConsentScope(info, interactionId, "Accounts Read");
           return ObbSupport.json(
               200,
-              iid,
+              interactionId,
               Map.of("data", List.of(SAMPLE_ACCOUNT), "links", ObbSupport.links(), "meta", ObbSupport.meta()));
         });
   }
@@ -124,11 +124,11 @@ public final class ObbController extends BaseController {
         request,
         "Resources Read",
         "resources",
-        (iid, info) -> {
-          requireConsentScope(info, iid, "Resources Read");
+        (interactionId, info) -> {
+          requireConsentScope(info, interactionId, "Resources Read");
           return ObbSupport.json(
               200,
-              iid,
+              interactionId,
               Map.of(
                   "data",
                   List.of(Map.of("resourceId", "resourceId", "type", "type", "status", "status")),
@@ -149,10 +149,10 @@ public final class ObbController extends BaseController {
           if (!config.obbEnabled()) {
             return notFound();
           }
-          String iid =
+          String interactionId =
               ObbSupport.outgoingInteractionId(
                   code, Requests.header(request, ObbSupport.X_FAPI_INTERACTION_ID));
-          return handler.handle(iid, validate(request, iid, code, scope));
+          return handler.handle(interactionId, validate(request, interactionId, code, scope));
         });
   }
 
@@ -160,7 +160,7 @@ public final class ObbController extends BaseController {
    * Validates the access token, including the DPoP proof or certificate binding and the required
    * scope, by calling Authlete's /api/auth/introspection API.
    */
-  private IntrospectionResponse validate(Http.Request request, String iid, String code, String scope) {
+  private IntrospectionResponse validate(Http.Request request, String interactionId, String code, String scope) {
     IntrospectionResponse r =
         api()
             .introspection(
@@ -174,32 +174,32 @@ public final class ObbController extends BaseController {
     String detail = r.getResultMessage();
     return switch (r.getAction()) {
       case OK -> r;
-      case BAD_REQUEST -> throw fail(400, iid, code, "Bad Request", detail);
-      case UNAUTHORIZED -> throw fail(401, iid, code, "Unauthorized", detail);
-      case FORBIDDEN -> throw fail(403, iid, code, "Forbidden", detail);
-      default -> throw fail(500, iid, code, "Internal Server Error", detail);
+      case BAD_REQUEST -> throw fail(400, interactionId, code, "Bad Request", detail);
+      case UNAUTHORIZED -> throw fail(401, interactionId, code, "Unauthorized", detail);
+      case FORBIDDEN -> throw fail(403, interactionId, code, "Forbidden", detail);
+      default -> throw fail(500, interactionId, code, "Internal Server Error", detail);
     };
   }
 
-  private Consent ownedConsent(String consentId, IntrospectionResponse info, String iid, String code) {
+  private Consent ownedConsent(String consentId, IntrospectionResponse info, String interactionId, String code) {
     Optional<Consent> consent = consents.find(consentId);
     if (consent.isEmpty()) {
-      throw fail(404, iid, code, "Not Found", "The consent ID does not exist.");
+      throw fail(404, interactionId, code, "Not Found", "The consent ID does not exist.");
     }
     if (consent.get().clientId() != info.getClientId()) {
-      throw fail(403, iid, code, "Forbidden", "Cannot access the consent with the access token.");
+      throw fail(403, interactionId, code, "Forbidden", "Cannot access the consent with the access token.");
     }
     return consent.get();
   }
 
-  private static void requireConsentScope(IntrospectionResponse info, String iid, String code) {
+  private static void requireConsentScope(IntrospectionResponse info, String interactionId, String code) {
     if (ObbSupport.consentScope(info.getScopes()) == null) {
-      throw fail(403, iid, code, "Forbidden", "The access token does not have a consent scope.");
+      throw fail(403, interactionId, code, "Forbidden", "The access token does not have a consent scope.");
     }
   }
 
   @SuppressWarnings("unchecked")
-  private static Map<String, Object> consentData(String body, String iid) {
+  private static Map<String, Object> consentData(String body, String interactionId) {
     try {
       Object data = Jsons.readMap(body).get("data");
       if (data instanceof Map<?, ?> m) {
@@ -208,7 +208,7 @@ public final class ObbController extends BaseController {
     } catch (RuntimeException ignored) {
       // fall through
     }
-    throw fail(400, iid, "Consent Create", "Bad Request", "The request has no valid 'data' object.");
+    throw fail(400, interactionId, "Consent Create", "Bad Request", "The request has no valid 'data' object.");
   }
 
   private static Map<String, Object> consentBody(Consent c) {
@@ -226,7 +226,7 @@ public final class ObbController extends BaseController {
     return Map.of("data", data);
   }
 
-  private static WebException fail(int status, String iid, String code, String title, String detail) {
-    return new WebException(ObbSupport.error(status, iid, code, title, detail));
+  private static WebException fail(int status, String interactionId, String code, String title, String detail) {
+    return new WebException(ObbSupport.error(status, interactionId, code, title, detail));
   }
 }

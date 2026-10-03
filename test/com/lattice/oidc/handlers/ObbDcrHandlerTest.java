@@ -34,12 +34,12 @@ public class ObbDcrHandlerTest {
 
   /** Builds a request from a (possibly altered) statement and request, and expects a rejection. */
   private void rejected(
-      String expectedError, Consumer<Map<String, Object>> ssChange, Consumer<Map<String, Object>> reqChange) {
+      String expectedError, Consumer<Map<String, Object>> statementChange, Consumer<Map<String, Object>> requestChange) {
     Map<String, Object> claims = new java.util.LinkedHashMap<>(FakeObbDirectory.claims());
-    ssChange.accept(claims);
-    Map<String, Object> req = new java.util.LinkedHashMap<>(FakeObbDirectory.request(directory.sign(claims)));
-    reqChange.accept(req);
-    rejected(expectedError, Jsons.write(req));
+    statementChange.accept(claims);
+    Map<String, Object> request = new java.util.LinkedHashMap<>(FakeObbDirectory.request(directory.sign(claims)));
+    requestChange.accept(request);
+    rejected(expectedError, Jsons.write(request));
   }
 
   private void rejected(String expectedError, String body) {
@@ -99,33 +99,33 @@ public class ObbDcrHandlerTest {
 
   @Test
   public void requestMustAgreeWithTheStatement() {
-    rejected("invalid_client_metadata", ss -> {}, req -> req.put("jwks_uri", "https://evil.example/jwks"));
+    rejected("invalid_client_metadata", statement -> {}, request -> request.put("jwks_uri", "https://evil.example/jwks"));
     rejected(
         "invalid_redirect_uri",
-        ss -> {},
-        req -> req.put("redirect_uris", List.of("https://evil.example/cb")));
-    rejected("invalid_client_metadata", ss -> {}, req -> req.put("jwks", Map.of("keys", List.of())));
+        statement -> {},
+        request -> request.put("redirect_uris", List.of("https://evil.example/cb")));
+    rejected("invalid_client_metadata", statement -> {}, request -> request.put("jwks", Map.of("keys", List.of())));
   }
 
   @Test
   public void scopesAreLimitedByRoles() {
-    rejected("invalid_client_metadata", ss -> {}, req -> req.put("scope", "openid payments"));
+    rejected("invalid_client_metadata", statement -> {}, request -> request.put("scope", "openid payments"));
     rejected(
-        "invalid_software_statement", ss -> ss.put("software_roles", List.of("ROOT")), req -> {});
+        "invalid_software_statement", statement -> statement.put("software_roles", List.of("ROOT")), request -> {});
   }
 
   @Test
   public void weakAlgorithmsAndAuthMethodsAreRejected() {
     rejected(
         "invalid_client_metadata",
-        ss -> {},
-        req -> req.put("token_endpoint_auth_method", "client_secret_basic"));
+        statement -> {},
+        request -> request.put("token_endpoint_auth_method", "client_secret_basic"));
     rejected(
-        "invalid_client_metadata", ss -> {}, req -> req.put("id_token_signed_response_alg", "RS256"));
+        "invalid_client_metadata", statement -> {}, request -> request.put("id_token_signed_response_alg", "RS256"));
     rejected(
-        "invalid_client_metadata", ss -> {}, req -> req.put("request_object_encryption_alg", "RSA1_5"));
+        "invalid_client_metadata", statement -> {}, request -> request.put("request_object_encryption_alg", "RSA1_5"));
     rejected(
-        "invalid_client_metadata", ss -> {}, req -> req.put("tls_client_auth_san_dns", "tpp.example"));
+        "invalid_client_metadata", statement -> {}, request -> request.put("tls_client_auth_san_dns", "tpp.example"));
   }
 
   @Test

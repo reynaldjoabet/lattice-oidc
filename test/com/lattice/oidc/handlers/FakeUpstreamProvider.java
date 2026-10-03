@@ -96,16 +96,16 @@ public final class FakeUpstreamProvider implements AutoCloseable {
    * A JWT signed with this provider's key. {@code iss} need not be this provider's issuer, so a
    * second instance can forge tokens that claim to come from the first.
    */
-  public String jwt(String iss, String sub, String aud) {
+  public String jwt(String issuer, String subject, String audience) {
     Date now = new Date();
     JWTClaimsSet.Builder claims =
         new JWTClaimsSet.Builder()
-            .issuer(iss)
-            .subject(sub)
+            .issuer(issuer)
+            .subject(subject)
             .issueTime(now)
             .expirationTime(new Date(now.getTime() + 300_000));
-    if (aud != null) {
-      claims.audience(aud);
+    if (audience != null) {
+      claims.audience(audience);
     }
     try {
       SignedJWT jwt =

@@ -40,8 +40,8 @@ public class ClaimsCollectorTest {
             null,
             "{\"verified_claims\":{\"verification\":{\"trust_framework\":null},"
                 + "\"claims\":{\"given_name\":null}}}");
-    Object vc = claims.get("verified_claims");
-    assertTrue(String.valueOf(vc), String.valueOf(vc).contains("given_name=Taro"));
-    assertTrue(!String.valueOf(vc).contains("family_name"));
+    Object verified = claims.get("verified_claims");
+    assertTrue(String.valueOf(verified), String.valueOf(verified).contains("given_name=Taro"));
+    assertTrue(!String.valueOf(verified).contains("family_name"));
   }
 }

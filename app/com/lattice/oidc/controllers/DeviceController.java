@@ -104,7 +104,7 @@ public final class DeviceController extends BaseController {
    * {@code user_code} query parameter (verification_uri_complete) pre-fills the code.
    */
   public Result verificationPage(Http.Request request) {
-    Optional<String> user = sessions.current(request).map(s -> s.user().displayName());
+    Optional<String> user = sessions.current(request).map(loginState -> loginState.user().displayName());
     String userCode = request.queryString("user_code").orElse("");
     return page(request, 200, userCode, user, Optional.empty());
   }
@@ -120,7 +120,7 @@ public final class DeviceController extends BaseController {
           String userCode = Optional.ofNullable(Requests.first(form, "userCode")).orElse("").trim();
           Map<String, String> sessionOut = new HashMap<>();
           Optional<LoginState> current = sessions.current(request);
-          Optional<String> shown = current.map(s -> s.user().displayName());
+          Optional<String> shown = current.map(loginState -> loginState.user().displayName());
           if (current.isEmpty()) {
             LoginService.Result auth =
                 login.authenticate(Requests.first(form, "loginId"), Requests.first(form, "password"));

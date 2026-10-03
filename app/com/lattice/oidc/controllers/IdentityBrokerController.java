@@ -114,9 +114,9 @@ public final class IdentityBrokerController extends BaseController {
             return Pages.message(
                 request, 400, "Request expired", "Please start again from the application.");
           }
-          Optional<AuthorizationInteraction> ix =
+          Optional<AuthorizationInteraction> interaction =
               interactions.get(AUTHZ, pending.get().ticket(), browserId, AuthorizationInteraction.class);
-          if (ix.isEmpty()) {
+          if (interaction.isEmpty()) {
             return Pages.message(
                 request, 400, "Request expired", "Please start again from the application.");
           }
@@ -135,7 +135,7 @@ public final class IdentityBrokerController extends BaseController {
             LOG.warn("Identity provider {} login failed: {}", providerId, e.getMessage());
             audit.record(
                 request, AuditService.Event.BROKERED_LOGIN_FAILED, "identity_provider", providerId);
-            var page = ix.get().page().withError("Login with the external provider failed.");
+            var page = interaction.get().page().withError("Login with the external provider failed.");
             return Responses.of(
                 502, views.html.oidc.authorization.render(page, request).body(), Responses.HTML, null);
           }
@@ -150,12 +150,12 @@ public final class IdentityBrokerController extends BaseController {
               user.getSubject(),
               "identity_provider",
               providerId);
-          var page = ix.get().page().withLoggedInAs(Optional.of(user.displayName())).withError(null);
+          var page = interaction.get().page().withLoggedInAs(Optional.of(user.displayName())).withError(null);
           interactions.put(
               AUTHZ,
               pending.get().ticket(),
               browserId,
-              ix.get().withPage(page).withShownSubject(user.getSubject()));
+              interaction.get().withPage(page).withShownSubject(user.getSubject()));
           Result result =
               Responses.of(
                   200, views.html.oidc.authorization.render(page, request).body(), Responses.HTML, null);

@@ -92,11 +92,11 @@ public final class FederationController extends BaseController {
     String contentType = request.contentType().orElse("");
     return async(
         () -> {
-          FederationRegistrationRequest req = new FederationRegistrationRequest();
+          FederationRegistrationRequest registrationRequest = new FederationRegistrationRequest();
           if (contentType.equalsIgnoreCase("application/entity-statement+jwt")) {
-            req.setEntityConfiguration(body);
+            registrationRequest.setEntityConfiguration(body);
           } else if (contentType.equalsIgnoreCase("application/trust-chain+json")) {
-            req.setTrustChain(body);
+            registrationRequest.setTrustChain(body);
           } else {
             return Responses.json(
                 415,
@@ -104,7 +104,7 @@ public final class FederationController extends BaseController {
                     "invalid_request",
                     "Content-Type must be application/entity-statement+jwt or application/trust-chain+json."));
           }
-          FederationRegistrationResponse r = api().federationRegistration(req);
+          FederationRegistrationResponse r = api().federationRegistration(registrationRequest);
           String content = r.getResponseContent();
           return switch (r.getAction()) {
             case OK -> Responses.of(200, content, Responses.ENTITY_STATEMENT, null);

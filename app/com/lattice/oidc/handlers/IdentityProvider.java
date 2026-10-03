@@ -72,10 +72,10 @@ public final class IdentityProvider {
     if (m == null) {
       Issuer issuer = new Issuer(config.server().issuer());
       try {
-        HTTPRequest req = new OIDCProviderConfigurationRequest(issuer).toHTTPRequest();
-        req.setConnectTimeout(TIMEOUT_MILLIS);
-        req.setReadTimeout(TIMEOUT_MILLIS);
-        m = OIDCProviderMetadata.parse(req.send().getContentAsJSONObject());
+        HTTPRequest httpRequest = new OIDCProviderConfigurationRequest(issuer).toHTTPRequest();
+        httpRequest.setConnectTimeout(TIMEOUT_MILLIS);
+        httpRequest.setReadTimeout(TIMEOUT_MILLIS);
+        m = OIDCProviderMetadata.parse(httpRequest.send().getContentAsJSONObject());
       } catch (ParseException e) {
         throw new IOException("Invalid discovery document from " + issuer + ": " + e.getMessage(), e);
       }

@@ -178,12 +178,12 @@ public class ProtocolEndpointsTest {
     fake.answer(
             "userinfo",
             args -> {
-              UserInfoResponse u = new UserInfoResponse();
-              u.setAction(UserInfoResponse.Action.OK);
-              u.setSubject("1001");
-              u.setToken("at");
-              u.setClaims(new String[] {"name", "email"});
-              return u;
+              UserInfoResponse userInfo = new UserInfoResponse();
+              userInfo.setAction(UserInfoResponse.Action.OK);
+              userInfo.setSubject("1001");
+              userInfo.setToken("at");
+              userInfo.setClaims(new String[] {"name", "email"});
+              return userInfo;
             })
         .answer(
             "userinfoIssue",

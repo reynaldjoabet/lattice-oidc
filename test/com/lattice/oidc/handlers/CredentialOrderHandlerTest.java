@@ -98,11 +98,11 @@ public class CredentialOrderHandlerTest {
             CredentialOrderHandler.Context.SINGLE,
             token("alice", PID_AND_MDL),
             new CredentialRequestInfo().setIdentifier("req-1").setFormat("dc+sd-jwt").setCredentialConfigurationId("pid"));
-    Map<String, Object> p = payload(order);
-    assertEquals(PID, p.get("vct"));
-    assertEquals("alice", p.get("sub"));
-    assertEquals("Alice", p.get("given_name"));
-    assertFalse("claims outside the credential type are not disclosed", p.containsKey("email"));
+    Map<String, Object> credential = payload(order);
+    assertEquals(PID, credential.get("vct"));
+    assertEquals("alice", credential.get("sub"));
+    assertEquals("Alice", credential.get("given_name"));
+    assertFalse("claims outside the credential type are not disclosed", credential.containsKey("email"));
     assertEquals("req-1", order.getRequestIdentifier());
     assertFalse(order.isIssuanceDeferred());
   }
@@ -114,14 +114,14 @@ public class CredentialOrderHandlerTest {
             CredentialOrderHandler.Context.SINGLE,
             token("alice", PID_AND_MDL),
             new CredentialRequestInfo().setFormat("mso_mdoc").setCredentialConfigurationId("mdl"));
-    Map<String, Object> p = payload(order);
-    assertEquals(MDL, p.get("doctype"));
+    Map<String, Object> credential = payload(order);
+    assertEquals(MDL, credential.get("doctype"));
     @SuppressWarnings("unchecked")
-    Map<String, Object> ns =
-        (Map<String, Object>) ((Map<String, Object>) p.get("claims")).get("org.iso.18013.5.1");
-    assertEquals("Example", ns.get("family_name"));
-    assertTrue(String.valueOf(ns.get("issue_date")).startsWith("cbor:1004("));
-    assertFalse("undeclared claims are not issued", ns.containsKey("document_number"));
+    Map<String, Object> namespace =
+        (Map<String, Object>) ((Map<String, Object>) credential.get("claims")).get("org.iso.18013.5.1");
+    assertEquals("Example", namespace.get("family_name"));
+    assertTrue(String.valueOf(namespace.get("issue_date")).startsWith("cbor:1004("));
+    assertFalse("undeclared claims are not issued", namespace.containsKey("document_number"));
   }
 
   @Test

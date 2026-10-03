@@ -21,19 +21,21 @@ import play.mvc.Result;
  * Browser login sessions.
  *
  * <p>The signed Play session cookie carries only identifiers: {@code browser_id} (a stable browser
- * binding for pending interactions), {@code sid} (the login session, rotated at every login) and
- * {@code sub}/{@code auth_time}. A session is valid only while its {@code sid} is registered
- * server-side, so logout invalidates it even if the cookie is replayed.
+ * binding for pending interactions), {@code session_id} (the login session, rotated at every
+ * login), {@code subject}, {@code auth_time} and {@code acr}. A session is valid only while its
+ * {@code session_id} is registered server-side, so logout invalidates it even if the cookie is
+ * replayed. The session ID is also the value of the {@code sid} claim in ID tokens and logout
+ * tokens.
  */
 @Singleton
 public final class UserSessions {
 
-  public record LoginState(User user, String sid, long authTime, String acr) {}
+  public record LoginState(User user, String sessionId, long authTime, String acr) {}
 
   private static final SecureRandom RANDOM = new SecureRandom();
-  private static final String SID = "sid";
+  private static final String SESSION_ID = "session_id";
   private static final String BROWSER_ID = "browser_id";
-  private static final String SUB = "sub";
+  private static final String SUBJECT = "subject";
   private static final String AUTH_TIME = "auth_time";
   private static final String ACR = "acr";
 
@@ -52,41 +54,39 @@ public final class UserSessions {
   }
 
   public static String randomId() {
-    byte[] b = new byte[32];
-    RANDOM.nextBytes(b);
-    return Base64.getUrlEncoder().withoutPadding().encodeToString(b);
+    byte[] bytes = new byte[32];
+    RANDOM.nextBytes(bytes);
+    return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
   }
 
   /** The logged-in user, if the session is still registered and within its maximum lifetime. */
   public Optional<LoginState> current(Http.Request request) {
-    Http.Session s = request.session();
-    Optional<String> sid = s.get(SID);
-    Optional<String> sub = s.get(SUB);
-    Optional<String> authTime = s.get(AUTH_TIME);
-    if (sid.isEmpty() || sub.isEmpty() || authTime.isEmpty()) {
+    Http.Session session = request.session();
+    Optional<String> sessionId = session.get(SESSION_ID);
+    Optional<String> subject = session.get(SUBJECT);
+    Optional<String> authTimeValue = session.get(AUTH_TIME);
+    if (sessionId.isEmpty() || subject.isEmpty() || authTimeValue.isEmpty()) {
       return Optional.empty();
     }
-    Optional<SessionRecord> record = cache.get(key(sid.get()));
-    if (record.isEmpty() || !record.get().subject().equals(sub.get())) {
+    Optional<SessionRecord> record = cache.get(key(sessionId.get()));
+    if (record.isEmpty() || !record.get().subject().equals(subject.get())) {
       return Optional.empty();
     }
-    long at;
+    long authTime;
     try {
-      at = Long.parseLong(authTime.get());
+      authTime = Long.parseLong(authTimeValue.get());
     } catch (NumberFormatException e) {
       return Optional.empty();
     }
+    String acr = session.get(ACR).filter(value -> !value.isEmpty()).orElse(null);
     return users
-        .bySubject(sub.get())
-        .map(
-            u ->
-                new LoginState(
-                    u, sid.get(), at, s.get(ACR).filter(a -> !a.isEmpty()).orElse(null)));
+        .bySubject(subject.get())
+        .map(user -> new LoginState(user, sessionId.get(), authTime, acr));
   }
 
   /** Whether a login session id is still active (used by native SSO). */
-  public boolean isActive(String sid) {
-    return sid != null && cache.get(key(sid)).isPresent();
+  public boolean isActive(String sessionId) {
+    return sessionId != null && cache.get(key(sessionId)).isPresent();
   }
 
   /**
@@ -106,18 +106,18 @@ public final class UserSessions {
     return result.addingToSession(request, BROWSER_ID, browserId);
   }
 
-  /** Starts a new login session (new sid, preventing session fixation). Returns the new sid. */
+  /** Starts a new login session (new session ID, preventing session fixation). Returns the session ID. */
   public String login(User user, long authTime, String acr, Map<String, String> sessionOut) {
-    String sid = randomId();
+    String sessionId = randomId();
     cache.set(
-        key(sid),
+        key(sessionId),
         new SessionRecord(user.getSubject(), new LinkedHashSet<>()),
         (int) config.sessionMaxLifespan().toSeconds());
-    sessionOut.put(SID, sid);
-    sessionOut.put(SUB, user.getSubject());
+    sessionOut.put(SESSION_ID, sessionId);
+    sessionOut.put(SUBJECT, user.getSubject());
     sessionOut.put(AUTH_TIME, Long.toString(authTime));
     sessionOut.put(ACR, acr == null ? "" : acr);
-    return sid;
+    return sessionId;
   }
 
   /** Applies session values produced by {@link #login} (and the browser binding) to a result. */
@@ -129,39 +129,39 @@ public final class UserSessions {
   }
 
   /** Records that a client obtained tokens in this session (for back-channel logout). */
-  public void addClient(String sid, String clientIdentifier) {
-    if (sid == null || clientIdentifier == null) {
+  public void addClient(String sessionId, String clientIdentifier) {
+    if (sessionId == null || clientIdentifier == null) {
       return;
     }
-    cache.<SessionRecord>get(key(sid))
+    cache.<SessionRecord>get(key(sessionId))
         .ifPresent(
-            r -> {
-              synchronized (r.clients()) {
-                r.clients().add(clientIdentifier);
+            record -> {
+              synchronized (record.clients()) {
+                record.clients().add(clientIdentifier);
               }
             });
   }
 
-  public Set<String> clients(String sid) {
-    return cache.<SessionRecord>get(key(sid))
+  public Set<String> clients(String sessionId) {
+    return cache.<SessionRecord>get(key(sessionId))
         .map(
-            r -> {
-              synchronized (r.clients()) {
-                return Set.copyOf(r.clients());
+            record -> {
+              synchronized (record.clients()) {
+                return Set.copyOf(record.clients());
               }
             })
         .orElse(Set.of());
   }
 
   /** Ends the login session server-side and strips it from the cookie (keeps the browser id). */
-  public Result logout(Result result, Http.Request request, String sid) {
-    if (sid != null) {
-      cache.remove(key(sid));
+  public Result logout(Result result, Http.Request request, String sessionId) {
+    if (sessionId != null) {
+      cache.remove(key(sessionId));
     }
-    return result.removingFromSession(request, SID, SUB, AUTH_TIME, ACR);
+    return result.removingFromSession(request, SESSION_ID, SUBJECT, AUTH_TIME, ACR);
   }
 
-  private static String key(String sid) {
-    return "session:" + sid;
+  private static String key(String sessionId) {
+    return "session:" + sessionId;
   }
 }

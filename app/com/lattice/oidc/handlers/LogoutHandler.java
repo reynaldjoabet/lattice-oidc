@@ -67,10 +67,10 @@ public final class LogoutHandler {
 
   /** Validates the logout request parameters. */
   public LogoutRequest validate(Map<String, String[]> params) throws InvalidLogoutRequest {
-    Optional<String> hint = opt(params, "id_token_hint");
-    Optional<String> clientId = opt(params, "client_id");
-    Optional<String> redirect = opt(params, "post_logout_redirect_uri");
-    Optional<String> state = opt(params, "state");
+    Optional<String> hint = optionalParameter(params, "id_token_hint");
+    Optional<String> clientId = optionalParameter(params, "client_id");
+    Optional<String> redirect = optionalParameter(params, "post_logout_redirect_uri");
+    Optional<String> state = optionalParameter(params, "state");
 
     // id_token_hint: an ID token previously issued by this server (it may have expired). It
     // identifies the end-user and the client (aud/azp).
@@ -81,11 +81,11 @@ public final class LogoutHandler {
       } catch (JwtVerifier.InvalidJwtException e) {
         throw new InvalidLogoutRequest("The id_token_hint is invalid.");
       }
-      Optional<String> aud = hintClaims.flatMap(LogoutHandler::audience);
-      if (clientId.isPresent() && aud.isPresent() && !clientId.equals(aud)) {
+      Optional<String> hintAudience = hintClaims.flatMap(LogoutHandler::audience);
+      if (clientId.isPresent() && hintAudience.isPresent() && !clientId.equals(hintAudience)) {
         throw new InvalidLogoutRequest("client_id does not match the id_token_hint.");
       }
-      clientId = clientId.or(() -> aud);
+      clientId = clientId.or(() -> hintAudience);
     }
 
     // post_logout_redirect_uri must exactly match a URI registered for the client; otherwise the
@@ -111,7 +111,7 @@ public final class LogoutHandler {
    */
   public boolean hintMatches(LogoutRequest request, LoginState current) {
     return request.hintSubject().filter(current.user().getSubject()::equals).isPresent()
-        || request.hintSessionId().filter(current.sid()::equals).isPresent();
+        || request.hintSessionId().filter(current.sessionId()::equals).isPresent();
   }
 
   /** The URL to redirect to after logout ({@code state} appended), if any. */
@@ -123,11 +123,11 @@ public final class LogoutHandler {
                 request
                     .state()
                     .map(
-                        s ->
+                        state ->
                             url
                                 + (url.contains("?") ? "&" : "?")
                                 + "state="
-                                + URLEncoder.encode(s, StandardCharsets.UTF_8))
+                                + URLEncoder.encode(state, StandardCharsets.UTF_8))
                     .orElse(url));
   }
 
@@ -138,8 +138,8 @@ public final class LogoutHandler {
    * logged, never surfaced to the end-user.
    */
   public void endSession(LoginState state) {
-    String sid = state.sid();
-    for (String client : sessions.clients(sid)) {
+    String sessionId = state.sessionId();
+    for (String client : sessions.clients(sessionId)) {
       try {
         BackchannelLogoutTokenResponse r =
             api.get()
@@ -147,7 +147,7 @@ public final class LogoutHandler {
                     new BackchannelLogoutTokenRequest()
                         .setClientIdentifier(client)
                         .setSubject(state.user().getSubject())
-                        .setSessionId(sid),
+                        .setSessionId(sessionId),
                     null);
         if (r.getAction() == BackchannelLogoutTokenResponse.Action.OK
             && r.getBackchannelLogoutUri() != null
@@ -172,7 +172,7 @@ public final class LogoutHandler {
       }
     }
     try {
-      api.get().nativeSsoLogout(new NativeSsoLogoutRequest().setSessionId(sid), null);
+      api.get().nativeSsoLogout(new NativeSsoLogoutRequest().setSessionId(sessionId), null);
     } catch (RuntimeException e) {
       LOG.warn("Native SSO logout failed: {}", e.getMessage());
     }
@@ -203,20 +203,20 @@ public final class LogoutHandler {
   }
 
   private static Optional<String> audience(JWTClaimsSet claims) {
-    String azp = stringClaim(claims, "azp");
-    if (azp != null) {
-      return Optional.of(azp);
+    String authorizedParty = stringClaim(claims, "azp");
+    if (authorizedParty != null) {
+      return Optional.of(authorizedParty);
     }
-    List<String> aud = claims.getAudience();
-    return aud != null && aud.size() == 1 ? Optional.of(aud.get(0)) : Optional.empty();
+    List<String> audiences = claims.getAudience();
+    return audiences != null && audiences.size() == 1 ? Optional.of(audiences.get(0)) : Optional.empty();
   }
 
   private static String stringClaim(JWTClaimsSet claims, String name) {
-    Object v = claims.getClaim(name);
-    return v instanceof String s ? s : null;
+    Object value = claims.getClaim(name);
+    return value instanceof String string ? string : null;
   }
 
-  private static Optional<String> opt(Map<String, String[]> params, String name) {
-    return Optional.ofNullable(Requests.first(params, name)).filter(v -> !v.isEmpty());
+  private static Optional<String> optionalParameter(Map<String, String[]> params, String name) {
+    return Optional.ofNullable(Requests.first(params, name)).filter(value -> !value.isEmpty());
   }
 }

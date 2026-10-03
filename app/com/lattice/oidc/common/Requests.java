@@ -62,21 +62,21 @@ public final class Requests {
   }
 
   public static Map<String, String[]> decode(String body) {
-    Map<String, List<String>> tmp = new LinkedHashMap<>();
+    Map<String, List<String>> decoded = new LinkedHashMap<>();
     if (body != null && !body.isEmpty()) {
       for (String pair : body.split("&")) {
         if (pair.isEmpty()) {
           continue;
         }
-        int eq = pair.indexOf('=');
-        String k = eq < 0 ? pair : pair.substring(0, eq);
-        String v = eq < 0 ? "" : pair.substring(eq + 1);
-        tmp.computeIfAbsent(URLDecoder.decode(k, StandardCharsets.UTF_8), x -> new ArrayList<>())
-            .add(URLDecoder.decode(v, StandardCharsets.UTF_8));
+        int separator = pair.indexOf('=');
+        String name = separator < 0 ? pair : pair.substring(0, separator);
+        String value = separator < 0 ? "" : pair.substring(separator + 1);
+        decoded.computeIfAbsent(URLDecoder.decode(name, StandardCharsets.UTF_8), key -> new ArrayList<>())
+            .add(URLDecoder.decode(value, StandardCharsets.UTF_8));
       }
     }
     Map<String, String[]> out = new LinkedHashMap<>();
-    tmp.forEach((k, v) -> out.put(k, v.toArray(String[]::new)));
+    decoded.forEach((name, value) -> out.put(name, value.toArray(String[]::new)));
     return out;
   }
 
@@ -114,7 +114,7 @@ public final class Requests {
     request
         .getHeaders()
         .asMap()
-        .forEach((name, values) -> values.forEach(v -> pairs.add(new Pair(name, v))));
+        .forEach((name, values) -> values.forEach(value -> pairs.add(new Pair(name, value))));
     return pairs.toArray(Pair[]::new);
   }
 
@@ -200,12 +200,12 @@ public final class Requests {
     if (value == null) {
       return null;
     }
-    String v = value.trim();
-    if (v.length() < 3 || !v.startsWith(":") || !v.endsWith(":")) {
+    String trimmed = value.trim();
+    if (trimmed.length() < 3 || !trimmed.startsWith(":") || !trimmed.endsWith(":")) {
       return null;
     }
     try {
-      return toPem(Base64.getDecoder().decode(v.substring(1, v.length() - 1)));
+      return toPem(Base64.getDecoder().decode(trimmed.substring(1, trimmed.length() - 1)));
     } catch (IllegalArgumentException e) {
       return null;
     }

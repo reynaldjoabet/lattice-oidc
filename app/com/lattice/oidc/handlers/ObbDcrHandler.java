@@ -114,8 +114,8 @@ public final class ObbDcrHandler {
   /** Whether the body carries a software statement whose JWKS is hosted by the OBB directory. */
   public static boolean isObbRequest(String body) {
     try {
-      Object ss = Jsons.readMap(body).get("software_statement");
-      if (!(ss instanceof String s)) {
+      Object statement = Jsons.readMap(body).get("software_statement");
+      if (!(statement instanceof String s)) {
         return false;
       }
       String uri = SignedJWT.parse(s).getJWTClaimsSet().getStringClaim("software_jwks_uri");
@@ -133,10 +133,10 @@ public final class ObbDcrHandler {
     } catch (RuntimeException e) {
       throw error("invalid_request", "The request body is not a JSON object.");
     }
-    SignedJWT ss = softwareStatement(params);
+    SignedJWT statement = softwareStatement(params);
     Map<String, Object> claims;
     try {
-      claims = ss.getJWTClaimsSet().getClaims();
+      claims = statement.getJWTClaimsSet().getClaims();
     } catch (java.text.ParseException e) {
       throw error("invalid_software_statement", "The software statement payload is malformed.");
     }
@@ -148,44 +148,44 @@ public final class ObbDcrHandler {
     if (!(params.get("software_statement") instanceof String value)) {
       throw error("invalid_request", "'software_statement' is missing or not a string.");
     }
-    SignedJWT ss;
+    SignedJWT statement;
     try {
-      ss = SignedJWT.parse(value);
+      statement = SignedJWT.parse(value);
     } catch (java.text.ParseException e) {
       throw error("invalid_software_statement", "The software statement is not a signed JWT.");
     }
-    if (!JWSAlgorithm.PS256.equals(ss.getHeader().getAlgorithm())) {
+    if (!JWSAlgorithm.PS256.equals(statement.getHeader().getAlgorithm())) {
       throw error("invalid_software_statement", "The software statement must be signed with PS256.");
     }
     JWKSet jwks;
-    String location = directoryJwks(ss);
+    String location = directoryJwks(statement);
     try {
       jwks = JWKSet.load(URI.create(location).toURL(), 10_000, 10_000, 1_000_000);
     } catch (Exception e) {
       throw error("server_error", "Failed to fetch the directory JWK Set.", 500);
     }
-    List<JWK> keys = new JWKSelector(JWKMatcher.forJWSHeader(ss.getHeader())).select(jwks);
+    List<JWK> keys = new JWKSelector(JWKMatcher.forJWSHeader(statement.getHeader())).select(jwks);
     if (keys.size() != 1 || !(keys.get(0) instanceof RSAKey rsa)) {
       throw error(
           "invalid_software_statement",
           "Exactly one directory key must match the software statement header.");
     }
     try {
-      if (!ss.verify(new RSASSAVerifier(rsa.toRSAPublicKey()))) {
+      if (!statement.verify(new RSASSAVerifier(rsa.toRSAPublicKey()))) {
         throw error("invalid_software_statement", "The software statement signature is invalid.");
       }
     } catch (com.nimbusds.jose.JOSEException e) {
       throw error("invalid_software_statement", "The software statement signature is invalid.");
     }
-    return ss;
+    return statement;
   }
 
-  private String directoryJwks(SignedJWT ss) {
+  private String directoryJwks(SignedJWT statement) {
     if (config.obbDirectoryJwksUri().isPresent()) {
       return config.obbDirectoryJwksUri().get();
     }
     try {
-      return "production".equals(ss.getJWTClaimsSet().getStringClaim("software_environment"))
+      return "production".equals(statement.getJWTClaimsSet().getStringClaim("software_environment"))
           ? PRODUCTION_JWKS
           : SANDBOX_JWKS;
     } catch (java.text.ParseException e) {
@@ -193,8 +193,8 @@ public final class ObbDcrHandler {
     }
   }
 
-  private void validate(Map<String, Object> req, Map<String, Object> ss) {
-    if (!(ss.get("iat") instanceof Date iat)) {
+  private void validate(Map<String, Object> request, Map<String, Object> statement) {
+    if (!(statement.get("iat") instanceof Date iat)) {
       throw error("invalid_software_statement", "The software statement has no 'iat'.");
     }
     long age = System.currentTimeMillis() - iat.getTime();
@@ -202,15 +202,15 @@ public final class ObbDcrHandler {
       throw error(
           "invalid_software_statement", "The software statement must be issued within 5 minutes.");
     }
-    if (req.containsKey("jwks") || ss.containsKey("jwks")) {
+    if (request.containsKey("jwks") || statement.containsKey("jwks")) {
       throw error("invalid_client_metadata", "'jwks' is not allowed; use 'jwks_uri'.");
     }
-    Object jwksUri = req.get("jwks_uri");
-    if (jwksUri == null || !jwksUri.equals(ss.get("software_jwks_uri"))) {
+    Object jwksUri = request.get("jwks_uri");
+    if (jwksUri == null || !jwksUri.equals(statement.get("software_jwks_uri"))) {
       throw error("invalid_client_metadata", "'jwks_uri' must equal 'software_jwks_uri'.");
     }
-    List<String> redirectUris = strings(req, "redirect_uris", "the request body");
-    Set<String> allowed = new HashSet<>(strings(ss, "software_redirect_uris", "the software statement"));
+    List<String> redirectUris = strings(request, "redirect_uris", "the request body");
+    Set<String> allowed = new HashSet<>(strings(statement, "software_redirect_uris", "the software statement"));
     for (int i = 0; i < redirectUris.size(); i++) {
       if (!allowed.contains(redirectUris.get(i))) {
         throw error(
@@ -218,12 +218,12 @@ public final class ObbDcrHandler {
             "redirect_uris[" + i + "] is not listed in the software statement.");
       }
     }
-    String method = string(req, ss, "token_endpoint_auth_method");
+    String method = string(request, statement, "token_endpoint_auth_method");
     if (method == null || !AUTH_METHODS.contains(method)) {
       throw error("invalid_client_metadata", "'token_endpoint_auth_method' is missing or not allowed.");
     }
-    List<String> roles = strings(ss, "software_roles", "the software statement");
-    String scope = string(req, ss, "scope");
+    List<String> roles = strings(statement, "software_roles", "the software statement");
+    String scope = string(request, statement, "scope");
     if (scope != null && !scope.isBlank()) {
       for (String s : scope.trim().split(" +")) {
         if (roles.stream().noneMatch(r -> allowedScopes(r).contains(s))) {
@@ -232,19 +232,19 @@ public final class ObbDcrHandler {
       }
     }
     for (String m : SAN_METADATA) {
-      if (req.containsKey(m) || ss.containsKey(m)) {
+      if (request.containsKey(m) || statement.containsKey(m)) {
         throw error("invalid_client_metadata", "'" + m + "' is not allowed.");
       }
     }
-    requireValue(req, ss, JWS_ALG_METADATA, "PS256");
-    requireValue(req, ss, JWE_ALG_METADATA, "RSA-OAEP");
-    requireValue(req, ss, JWE_ENC_METADATA, "A256GCM");
+    requireValue(request, statement, JWS_ALG_METADATA, "PS256");
+    requireValue(request, statement, JWE_ALG_METADATA, "RSA-OAEP");
+    requireValue(request, statement, JWE_ENC_METADATA, "A256GCM");
   }
 
-  private Map<String, Object> merge(Map<String, Object> req, Map<String, Object> ss) {
+  private Map<String, Object> merge(Map<String, Object> request, Map<String, Object> statement) {
     Map<String, Object> merged = new HashMap<>();
     for (String m : RECOGNIZED) {
-      Object v = ss.containsKey(m) ? ss.get(m) : req.get(m);
+      Object v = statement.containsKey(m) ? statement.get(m) : request.get(m);
       if (v != null) {
         merged.put(m, v instanceof Date d ? d.getTime() / 1000L : v);
       }
@@ -264,12 +264,12 @@ public final class ObbDcrHandler {
     merged.putIfAbsent("id_token_encrypted_response_alg", "RSA-OAEP");
     merged.putIfAbsent("id_token_encrypted_response_enc", "A256GCM");
     merged.putIfAbsent("default_acr_values", List.of("urn:brasil:openbanking:loa3"));
-    defaultFrom(merged, ss, "software_client_name", "client_name");
-    defaultFrom(merged, ss, "software_tos_uri", "tos_uri");
-    defaultFrom(merged, ss, "software_client_description", "client_description");
-    defaultFrom(merged, ss, "software_policy_uri", "policy_uri");
-    defaultFrom(merged, ss, "software_client_uri", "client_uri");
-    defaultFrom(merged, ss, "software_logo_uri", "logo_uri");
+    defaultFrom(merged, statement, "software_client_name", "client_name");
+    defaultFrom(merged, statement, "software_tos_uri", "tos_uri");
+    defaultFrom(merged, statement, "software_client_description", "client_description");
+    defaultFrom(merged, statement, "software_policy_uri", "policy_uri");
+    defaultFrom(merged, statement, "software_client_uri", "client_uri");
+    defaultFrom(merged, statement, "software_logo_uri", "logo_uri");
     if (merged.get("scope") == null) {
       Set<String> scopes = new TreeSet<>();
       strings(merged, "software_roles", "the software statement")
@@ -280,9 +280,9 @@ public final class ObbDcrHandler {
   }
 
   private static void defaultFrom(
-      Map<String, Object> merged, Map<String, Object> ss, String source, String target) {
-    if (!merged.containsKey(target) && ss.containsKey(source)) {
-      merged.put(target, ss.get(source));
+      Map<String, Object> merged, Map<String, Object> statement, String source, String target) {
+    if (!merged.containsKey(target) && statement.containsKey(source)) {
+      merged.put(target, statement.get(source));
     }
   }
 
@@ -295,17 +295,17 @@ public final class ObbDcrHandler {
   }
 
   private static void requireValue(
-      Map<String, Object> req, Map<String, Object> ss, List<String> names, String expected) {
+      Map<String, Object> request, Map<String, Object> statement, List<String> names, String expected) {
     for (String name : names) {
-      String v = string(req, ss, name);
+      String v = string(request, statement, name);
       if (v != null && !v.equals(expected)) {
         throw error("invalid_client_metadata", "'" + name + "' must be '" + expected + "'.");
       }
     }
   }
 
-  private static String string(Map<String, Object> req, Map<String, Object> ss, String name) {
-    Object v = ss.containsKey(name) ? ss.get(name) : req.get(name);
+  private static String string(Map<String, Object> request, Map<String, Object> statement, String name) {
+    Object v = statement.containsKey(name) ? statement.get(name) : request.get(name);
     if (v != null && !(v instanceof String)) {
       throw error("invalid_client_metadata", "'" + name + "' must be a string.");
     }

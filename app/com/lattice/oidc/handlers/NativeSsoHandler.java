@@ -60,7 +60,7 @@ public final class NativeSsoHandler {
           400, "invalid_grant", "The login session associated with this request has ended.", headers);
     }
     // Validate the presented device secret, or create and register a new one.
-    DeviceSecret ds = deviceSecret(token.getDeviceSecret(), token.getDeviceSecretHash(), sessionId, headers);
+    DeviceSecret deviceSecret = deviceSecret(token.getDeviceSecret(), token.getDeviceSecretHash(), sessionId, headers);
 
     // Call Authlete's /nativesso API.
     NativeSsoResponse response =
@@ -72,8 +72,8 @@ public final class NativeSsoHandler {
                             ? token.getJwtAccessToken()
                             : token.getAccessToken())
                     .setRefreshToken(token.getRefreshToken())
-                    .setDeviceSecret(ds.value())
-                    .setDeviceSecretHash(ds.hash()),
+                    .setDeviceSecret(deviceSecret.value())
+                    .setDeviceSecretHash(deviceSecret.hash()),
                 null);
     return switch (response.getAction()) {
       case OK -> Responses.ok(response.getResponseContent(), headers);
@@ -114,9 +114,9 @@ public final class NativeSsoHandler {
 
   private DeviceSecret register(String sessionId) {
     String value = UserSessions.randomId();
-    DeviceSecret ds = new DeviceSecret(value, hash(value), sessionId);
-    cache.set(key(value), ds, (int) config.sessionMaxLifespan().toSeconds());
-    return ds;
+    DeviceSecret deviceSecret = new DeviceSecret(value, hash(value), sessionId);
+    cache.set(key(value), deviceSecret, (int) config.sessionMaxLifespan().toSeconds());
+    return deviceSecret;
   }
 
   static String hash(String value) {

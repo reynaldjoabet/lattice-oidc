@@ -94,7 +94,7 @@ public final class JwtVerifier {
     }
     processor.setJWTClaimsSetVerifier(
         allowExpired
-            ? (claims, ctx) -> {}
+            ? (claims, context) -> {}
             : new DefaultJWTClaimsVerifier<>(
                 null, new JWTClaimsSet.Builder().issuer(issuer).build(), required));
     try {

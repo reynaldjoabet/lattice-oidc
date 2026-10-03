@@ -83,7 +83,7 @@ public final class LogoutController extends BaseController {
           current.get().user().getSubject(),
           "client_id",
           logoutRequest.clientId().orElse(null));
-      result = sessions.logout(result, request, current.get().sid());
+      result = sessions.logout(result, request, current.get().sessionId());
     }
     return result;
   }

@@ -19,7 +19,7 @@ public final class HomeController extends Controller {
   }
 
   public Result index(Http.Request request) {
-    Optional<String> user = sessions.current(request).map(s -> s.user().displayName());
+    Optional<String> user = sessions.current(request).map(loginState -> loginState.user().displayName());
     return Responses.of(
         200, views.html.oidc.home.render(user, request).body(), Responses.HTML, null);
   }

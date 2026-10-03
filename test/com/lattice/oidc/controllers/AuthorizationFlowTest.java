@@ -114,9 +114,9 @@ public class AuthorizationFlowTest {
 
     AuthorizationIssueRequest issue = fake.lastRequest("authorizationIssue");
     assertEquals("1001", issue.getSubject());
-    assertNotNull("sid must be bound for logout/native SSO", issue.getSessionId());
+    assertNotNull("the session ID must be bound for logout/native SSO", issue.getSessionId());
     assertTrue(issue.getClaims().contains("John Flibble Smith"));
-    assertEquals(issue.getSessionId(), r.session().get("sid").orElse(null));
+    assertEquals(issue.getSessionId(), r.session().get("session_id").orElse(null));
 
     // The ticket is single-use.
     Result replay =

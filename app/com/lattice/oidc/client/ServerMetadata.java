@@ -32,7 +32,7 @@ public final class ServerMetadata {
       synchronized (this) {
         s = snapshot;
         if (s == null || System.currentTimeMillis() >= s.expiresAt()) {
-          Map<String, Object> conf = Jsons.readMap(api.get().getServiceConfiguration(false));
+          Map<String, Object> configuration = Jsons.readMap(api.get().getServiceConfiguration(false));
           JWKSet jwks;
           try {
             String json = api.get().getServiceJwks(false, false);
@@ -40,7 +40,7 @@ public final class ServerMetadata {
           } catch (ParseException e) {
             throw new IllegalStateException("Authlete returned an invalid JWK Set", e);
           }
-          s = new Snapshot(conf, jwks, System.currentTimeMillis() + TTL.toMillis());
+          s = new Snapshot(configuration, jwks, System.currentTimeMillis() + TTL.toMillis());
           snapshot = s;
         }
       }

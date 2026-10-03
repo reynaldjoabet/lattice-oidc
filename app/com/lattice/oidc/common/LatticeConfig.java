@@ -67,69 +67,69 @@ public final class LatticeConfig {
 
   @Inject
   public LatticeConfig(Config root) {
-    Config c = root.getConfig("lattice");
-    publicBaseUrl = opt(c, "public-base-url").map(LatticeConfig::stripSlash);
-    trustProxyCertificateHeaders = c.getBoolean("mtls.trust-proxy-headers");
-    demoUsers = c.getBoolean("demo-users");
-    testEndpointsEnabled = c.getBoolean("test-endpoints.enabled");
-    appleAppSiteAssociation = opt(c, "apple-app-site-association");
-    interactionTtl = c.getDuration("session.interaction-ttl");
-    sessionMaxLifespan = c.getDuration("session.max-lifespan");
-    loginMaxFailures = c.getInt("login.max-failures");
-    loginLockout = c.getDuration("login.lockout");
-    satisfiedAcrs = c.getStringList("login.satisfied-acrs");
+    Config lattice = root.getConfig("lattice");
+    publicBaseUrl = optionalString(lattice, "public-base-url").map(LatticeConfig::stripSlash);
+    trustProxyCertificateHeaders = lattice.getBoolean("mtls.trust-proxy-headers");
+    demoUsers = lattice.getBoolean("demo-users");
+    testEndpointsEnabled = lattice.getBoolean("test-endpoints.enabled");
+    appleAppSiteAssociation = optionalString(lattice, "apple-app-site-association");
+    interactionTtl = lattice.getDuration("session.interaction-ttl");
+    sessionMaxLifespan = lattice.getDuration("session.max-lifespan");
+    loginMaxFailures = lattice.getInt("login.max-failures");
+    loginLockout = lattice.getDuration("login.lockout");
+    satisfiedAcrs = lattice.getStringList("login.satisfied-acrs");
     trustedIssuers =
-        c.getConfigList("trusted-jwt-issuers").stream()
+        lattice.getConfigList("trusted-jwt-issuers").stream()
             .map(t -> new TrustedIssuer(stripSlash(t.getString("issuer")), t.getString("jwks-uri")))
             .toList();
     resourceServers =
-        c.getConfigList("resource-servers").stream()
+        lattice.getConfigList("resource-servers").stream()
             .map(
-                s ->
+                server ->
                     new ResourceServer(
-                        s.getString("id"),
-                        s.getString("secret"),
-                        opt(s, "uri"),
-                        opt(s, "introspection-sign-alg"),
-                        opt(s, "introspection-encryption-alg"),
-                        opt(s, "introspection-encryption-enc"),
-                        opt(s, "shared-key-for-sign"),
-                        opt(s, "shared-key-for-encryption"),
-                        opt(s, "public-key-for-encryption")))
+                        server.getString("id"),
+                        server.getString("secret"),
+                        optionalString(server, "uri"),
+                        optionalString(server, "introspection-sign-alg"),
+                        optionalString(server, "introspection-encryption-alg"),
+                        optionalString(server, "introspection-encryption-enc"),
+                        optionalString(server, "shared-key-for-sign"),
+                        optionalString(server, "shared-key-for-encryption"),
+                        optionalString(server, "public-key-for-encryption")))
             .toList();
-    Config ad = c.getConfig("ciba");
+    Config device = lattice.getConfig("ciba");
     ciba =
         new Ciba(
-            CibaMode.valueOf(ad.getString("mode").trim().toUpperCase()),
-            stripSlash(ad.getString("base-url")),
-            opt(ad, "workspace"),
-            ad.getDouble("auth-timeout-ratio"),
-            ad.getDuration("request-timeout"),
-            ad.getDuration("poll-interval"),
-            ad.getInt("poll-max-count"),
-            ad.getDuration("notification-timeout"));
-    identityProvidersFile = opt(c, "identity-providers.file");
-    credentialOfferEndpoint = c.getString("vci.credential-offer-endpoint");
-    obbEnabled = c.getBoolean("obb.enabled");
-    obbRootCertificates = c.getStringList("obb.root-certificates");
-    obbDirectoryJwksUri = opt(c, "obb.directory-jwks-uri");
-    backchannelLogoutTimeout = c.getDuration("logout.backchannel-timeout");
+            CibaMode.valueOf(device.getString("mode").trim().toUpperCase()),
+            stripSlash(device.getString("base-url")),
+            optionalString(device, "workspace"),
+            device.getDouble("auth-timeout-ratio"),
+            device.getDuration("request-timeout"),
+            device.getDuration("poll-interval"),
+            device.getInt("poll-max-count"),
+            device.getDuration("notification-timeout"));
+    identityProvidersFile = optionalString(lattice, "identity-providers.file");
+    credentialOfferEndpoint = lattice.getString("vci.credential-offer-endpoint");
+    obbEnabled = lattice.getBoolean("obb.enabled");
+    obbRootCertificates = lattice.getStringList("obb.root-certificates");
+    obbDirectoryJwksUri = optionalString(lattice, "obb.directory-jwks-uri");
+    backchannelLogoutTimeout = lattice.getDuration("logout.backchannel-timeout");
     pairwiseSecret =
-        opt(c, "pairwise-secret")
+        optionalString(lattice, "pairwise-secret")
             .orElseGet(
                 () -> root.hasPath("play.http.secret.key") ? root.getString("play.http.secret.key") : "");
   }
 
-  private static Optional<String> opt(Config c, String path) {
-    if (!c.hasPath(path)) {
+  private static Optional<String> optionalString(Config config, String path) {
+    if (!config.hasPath(path)) {
       return Optional.empty();
     }
-    String v = c.getString(path).trim();
-    return v.isEmpty() ? Optional.empty() : Optional.of(v);
+    String value = config.getString(path).trim();
+    return value.isEmpty() ? Optional.empty() : Optional.of(value);
   }
 
-  private static String stripSlash(String s) {
-    return s.endsWith("/") ? s.substring(0, s.length() - 1) : s;
+  private static String stripSlash(String url) {
+    return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
   }
 
   public Optional<String> publicBaseUrl() {

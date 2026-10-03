@@ -106,7 +106,7 @@ public class LogoutFlowTest {
     Result done =
         route(app, withCsrf(post("/api/logout/confirm", Map.of("confirm", "true"))).session(session));
     assertEquals(200, done.status());
-    assertFalse(done.session().get("sid").isPresent());
+    assertFalse(done.session().get("session_id").isPresent());
     assertEquals("client from the session is notified", 1, fake.count("backchannelLogoutToken"));
     assertEquals(1, fake.count("nativeSsoLogout"));
 

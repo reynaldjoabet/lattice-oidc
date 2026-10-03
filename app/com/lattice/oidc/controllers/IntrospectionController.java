@@ -48,14 +48,14 @@ public final class IntrospectionController extends BaseController {
   public CompletionStage<Result> introspect(Http.Request request) {
     return async(
         () -> {
-          Optional<ResourceServer> rs = authenticate(Requests.basicCredentials(request));
-          if (rs.isEmpty()) {
+          Optional<ResourceServer> resourceServer = authenticate(Requests.basicCredentials(request));
+          if (resourceServer.isEmpty()) {
             return Responses.unauthorized(
                 Responses.error("invalid_client", "Resource server authentication failed."),
                 CHALLENGE,
                 null);
           }
-          ResourceServer server = rs.get();
+          ResourceServer server = resourceServer.get();
           // Call Authlete's /api/auth/introspection/standard API.
           StandardIntrospectionResponse response =
               api()
@@ -96,8 +96,8 @@ public final class IntrospectionController extends BaseController {
     }
     byte[] presented = credentials.getPassword().getBytes(StandardCharsets.UTF_8);
     return config.resourceServers().stream()
-        .filter(rs -> rs.id().equals(credentials.getUserId()))
-        .filter(rs -> MessageDigest.isEqual(rs.secret().getBytes(StandardCharsets.UTF_8), presented))
+        .filter(resourceServer -> resourceServer.id().equals(credentials.getUserId()))
+        .filter(resourceServer -> MessageDigest.isEqual(resourceServer.secret().getBytes(StandardCharsets.UTF_8), presented))
         .findFirst();
   }
 }

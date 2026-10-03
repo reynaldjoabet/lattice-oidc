@@ -18,8 +18,8 @@ public final class UiFilter extends Filter {
   private final UiSettings settings;
 
   @Inject
-  public UiFilter(Materializer mat, Config config) {
-    super(mat);
+  public UiFilter(Materializer materializer, Config config) {
+    super(materializer);
     this.settings = UiSettings.from(config);
   }
 

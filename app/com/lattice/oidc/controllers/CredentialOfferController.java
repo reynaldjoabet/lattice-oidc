@@ -44,7 +44,7 @@ public final class CredentialOfferController extends BaseController {
   }
 
   public Result form(Http.Request request) {
-    Optional<String> user = sessions.current(request).map(s -> s.user().displayName());
+    Optional<String> user = sessions.current(request).map(loginState -> loginState.user().displayName());
     CredentialOfferForm form =
         new CredentialOfferForm(DEFAULT_IDS, false, true, true, "", "numeric", "", 0, config.credentialOfferEndpoint(),
             user, Optional.empty(), Optional.empty());
@@ -117,9 +117,9 @@ public final class CredentialOfferController extends BaseController {
           String offerUri = info.getCredentialIssuer() + "/api/offer/" + info.getIdentifier();
           CredentialOfferForm.Created created =
               new CredentialOfferForm.Created(
-                  form.endpoint() + "?credential_offer=" + enc(info.getCredentialOffer()),
+                  form.endpoint() + "?credential_offer=" + urlEncode(info.getCredentialOffer()),
                   offerUri,
-                  form.endpoint() + "?credential_offer_uri=" + enc(offerUri),
+                  form.endpoint() + "?credential_offer_uri=" + urlEncode(offerUri),
                   Jsons.pretty(Jsons.readMap(info.getCredentialOffer())));
           CredentialOfferForm done =
               new CredentialOfferForm(
@@ -151,7 +151,7 @@ public final class CredentialOfferController extends BaseController {
     }
   }
 
-  private static String enc(String value) {
+  private static String urlEncode(String value) {
     return URLEncoder.encode(value, StandardCharsets.UTF_8);
   }
 

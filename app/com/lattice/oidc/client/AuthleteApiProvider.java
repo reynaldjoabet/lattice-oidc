@@ -19,14 +19,14 @@ public final class AuthleteApiProvider implements Provider<AuthleteApi> {
 
   @Inject
   public AuthleteApiProvider(AuthleteSettings settings, WSClient ws) {
-    AuthleteSimpleConfiguration conf =
+    AuthleteSimpleConfiguration configuration =
         new AuthleteSimpleConfiguration()
             .setApiVersion("V3")
             .setBaseUrl(settings.baseUrl())
             .setServiceApiKey(Long.toString(settings.serviceId()))
             .setServiceAccessToken(settings.serviceAccessToken())
             .setDpopKey(settings.dpopKey().orElse(null));
-    PlayAuthleteApiV3 client = new PlayAuthleteApiV3(conf, ws);
+    PlayAuthleteApiV3 client = new PlayAuthleteApiV3(configuration, ws);
     client
         .getSettings()
         .setReadTimeout((int) settings.readTimeout().toMillis())

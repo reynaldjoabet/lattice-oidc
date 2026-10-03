@@ -127,7 +127,7 @@ public final class AuthorizationController extends BaseController {
    */
   private Result interaction(Http.Request request, AuthorizationResponse info) {
     Optional<LoginState> current = reusableSession(request, info);
-    Optional<String> shown = current.map(s -> s.user().displayName());
+    Optional<String> shown = current.map(loginState -> loginState.user().displayName());
     AuthorizationPage page = AuthorizationPage.from(info, shown, identityProviders.links());
     String browserId = sessions.browserId(request);
     interactions.put(
@@ -135,7 +135,7 @@ public final class AuthorizationController extends BaseController {
         info.getTicket(),
         browserId,
         AuthorizationInteraction.from(
-            info, page, current.map(s -> s.user().getSubject()).orElse(null)));
+            info, page, current.map(loginState -> loginState.user().getSubject()).orElse(null)));
     return sessions.withBrowserId(
         Responses.of(200, views.html.oidc.authorization.render(page, request).body(), Responses.HTML, null),
         request,
@@ -197,11 +197,11 @@ public final class AuthorizationController extends BaseController {
     }
     // Check 3. Subject and Check 4. ACR are performed by AuthorizationHandler.issue(): the
     // requested subject must match the current user, and an essential ACR must be satisfied.
-    AuthorizationInteraction ix =
+    AuthorizationInteraction interaction =
         AuthorizationInteraction.from(info, null, state.user().getSubject());
     // Issue
     return service.issue(
-        ix, new AuthorizationHandler.Grant(state.user(), state.authTime(), state.sid()));
+        interaction, new AuthorizationHandler.Grant(state.user(), state.authTime(), state.sessionId()));
   }
 
   /**
@@ -232,13 +232,13 @@ public final class AuthorizationController extends BaseController {
           "Request expired",
           "This authorization request is no longer valid. Please start again from the application.");
     }
-    AuthorizationInteraction ix = found.get();
+    AuthorizationInteraction interaction = found.get();
 
     // "Use a different account": show the login form for this request. The existing session is
     // not ended; it is just no longer offered for this authorization request.
     if (form.containsKey("switchAccount")) {
       AuthorizationInteraction anonymous =
-          ix.withPage(ix.page().withLoggedInAs(Optional.empty()).withError(null))
+          interaction.withPage(interaction.page().withLoggedInAs(Optional.empty()).withError(null))
               .withShownSubject(null);
       interactions.put(KIND, ticket, browserId, anonymous);
       return rerender(request, anonymous, null, 200);
@@ -248,7 +248,7 @@ public final class AuthorizationController extends BaseController {
     // The end-user denied the authorization request.
     if (!form.containsKey("authorized")) {
       interactions.take(KIND, ticket, browserId, AuthorizationInteraction.class);
-      audit.record(request, AuditService.Event.CONSENT_DENIED, "client_id", ix.clientIdentifier());
+      audit.record(request, AuditService.Event.CONSENT_DENIED, "client_id", interaction.clientIdentifier());
       return service.fail(ticket, Reason.DENIED);
     }
 
@@ -265,21 +265,21 @@ public final class AuthorizationController extends BaseController {
             result.outcome() == LoginService.Outcome.LOCKED
                 ? "Too many failed attempts. Try again later."
                 : "Invalid login ID or password.";
-        return rerender(request, ix, message, 401);
+        return rerender(request, interaction, message, 401);
       }
       long authTime = System.currentTimeMillis() / 1000L;
-      String sid = sessions.login(result.user().get(), authTime, null, sessionOut);
-      grant = new AuthorizationHandler.Grant(result.user().get(), authTime, sid);
+      String sessionId = sessions.login(result.user().get(), authTime, null, sessionOut);
+      grant = new AuthorizationHandler.Grant(result.user().get(), authTime, sessionId);
     } else {
       Optional<LoginState> current = sessions.current(request);
       if (current.isEmpty()
-          || ix.shownSubject() == null
-          || !ix.shownSubject().equals(current.get().user().getSubject())) {
+          || interaction.shownSubject() == null
+          || !interaction.shownSubject().equals(current.get().user().getSubject())) {
         // The end-user is not authenticated.
-        return rerender(request, ix, "Please log in.", 401);
+        return rerender(request, interaction, "Please log in.", 401);
       }
-      LoginState s = current.get();
-      grant = new AuthorizationHandler.Grant(s.user(), s.authTime(), s.sid());
+      LoginState loginState = current.get();
+      grant = new AuthorizationHandler.Grant(loginState.user(), loginState.authTime(), loginState.sessionId());
     }
 
     // Authorize the authorization request. The ticket is single-use, so the pending state is
@@ -291,16 +291,16 @@ public final class AuthorizationController extends BaseController {
         "subject",
         grant.user().getSubject(),
         "client_id",
-        ix.clientIdentifier());
-    return sessions.apply(service.issue(ix, grant), request, sessionOut);
+        interaction.clientIdentifier());
+    return sessions.apply(service.issue(interaction, grant), request, sessionOut);
   }
 
   /**
    * Displays the authorization page again, with a message (e.g. after a failed login).
    */
   private Result rerender(
-      Http.Request request, AuthorizationInteraction ix, String message, int status) {
-    AuthorizationPage page = ix.page().withError(message);
+      Http.Request request, AuthorizationInteraction interaction, String message, int status) {
+    AuthorizationPage page = interaction.page().withError(message);
     return Responses.of(
         status, views.html.oidc.authorization.render(page, request).body(), Responses.HTML, null);
   }

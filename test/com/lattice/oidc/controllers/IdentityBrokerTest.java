@@ -94,7 +94,7 @@ public class IdentityBrokerTest {
 
   /** Whether the response started a login session ({@code session()} is null when untouched). */
   private static boolean loggedIn(Result r) {
-    return r.session() != null && r.session().get("sid").isPresent();
+    return r.session() != null && r.session().get("session_id").isPresent();
   }
 
   private boolean audited(AuditService.Event event) {

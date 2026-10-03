@@ -49,7 +49,7 @@ public final class CibaController extends BaseController {
           BasicCredentials basic = Requests.basicCredentials(request);
           String[] chain = requests.clientCertificateChain(request);
           // Call Authlete's /api/backchannel/authentication API.
-          BackchannelAuthenticationResponse ba =
+          BackchannelAuthenticationResponse backchannelResponse =
               api()
                   .backchannelAuthentication(
                       new BackchannelAuthenticationRequest()
@@ -62,13 +62,13 @@ public final class CibaController extends BaseController {
                           .setOauthClientAttestation(Requests.header(request, "OAuth-Client-Attestation"))
                           .setOauthClientAttestationPop(Requests.header(request, "OAuth-Client-Attestation-PoP")));
           Map<String, String> headers = new LinkedHashMap<>();
-          if (ba.getAttestationChallenge() != null) {
-            headers.put("OAuth-Client-Attestation-Challenge", ba.getAttestationChallenge());
+          if (backchannelResponse.getAttestationChallenge() != null) {
+            headers.put("OAuth-Client-Attestation-Challenge", backchannelResponse.getAttestationChallenge());
           }
-          String content = ba.getResponseContent();
-          return switch (ba.getAction()) {
+          String content = backchannelResponse.getResponseContent();
+          return switch (backchannelResponse.getAction()) {
             // Process user identification.
-            case USER_IDENTIFICATION -> Responses.ok(ciba.identifyAndIssue(ba), headers);
+            case USER_IDENTIFICATION -> Responses.ok(ciba.identifyAndIssue(backchannelResponse), headers);
             // 400 Bad Request
             case BAD_REQUEST -> Responses.badRequest(content, headers);
             // 401 Unauthorized
@@ -76,7 +76,7 @@ public final class CibaController extends BaseController {
             // 500 Internal Server Error
             case INTERNAL_SERVER_ERROR -> Responses.serverError(content, headers);
             // This never happens.
-            default -> throw unknownAction("/backchannel/authentication", ba.getAction());
+            default -> throw unknownAction("/backchannel/authentication", backchannelResponse.getAction());
           };
         });
   }

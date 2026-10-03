@@ -29,7 +29,7 @@ public class CacheIsolationTest {
       Interactions interactions = app.injector().instanceOf(Interactions.class);
       UserStore users = app.injector().instanceOf(UserStore.class);
 
-      String sid =
+      String sessionId =
           sessions.login(users.byLoginId("john").orElseThrow(), 0L, null, new HashMap<>());
       interactions.put("authz", "first", "browser", "pending");
 
@@ -44,7 +44,7 @@ public class CacheIsolationTest {
         Thread.sleep(20);
       }
       assertTrue("the interactions cache is bounded", firstEvicted);
-      assertTrue("login sessions live in their own cache", sessions.isActive(sid));
+      assertTrue("login sessions live in their own cache", sessions.isActive(sessionId));
     } finally {
       Helpers.stop(app);
     }

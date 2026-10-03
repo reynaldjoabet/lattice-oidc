@@ -189,11 +189,11 @@ public class TokenGrantsTest {
     return sessions.login(john, System.currentTimeMillis() / 1000L, null, new HashMap<>());
   }
 
-  private void nativeSso(String sid, String deviceSecret, String deviceSecretHash) {
+  private void nativeSso(String sessionId, String deviceSecret, String deviceSecretHash) {
     authleteSays(
         TokenResponse.Action.NATIVE_SSO,
         r -> {
-          r.setSessionId(sid);
+          r.setSessionId(sessionId);
           r.setAccessToken("at");
           r.setDeviceSecret(deviceSecret);
           r.setDeviceSecretHash(deviceSecretHash);
@@ -202,14 +202,14 @@ public class TokenGrantsTest {
 
   @Test
   public void nativeSsoIssuesADeviceSecretAndReusesItForTheSameSession() {
-    String sid = login();
-    nativeSso(sid, null, null);
+    String sessionId = login();
+    nativeSso(sessionId, null, null);
     assertEquals(200, tokenRequest().status());
     NativeSsoRequest first = fake.lastRequest("nativeSso");
     assertNotNull(first.getDeviceSecret());
 
     // Token exchange by a second app on the device, presenting the secret and its hash.
-    nativeSso(sid, first.getDeviceSecret(), first.getDeviceSecretHash());
+    nativeSso(sessionId, first.getDeviceSecret(), first.getDeviceSecretHash());
     assertEquals(200, tokenRequest().status());
     NativeSsoRequest second = fake.lastRequest("nativeSso");
     assertEquals(first.getDeviceSecret(), second.getDeviceSecret());
@@ -217,41 +217,41 @@ public class TokenGrantsTest {
 
   @Test
   public void deviceSecretWithWrongHashOrFromAnotherSessionIsRejected() {
-    String sid = login();
-    nativeSso(sid, null, null);
+    String sessionId = login();
+    nativeSso(sessionId, null, null);
     tokenRequest();
     NativeSsoRequest issued = fake.lastRequest("nativeSso");
 
-    nativeSso(sid, issued.getDeviceSecret(), "wrong-hash");
+    nativeSso(sessionId, issued.getDeviceSecret(), "wrong-hash");
     Result wrongHash = tokenRequest();
     assertEquals(400, wrongHash.status());
     assertTrue(contentAsString(wrongHash).contains("invalid_grant"));
 
-    String otherSid = login();
-    nativeSso(otherSid, issued.getDeviceSecret(), issued.getDeviceSecretHash());
+    String otherSessionId = login();
+    nativeSso(otherSessionId, issued.getDeviceSecret(), issued.getDeviceSecretHash());
     assertEquals(400, tokenRequest().status());
     assertEquals(1, fake.count("nativeSso"));
   }
 
   @Test
   public void unknownDeviceSecretInARegularFlowIsReplaced() {
-    String sid = login();
-    nativeSso(sid, "stale-secret", null);
+    String sessionId = login();
+    nativeSso(sessionId, "stale-secret", null);
     assertEquals(200, tokenRequest().status());
     assertNotEquals("stale-secret", ((NativeSsoRequest) fake.lastRequest("nativeSso")).getDeviceSecret());
   }
 
   @Test
   public void nativeSsoStopsWorkingWhenTheLoginSessionEnds() {
-    String sid = login();
-    nativeSso(sid, null, null);
+    String sessionId = login();
+    nativeSso(sessionId, null, null);
     tokenRequest();
     NativeSsoRequest issued = fake.lastRequest("nativeSso");
 
     app.injector()
         .instanceOf(UserSessions.class)
-        .logout(Results.ok(), new Http.RequestBuilder().build(), sid);
-    nativeSso(sid, issued.getDeviceSecret(), issued.getDeviceSecretHash());
+        .logout(Results.ok(), new Http.RequestBuilder().build(), sessionId);
+    nativeSso(sessionId, issued.getDeviceSecret(), issued.getDeviceSecretHash());
     Result r = tokenRequest();
     assertEquals(400, r.status());
     assertTrue(contentAsString(r).contains("invalid_grant"));

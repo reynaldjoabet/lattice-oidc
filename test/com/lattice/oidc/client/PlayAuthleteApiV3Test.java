@@ -78,13 +78,13 @@ public class PlayAuthleteApiV3Test {
                         })
                     .build());
     ws = WSTestClient.newClient(server.httpPort());
-    AuthleteSimpleConfiguration conf =
+    AuthleteSimpleConfiguration configuration =
         new AuthleteSimpleConfiguration()
             .setApiVersion("V3")
             .setBaseUrl("http://localhost:" + server.httpPort())
             .setServiceApiKey("42")
             .setServiceAccessToken("secret-token");
-    api = new PlayAuthleteApiV3(conf, ws);
+    api = new PlayAuthleteApiV3(configuration, ws);
   }
 
   @After
@@ -153,14 +153,14 @@ public class PlayAuthleteApiV3Test {
 
   @Test
   public void transportFailuresHaveNoStatusCode() throws Exception {
-    AuthleteSimpleConfiguration conf =
+    AuthleteSimpleConfiguration configuration =
         new AuthleteSimpleConfiguration()
             .setApiVersion("V3")
             .setBaseUrl("http://localhost:1")
             .setServiceApiKey("42")
             .setServiceAccessToken("t");
     try {
-      new PlayAuthleteApiV3(conf, ws).authorization(new AuthorizationRequest());
+      new PlayAuthleteApiV3(configuration, ws).authorization(new AuthorizationRequest());
       fail("expected AuthleteApiException");
     } catch (AuthleteApiException e) {
       assertEquals(0, e.getStatusCode());

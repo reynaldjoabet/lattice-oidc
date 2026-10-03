@@ -24,8 +24,8 @@ public final class AccessLogFilter extends Filter {
   private static final Logger ACCESS = LoggerFactory.getLogger("access");
 
   @Inject
-  public AccessLogFilter(Materializer mat) {
-    super(mat);
+  public AccessLogFilter(Materializer materializer) {
+    super(materializer);
   }
 
   @Override

@@ -57,7 +57,7 @@ public class CibaTest {
           String response =
               ex.getRequestURI().getPath().endsWith("/sync")
                   ? "{\"result\":\"" + syncResult + "\"}"
-                  : "{\"request_id\":\"dev-req-1\"}";
+                  : "{\"request_id\":\"dev-failRequest-1\"}";
           byte[] bytes = response.getBytes(StandardCharsets.UTF_8);
           ex.sendResponseHeaders(200, bytes.length);
           ex.getResponseBody().write(bytes);
@@ -129,8 +129,8 @@ public class CibaTest {
   }
 
   private BackchannelAuthenticationFailRequest.Reason failureReason() {
-    BackchannelAuthenticationFailRequest req = fake.lastRequest("backchannelAuthenticationFail");
-    return req.getReason();
+    BackchannelAuthenticationFailRequest failRequest = fake.lastRequest("backchannelAuthenticationFail");
+    return failRequest.getReason();
   }
 
   /** Waits for the background interaction with the device to call Authlete's complete API. */
@@ -242,7 +242,7 @@ public class CibaTest {
     assertEquals(200, authenticate().status());
     assertEquals(400, deviceCallback("{\"request_id\":\"forged\",\"result\":\"allow\"}").status());
 
-    assertEquals(204, awaitAcceptedCallback("{\"request_id\":\"dev-req-1\",\"result\":\"allow\"}").status());
+    assertEquals(204, awaitAcceptedCallback("{\"request_id\":\"dev-failRequest-1\",\"result\":\"allow\"}").status());
     assertTrue(String.valueOf(deviceRequests.get(0).get("path")).endsWith("/async"));
     BackchannelAuthenticationCompleteRequest done = fake.lastRequest("backchannelAuthenticationComplete");
     assertEquals(BackchannelAuthenticationCompleteRequest.Result.AUTHORIZED, done.getResult());
@@ -250,7 +250,7 @@ public class CibaTest {
     assertEquals(
         "the request id is single-use",
         400,
-        deviceCallback("{\"request_id\":\"dev-req-1\",\"result\":\"allow\"}").status());
+        deviceCallback("{\"request_id\":\"dev-failRequest-1\",\"result\":\"allow\"}").status());
     assertEquals(1, fake.count("backchannelAuthenticationComplete"));
   }
 
@@ -259,6 +259,6 @@ public class CibaTest {
     start("async");
     assertEquals(400, deviceCallback("not json").status());
     assertEquals(400, deviceCallback("{\"result\":\"allow\"}").status());
-    assertEquals(400, deviceCallback("{\"request_id\":\"dev-req-1\"}").status());
+    assertEquals(400, deviceCallback("{\"request_id\":\"dev-failRequest-1\"}").status());
   }
 }
