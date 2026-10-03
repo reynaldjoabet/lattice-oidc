@@ -157,12 +157,12 @@ public final class DeviceController extends BaseController {
 
   private Result approvalPage(Http.Request request, String userCode, DeviceVerificationResponse info) {
     DeviceApproval approval = device.approval(userCode, info);
-    String bid = sessions.bid(request);
-    interactions.put(KIND, userCode, bid, approval);
-    return sessions.withBid(
+    String browserId = sessions.browserId(request);
+    interactions.put(KIND, userCode, browserId, approval);
+    return sessions.withBrowserId(
         Responses.of(200, views.html.oidc.deviceAuthorization.render(approval, request).body(), Responses.HTML, null),
         request,
-        bid);
+        browserId);
   }
 
   /**
@@ -173,8 +173,8 @@ public final class DeviceController extends BaseController {
         () -> {
           Map<String, String[]> form = Requests.form(request);
           String userCode = Requests.first(form, "userCode");
-          String bid = request.session().get("bid").orElse(null);
-          Optional<DeviceApproval> approval = interactions.take(KIND, userCode, bid, DeviceApproval.class);
+          String browserId = sessions.existingBrowserId(request).orElse(null);
+          Optional<DeviceApproval> approval = interactions.take(KIND, userCode, browserId, DeviceApproval.class);
           Optional<LoginState> current = sessions.current(request);
           if (approval.isEmpty() || current.isEmpty()) {
             return Pages.message(request, 400, "Request expired", "Please enter the code again.");

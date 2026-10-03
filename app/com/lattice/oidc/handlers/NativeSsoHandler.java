@@ -4,6 +4,7 @@ import com.authlete.common.api.AuthleteApi;
 import com.authlete.common.dto.NativeSsoRequest;
 import com.authlete.common.dto.NativeSsoResponse;
 import com.authlete.common.dto.TokenResponse;
+import com.lattice.oidc.common.Caches;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.common.Responses;
 import com.lattice.oidc.security.UserSessions;
@@ -17,6 +18,7 @@ import java.util.Optional;
 import javax.inject.Inject;
 import javax.inject.Provider;
 import javax.inject.Singleton;
+import play.cache.NamedCache;
 import play.cache.SyncCacheApi;
 import play.mvc.Result;
 
@@ -41,7 +43,8 @@ public final class NativeSsoHandler {
 
   @Inject
   public NativeSsoHandler(
-      Provider<AuthleteApi> api, UserSessions sessions, SyncCacheApi cache, LatticeConfig config) {
+      Provider<AuthleteApi> api, UserSessions sessions,
+      @NamedCache(Caches.DEVICE_SECRETS) SyncCacheApi cache, LatticeConfig config) {
     this.api = api;
     this.sessions = sessions;
     this.cache = cache;

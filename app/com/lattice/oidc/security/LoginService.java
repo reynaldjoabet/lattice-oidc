@@ -1,5 +1,6 @@
 package com.lattice.oidc.security;
 
+import com.lattice.oidc.common.Caches;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.models.User;
 import com.lattice.oidc.stores.UserStore;
@@ -10,6 +11,7 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import play.cache.NamedCache;
 import play.cache.SyncCacheApi;
 
 /**
@@ -37,7 +39,9 @@ public final class LoginService {
   private final LatticeConfig config;
 
   @Inject
-  public LoginService(UserStore users, SyncCacheApi cache, LatticeConfig config) {
+  public LoginService(UserStore users,
+      @NamedCache(Caches.LOGIN_FAILURES) SyncCacheApi cache,
+      LatticeConfig config) {
     this.users = users;
     this.cache = cache;
     this.config = config;

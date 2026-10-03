@@ -12,6 +12,7 @@ import com.authlete.common.dto.BackchannelAuthenticationIssueResponse;
 import com.authlete.common.dto.BackchannelAuthenticationResponse;
 import com.authlete.common.dto.Scope;
 import com.lattice.oidc.client.AuthleteExecutionContext;
+import com.lattice.oidc.common.Caches;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.common.Responses;
 import com.lattice.oidc.common.WebException;
@@ -29,6 +30,7 @@ import javax.inject.Provider;
 import javax.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import play.cache.NamedCache;
 import play.cache.SyncCacheApi;
 import play.libs.ws.WSClient;
 import play.libs.ws.WSResponse;
@@ -58,7 +60,7 @@ public final class CibaHandler {
       Provider<AuthleteApi> api,
       AuthenticationDevice device,
       UserStore users,
-      SyncCacheApi cache,
+      @NamedCache(Caches.CIBA) SyncCacheApi cache,
       WSClient ws,
       AuthleteExecutionContext ec,
       LatticeConfig config) {

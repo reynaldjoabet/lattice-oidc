@@ -1,5 +1,6 @@
 package com.lattice.oidc.security;
 
+import com.lattice.oidc.common.Caches;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.models.User;
 import com.lattice.oidc.stores.UserStore;
@@ -11,6 +12,7 @@ import java.util.Optional;
 import java.util.Set;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import play.cache.NamedCache;
 import play.cache.SyncCacheApi;
 import play.mvc.Http;
 import play.mvc.Result;
@@ -18,7 +20,7 @@ import play.mvc.Result;
 /**
  * Browser login sessions.
  *
- * <p>The signed Play session cookie carries only identifiers: {@code bid} (a stable browser
+ * <p>The signed Play session cookie carries only identifiers: {@code browser_id} (a stable browser
  * binding for pending interactions), {@code sid} (the login session, rotated at every login) and
  * {@code sub}/{@code auth_time}. A session is valid only while its {@code sid} is registered
  * server-side, so logout invalidates it even if the cookie is replayed.
@@ -30,7 +32,7 @@ public final class UserSessions {
 
   private static final SecureRandom RANDOM = new SecureRandom();
   private static final String SID = "sid";
-  private static final String BID = "bid";
+  private static final String BROWSER_ID = "browser_id";
   private static final String SUB = "sub";
   private static final String AUTH_TIME = "auth_time";
   private static final String ACR = "acr";
@@ -42,7 +44,8 @@ public final class UserSessions {
   private final LatticeConfig config;
 
   @Inject
-  public UserSessions(SyncCacheApi cache, UserStore users, LatticeConfig config) {
+  public UserSessions(
+      @NamedCache(Caches.SESSIONS) SyncCacheApi cache, UserStore users, LatticeConfig config) {
     this.cache = cache;
     this.users = users;
     this.config = config;
@@ -86,13 +89,21 @@ public final class UserSessions {
     return sid != null && cache.get(key(sid)).isPresent();
   }
 
-  /** The stable browser binding, generating one if absent (persist it with {@link #withBid}). */
-  public String bid(Http.Request request) {
-    return request.session().get(BID).orElseGet(UserSessions::randomId);
+  /**
+   * The browser's stable id, generating one if absent (persist it with {@link #withBrowserId}).
+   * Used when a browser starts a multi-step flow.
+   */
+  public String browserId(Http.Request request) {
+    return existingBrowserId(request).orElseGet(UserSessions::randomId);
   }
 
-  public Result withBid(Result result, Http.Request request, String bid) {
-    return result.addingToSession(request, BID, bid);
+  /** The browser's id if it already has one (i.e. it has started a flow before). */
+  public Optional<String> existingBrowserId(Http.Request request) {
+    return request.session().get(BROWSER_ID);
+  }
+
+  public Result withBrowserId(Result result, Http.Request request, String browserId) {
+    return result.addingToSession(request, BROWSER_ID, browserId);
   }
 
   /** Starts a new login session (new sid, preventing session fixation). Returns the new sid. */

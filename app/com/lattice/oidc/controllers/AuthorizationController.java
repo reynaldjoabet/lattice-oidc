@@ -129,17 +129,17 @@ public final class AuthorizationController extends BaseController {
     Optional<LoginState> current = reusableSession(request, info);
     Optional<String> shown = current.map(s -> s.user().displayName());
     AuthorizationPage page = AuthorizationPage.from(info, shown, identityProviders.links());
-    String bid = sessions.bid(request);
+    String browserId = sessions.browserId(request);
     interactions.put(
         KIND,
         info.getTicket(),
-        bid,
+        browserId,
         AuthorizationInteraction.from(
             info, page, current.map(s -> s.user().getSubject()).orElse(null)));
-    return sessions.withBid(
+    return sessions.withBrowserId(
         Responses.of(200, views.html.oidc.authorization.render(page, request).body(), Responses.HTML, null),
         request,
-        bid);
+        browserId);
   }
 
   /**
@@ -221,9 +221,9 @@ public final class AuthorizationController extends BaseController {
   private Result decide(Http.Request request) {
     Map<String, String[]> form = Requests.form(request);
     String ticket = Requests.first(form, "ticket");
-    String bid = request.session().get("bid").orElse(null);
+    String browserId = sessions.existingBrowserId(request).orElse(null);
     Optional<AuthorizationInteraction> found =
-        interactions.get(KIND, ticket, bid, AuthorizationInteraction.class);
+        interactions.get(KIND, ticket, browserId, AuthorizationInteraction.class);
     // The authorization request is unknown, expired, or was started in another browser.
     if (found.isEmpty()) {
       return Pages.message(
@@ -237,7 +237,7 @@ public final class AuthorizationController extends BaseController {
     // If the end-user did not grant authorization to the client application.
     // The end-user denied the authorization request.
     if (!form.containsKey("authorized")) {
-      interactions.take(KIND, ticket, bid, AuthorizationInteraction.class);
+      interactions.take(KIND, ticket, browserId, AuthorizationInteraction.class);
       audit.record(request, AuditService.Event.CONSENT_DENIED, "client_id", ix.clientIdentifier());
       return service.fail(ticket, Reason.DENIED);
     }
@@ -274,7 +274,7 @@ public final class AuthorizationController extends BaseController {
 
     // Authorize the authorization request. The ticket is single-use, so the pending state is
     // removed first.
-    interactions.take(KIND, ticket, bid, AuthorizationInteraction.class);
+    interactions.take(KIND, ticket, browserId, AuthorizationInteraction.class);
     audit.record(
         request,
         AuditService.Event.CONSENT_GRANTED,

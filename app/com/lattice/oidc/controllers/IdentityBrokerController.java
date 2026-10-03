@@ -75,8 +75,8 @@ public final class IdentityBrokerController extends BaseController {
           if (provider.isEmpty()) {
             return Pages.message(request, 404, "Unknown provider", "No such identity provider.");
           }
-          String bid = request.session().get("bid").orElse(null);
-          if (interactions.get(AUTHZ, ticket, bid, AuthorizationInteraction.class).isEmpty()) {
+          String browserId = sessions.existingBrowserId(request).orElse(null);
+          if (interactions.get(AUTHZ, ticket, browserId, AuthorizationInteraction.class).isEmpty()) {
             return Pages.message(
                 request, 400, "Request expired", "Please start again from the application.");
           }
@@ -85,7 +85,7 @@ public final class IdentityBrokerController extends BaseController {
           String nonce = UserSessions.randomId();
           try {
             URI location = provider.get().authenticationRequest(state, verifier, nonce);
-            interactions.put(KIND, state, bid, new Pending(providerId, ticket, verifier, nonce));
+            interactions.put(KIND, state, browserId, new Pending(providerId, ticket, verifier, nonce));
             return Responses.location(location.toString());
           } catch (IOException e) {
             LOG.warn("Identity provider {} initiation failed: {}", providerId, e.getMessage());
@@ -104,9 +104,9 @@ public final class IdentityBrokerController extends BaseController {
   public CompletionStage<Result> callback(Http.Request request, String providerId) {
     return async(
         () -> {
-          String bid = request.session().get("bid").orElse(null);
+          String browserId = sessions.existingBrowserId(request).orElse(null);
           String state = request.queryString("state").orElse(null);
-          Optional<Pending> pending = interactions.take(KIND, state, bid, Pending.class);
+          Optional<Pending> pending = interactions.take(KIND, state, browserId, Pending.class);
           Optional<IdentityProvider> provider = providers.get(providerId);
           if (pending.isEmpty()
               || provider.isEmpty()
@@ -115,7 +115,7 @@ public final class IdentityBrokerController extends BaseController {
                 request, 400, "Request expired", "Please start again from the application.");
           }
           Optional<AuthorizationInteraction> ix =
-              interactions.get(AUTHZ, pending.get().ticket(), bid, AuthorizationInteraction.class);
+              interactions.get(AUTHZ, pending.get().ticket(), browserId, AuthorizationInteraction.class);
           if (ix.isEmpty()) {
             return Pages.message(
                 request, 400, "Request expired", "Please start again from the application.");
@@ -154,7 +154,7 @@ public final class IdentityBrokerController extends BaseController {
           interactions.put(
               AUTHZ,
               pending.get().ticket(),
-              bid,
+              browserId,
               ix.get().withPage(page).withShownSubject(user.getSubject()));
           Result result =
               Responses.of(

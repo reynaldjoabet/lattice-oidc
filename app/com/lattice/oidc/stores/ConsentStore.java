@@ -1,5 +1,6 @@
 package com.lattice.oidc.stores;
 
+import com.lattice.oidc.common.Caches;
 import com.lattice.oidc.common.ObbSupport;
 import com.lattice.oidc.models.Consent;
 import java.time.Duration;
@@ -10,6 +11,7 @@ import java.util.Optional;
 import java.util.UUID;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import play.cache.NamedCache;
 import play.cache.SyncCacheApi;
 
 /** Consent persistence (cache-backed; entries live until the consent expires, at most 1 year). */
@@ -22,7 +24,7 @@ public final class ConsentStore {
   private final SyncCacheApi cache;
 
   @Inject
-  public ConsentStore(SyncCacheApi cache) {
+  public ConsentStore(@NamedCache(Caches.OBB_CONSENTS) SyncCacheApi cache) {
     this.cache = cache;
   }
 

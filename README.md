@@ -153,7 +153,7 @@ Session ID rotation (`UserSessions.login`). Every successful login creates a bra
 
 Server-side invalidation. Play's session cookie is signed, but anyone holding a copy can replay it. So the cookie only carries the `sid`, and a session counts as valid only while that `sid` is registered on the server. Logout removes it there, so a stolen or replayed copy of the old cookie stops working. A test checks this. The `sid` is also what back-channel logout and native SSO key on.
 
-Pending flows bound to the browser (`Interactions`). Each browser gets a stable random ID (`bid`) in its cookie. Pending consent, device-approval and federation-login state is stored server-side under its ticket or code and tagged with that `bid`. Completing a flow requires the same `bid`. That stops an attacker who learns or guesses a ticket from completing the consent or device approval from their own browser, and it stops cross-site requests from finishing someone else's flow. CSRF tokens on the forms add a second layer.
+Pending flows bound to the browser (`Interactions`). Each browser gets a stable random ID (`browser_id`) in its cookie. Pending consent, device-approval and federation-login state is stored server-side under its ticket or code and tagged with that `browser_id`. Completing a flow requires the same `browser_id`. That stops an attacker who learns or guesses a ticket from completing the consent or device approval from their own browser, and it stops cross-site requests from finishing someone else's flow. CSRF tokens on the forms add a second layer.
 
 - `Single use`. The ticket is removed when it's used, so a replayed decision fails. That's tested too.
 
@@ -288,4 +288,26 @@ sequenceDiagram
     U->>L: session cookie already valid → no password asked
     L-->>B: code → tokens
     Note over U,L: That's SSO: one login at Lattice, many apps
+```
+
+
+## Tickets: a handle for pending requests
+A ticket is Authlete's handle for a request it is in the middle of processing. When Authlete can't finish a request on its own (for example, it needs the user to log in and consent), it remembers the parsed request on its side and gives Lattice an opaque string, the ticket. Lattice later sends that ticket back to finish the request (issue) or reject it (fail).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant B as Browser
+    participant L as Lattice
+    participant A as Authlete
+
+    B->>L: GET /api/authorization?client_id=...&scope=...
+    L->>A: /auth/authorization (raw parameters)
+    A-->>L: action=INTERACTION, ticket=T, client, scopes, claims...
+    Note over A: Authlete keeps the validated request under T
+    L-->>B: consent page (hidden field ticket=T)
+    B->>L: POST /api/authorization/decision ticket=T, login, Authorize
+    L->>A: /auth/authorization/issue ticket=T, subject=1001, claims...
+    A-->>L: action=LOCATION, redirect with code
+    L-->>B: 302 → client redirect_uri?code=...
 ```

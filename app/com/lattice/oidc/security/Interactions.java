@@ -1,9 +1,11 @@
 package com.lattice.oidc.security;
 
+import com.lattice.oidc.common.Caches;
 import com.lattice.oidc.common.LatticeConfig;
 import java.util.Optional;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import play.cache.NamedCache;
 import play.cache.SyncCacheApi;
 
 /**
@@ -13,36 +15,38 @@ import play.cache.SyncCacheApi;
 @Singleton
 public final class Interactions {
 
-  private record Bound(String bid, Object value) {}
+  /** A stored value together with the id of the browser that started the flow. */
+  private record Entry(String browserId, Object value) {}
 
   private final SyncCacheApi cache;
   private final LatticeConfig config;
 
   @Inject
-  public Interactions(SyncCacheApi cache, LatticeConfig config) {
+  public Interactions(
+      @NamedCache(Caches.INTERACTIONS) SyncCacheApi cache, LatticeConfig config) {
     this.cache = cache;
     this.config = config;
   }
 
-  public void put(String kind, String key, String bid, Object value) {
+  public void put(String kind, String key, String browserId, Object value) {
     cache.set(
-        kind + ":" + key, new Bound(bid, value), (int) config.interactionTtl().toSeconds());
+        kind + ":" + key, new Entry(browserId, value), (int) config.interactionTtl().toSeconds());
   }
 
-  public <T> Optional<T> get(String kind, String key, String bid, Class<T> type) {
-    if (key == null || bid == null) {
+  public <T> Optional<T> get(String kind, String key, String browserId, Class<T> type) {
+    if (key == null || browserId == null) {
       return Optional.empty();
     }
-    return cache.<Bound>get(kind + ":" + key)
-        .filter(b -> b.bid().equals(bid))
-        .map(Bound::value)
+    return cache.<Entry>get(kind + ":" + key)
+        .filter(entry -> entry.browserId().equals(browserId))
+        .map(Entry::value)
         .filter(type::isInstance)
         .map(type::cast);
   }
 
   /** Reads and removes the interaction (single use). */
-  public <T> Optional<T> take(String kind, String key, String bid, Class<T> type) {
-    Optional<T> value = get(kind, key, bid, type);
+  public <T> Optional<T> take(String kind, String key, String browserId, Class<T> type) {
+    Optional<T> value = get(kind, key, browserId, type);
     value.ifPresent(v -> cache.remove(kind + ":" + key));
     return value;
   }
