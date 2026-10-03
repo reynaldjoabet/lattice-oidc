@@ -1,0 +1,37 @@
+@*
+ * Identity brokering: the upstream account's email matches an existing password account. The
+ * user links them (with that account's password, so nobody can take over an account by using the
+ * same email at another provider) or keeps them separate. Screen 04 in docs/screens.
+ *@
+@import com.lattice.oidc.models.AccountLinkPage
+@import scala.jdk.OptionConverters._
+@(page: AccountLinkPage)(implicit request: Http.Request)
+@layout("Link accounts") {
+  <div class="intro">
+    <h1>You already have an account</h1>
+    <p class="lead">You signed in with @page.providerName() as <strong>@page.email()</strong>. A Lattice account already uses this email.</p>
+  </div>
+  <ul class="rows">
+    <li>
+      <span class="avatar" aria-hidden="true">@page.accountInitial()</span>
+      <span class="grow"><strong>@page.accountName()</strong><span class="meta">Lattice account · login ID @page.accountLoginId()</span></span>
+    </li>
+  </ul>
+  @for(error <- page.error().toScala) {
+    <div class="alert alert-error" role="alert" id="link-error">@icon(if (error.startsWith("Too many")) "lock" else "alert")<span>@error</span></div>
+  }
+  <form method="post" action="@com.lattice.oidc.controllers.routes.IdentityBrokerController.link()">
+    @helper.CSRF.formField
+    <input type="hidden" name="linkId" value="@page.linkId()">
+    <div class="field">
+      <label for="password">Enter that account's password to link them</label>
+      <div class="password">
+        <input type="password" id="password" name="password" autocomplete="current-password" autofocus
+               @if(page.error().isPresent()){aria-describedby="link-error" aria-invalid="true"}>
+      </div>
+    </div>
+    <button type="submit" name="link" value="true" class="primary">Link accounts</button>
+    <button type="submit" name="separate" value="true" formnovalidate>Keep them separate</button>
+  </form>
+  <p class="small">Linking lets you sign in with either @page.providerName() or your password and see the same apps. The password check means nobody can take over your account just by using the same email at another provider.</p>
+}

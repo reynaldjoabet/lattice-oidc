@@ -80,7 +80,7 @@ public class DeviceFlowTest {
             withCsrf(post("/api/device/complete", Map.of("userCode", "WDJB-MJHT", "authorized", "true")))
                 .session(page.session().data()));
     assertEquals(200, done.status());
-    assertTrue(contentAsString(done).contains("Device authorized"));
+    assertTrue(contentAsString(done).contains("Device connected"));
 
     DeviceCompleteRequest req = fake.lastRequest("deviceComplete");
     assertEquals(DeviceCompleteRequest.Result.AUTHORIZED, req.getResult());

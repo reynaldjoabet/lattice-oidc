@@ -1,13 +1,17 @@
 @*
- * Short outcome pages (device approved, request expired, signed out, ...). Failures show the
- * request id so users can quote it to support.
+ * Short outcome pages (device connected, request expired, signed out, ...). `tone` is success,
+ * info or warning. Failures show the request id so users can quote it to support.
+ * Screens 07, 10 and 12 in docs/screens.
  *@
-@(title: String, text: String, status: Int)(implicit request: Http.Request)
+@(title: String, text: String, status: Int, tone: String)(implicit request: Http.Request)
 @layout(title) {
-  <h1>@title</h1>
-  <p class="lead">@text</p>
+  <div class="status">
+    <span class="status-icon @tone">@icon(tone match { case "success" => "check"; case "warning" => "clock"; case _ => "signout" }, "")</span>
+    <h1>@title</h1>
+    <p class="lead">@text</p>
+  </div>
   @if(status >= 400) {
-    <p class="muted">Reference <code>@com.lattice.oidc.filters.RequestIdFilter.of(request)</code></p>
+    <div class="kv"><span>Reference for support</span><code>@com.lattice.oidc.filters.RequestIdFilter.of(request)</code></div>
   }
-  <div class="stack"><a class="button" href="@com.lattice.oidc.controllers.routes.HomeController.index()">Done</a></div>
+  <a class="button" href="@com.lattice.oidc.controllers.routes.HomeController.index()">Done</a>
 }

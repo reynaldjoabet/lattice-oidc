@@ -35,7 +35,8 @@ public record AuthorizationPage(
     boolean loginIdReadOnly,
     Optional<String> loggedInAs,
     List<IdentityProviders.Link> identityProviders,
-    Optional<String> error) {
+    Optional<String> error,
+    Optional<ObbConsentView> obbConsent) {
 
   /** A requested scope and its plain-language description. */
   public record ScopeItem(String name, String description) {}
@@ -77,6 +78,7 @@ public record AuthorizationPage(
         info.getSubject() != null,
         loggedInAs,
         identityProviders,
+        Optional.empty(),
         Optional.empty());
   }
 
@@ -85,7 +87,7 @@ public record AuthorizationPage(
         ticket, serviceName, clientName, description, logoUri, clientUri, policyUri, tosUri, scopes,
         claimsForIdToken, claimsForUserInfo, purpose, verifiedClaimsForIdToken,
         verifiedClaimsForUserInfo, authorizationDetails, loginId, loginIdReadOnly, loggedInAs,
-        identityProviders, Optional.ofNullable(message));
+        identityProviders, Optional.ofNullable(message), obbConsent);
   }
 
   public AuthorizationPage withLoggedInAs(Optional<String> user) {
@@ -93,7 +95,26 @@ public record AuthorizationPage(
         ticket, serviceName, clientName, description, logoUri, clientUri, policyUri, tosUri, scopes,
         claimsForIdToken, claimsForUserInfo, purpose, verifiedClaimsForIdToken,
         verifiedClaimsForUserInfo, authorizationDetails, loginId, loginIdReadOnly, user,
-        identityProviders, error);
+        identityProviders, error, obbConsent);
+  }
+
+  /** The page for an Open Banking consent ({@code consent:...} scope). */
+  public AuthorizationPage withObbConsent(Optional<ObbConsentView> consent) {
+    return new AuthorizationPage(
+        ticket, serviceName, clientName, description, logoUri, clientUri, policyUri, tosUri, scopes,
+        claimsForIdToken, claimsForUserInfo, purpose, verifiedClaimsForIdToken,
+        verifiedClaimsForUserInfo, authorizationDetails, loginId, loginIdReadOnly, loggedInAs,
+        identityProviders, error, consent);
+  }
+
+  /** Up to two initials of the client name, for the monogram shown when it has no logo. */
+  public String clientInitials() {
+    return Initials.of(clientName);
+  }
+
+  /** Scopes shown as permissions: the consent:... scope is described by the consent itself. */
+  public List<ScopeItem> displayScopes() {
+    return scopes.stream().filter(s -> !s.name().startsWith("consent:")).toList();
   }
 
   /**

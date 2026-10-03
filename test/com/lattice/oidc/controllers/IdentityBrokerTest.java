@@ -20,6 +20,8 @@ import java.net.URI;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -193,5 +195,80 @@ public class IdentityBrokerTest {
 
     Result otherBrowser = route(app, get("/api/federation/initiation/upstream?ticket=ticket-1"));
     assertEquals(400, otherBrowser.status());
+  }
+
+  // --- Linking an upstream sign-in to an existing account with the same email ---
+
+  private static String linkId(Result page) {
+    Matcher matcher = Pattern.compile("name=\"linkId\" value=\"([^\"]+)\"").matcher(contentAsString(page));
+    assertTrue("the link page is shown", matcher.find());
+    return matcher.group(1);
+  }
+
+  private Result answer(Result page, String linkId, Map<String, String> choice) {
+    Map<String, String> form = new java.util.HashMap<>(choice);
+    form.put("linkId", linkId);
+    return route(app, withCsrf(post("/api/federation/link", form)).session(page.session().data()));
+  }
+
+  private void authorize(Result signedIn) {
+    Result r =
+        route(
+            app,
+            withCsrf(post("/api/authorization/decision", Map.of("ticket", "ticket-1", "authorized", "true")))
+                .session(signedIn.session().data()));
+    assertEquals(302, r.status());
+  }
+
+  @Test
+  public void matchingEmailAsksToLinkAndThePasswordLinksTheAccounts() {
+    upstream.email = "john@example.com";
+    Result page = consentPage();
+    Result asked = callback(page, initiate(page));
+    assertEquals(200, asked.status());
+    String html = contentAsString(asked);
+    assertTrue(html.contains("You already have an account"));
+    assertTrue(html.contains("John Flibble Smith"));
+    assertFalse("nobody is signed in before the password check", loggedIn(asked));
+
+    String linkId = linkId(asked);
+    Result wrong = answer(page, linkId, Map.of("link", "true", "password", "nope"));
+    assertEquals(401, wrong.status());
+    assertFalse(loggedIn(wrong));
+
+    Result linked = answer(page, linkId, Map.of("link", "true", "password", "john"));
+    assertEquals(200, linked.status());
+    assertTrue(contentAsString(linked).contains("Signed in as"));
+    assertTrue(audited(AuditService.Event.ACCOUNT_LINKED));
+    authorize(linked);
+    assertEquals("1001", ((AuthorizationIssueRequest) fake.lastRequest("authorizationIssue")).getSubject());
+
+    // Next time the same upstream identity signs straight in to the linked account.
+    Result again = consentPage();
+    Result direct = callback(again, initiate(again));
+    assertTrue(contentAsString(direct).contains("Signed in as"));
+    assertTrue(contentAsString(direct).contains("John Flibble Smith"));
+  }
+
+  @Test
+  public void keepingAccountsSeparateUsesTheBrokeredAccount() {
+    upstream.email = "john@example.com";
+    Result page = consentPage();
+    Result asked = callback(page, initiate(page));
+    Result separate = answer(page, linkId(asked), Map.of("separate", "true"));
+    assertEquals(200, separate.status());
+    assertTrue(loggedIn(separate));
+    authorize(separate);
+    assertEquals("alice@upstream", ((AuthorizationIssueRequest) fake.lastRequest("authorizationIssue")).getSubject());
+  }
+
+  @Test
+  public void linkAnswerFromAnotherBrowserIsRejected() {
+    upstream.email = "john@example.com";
+    Result page = consentPage();
+    String linkId = linkId(callback(page, initiate(page)));
+    Result r =
+        route(app, withCsrf(post("/api/federation/link", Map.of("linkId", linkId, "link", "true", "password", "john"))));
+    assertEquals(400, r.status());
   }
 }

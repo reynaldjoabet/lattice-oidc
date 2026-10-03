@@ -7,6 +7,7 @@ import com.lattice.oidc.models.LogoutRequest;
 import com.lattice.oidc.security.AuditService;
 import com.lattice.oidc.security.UserSessions.LoginState;
 import com.lattice.oidc.security.UserSessions;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletionStage;
@@ -61,19 +62,29 @@ public final class LogoutController extends BaseController {
 
     Optional<LoginState> current = sessions.current(request);
     if (current.isPresent() && !confirmed && !logout.hintMatches(logoutRequest, current.get())) {
-      // Ask the end-user to confirm.
+      // Ask the end-user to confirm, listing the apps they will also be signed out of.
       return Responses.of(
           200,
-          views.html.oidc.logoutConfirm.render(logoutRequest, request).body(),
+          views.html.oidc.logoutConfirm.render(logoutRequest, appNames(current.get()), request).body(),
           Responses.HTML,
           null);
     }
 
+    int apps = current.map(state -> sessions.clients(state.sessionId()).size()).orElse(0);
     Result result =
         logout
             .redirectUrl(logoutRequest)
             .map(Responses::location)
-            .orElseGet(() -> Pages.message(request, 200, "Signed out", "You have been signed out."));
+            .orElseGet(
+                () ->
+                    Pages.success(
+                        request,
+                        "You're signed out",
+                        apps == 0
+                            ? "You have been signed out. It's safe to close this window."
+                            : "You have been signed out here and of the "
+                                + (apps == 1 ? "app" : apps + " apps")
+                                + " you used with this account. It's safe to close this window."));
     if (current.isPresent()) {
       logout.endSession(current.get());
       audit.record(
@@ -86,5 +97,21 @@ public final class LogoutController extends BaseController {
       result = sessions.logout(result, request, current.get().sessionId());
     }
     return result;
+  }
+
+  /** Display names of the apps that obtained tokens in this login session. */
+  private List<String> appNames(LoginState state) {
+    return sessions.clients(state.sessionId()).stream()
+        .map(
+            identifier -> {
+              try {
+                String name = api().getClient(identifier).getClientName();
+                return name == null || name.isBlank() ? identifier : name;
+              } catch (RuntimeException e) {
+                return identifier;
+              }
+            })
+        .sorted()
+        .toList();
   }
 }

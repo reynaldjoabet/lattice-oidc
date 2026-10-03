@@ -16,10 +16,14 @@ import com.lattice.oidc.common.Caches;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.common.Responses;
 import com.lattice.oidc.common.WebException;
+import com.lattice.oidc.models.CibaApproval;
+import com.lattice.oidc.models.ConsentLabels;
 import com.lattice.oidc.models.User;
 import com.lattice.oidc.stores.UserStore;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -38,6 +42,10 @@ import play.libs.ws.WSResponse;
 /**
  * Drives the end-user's decision on the authentication device and reports it to Authlete
  * (/backchannel/authentication/complete), delivering ping/push notifications to the client.
+ *
+ * <p>In {@code builtin} mode the "device" is Lattice itself: the request waits in the CIBA cache
+ * until the signed-in end-user approves or denies it on the approval page ({@link #pendingFor},
+ * {@link #decide}).
  */
 @Singleton
 public final class CibaHandler {
@@ -46,6 +54,9 @@ public final class CibaHandler {
 
   /** What is needed to complete a pending CIBA request. */
   public record Pending(String ticket, String subject, String[] claimNames, String[] acrs) {}
+
+  /** A request waiting on the built-in approval page, with what is needed to complete it. */
+  private record Waiting(CibaApproval approval, String subject, Pending pending) {}
 
   private final Provider<AuthleteApi> api;
   private final AuthenticationDevice device;
@@ -162,6 +173,10 @@ public final class CibaHandler {
     String message = message(backchannelResponse);
     int timeout = authTimeout(issue.getExpiresIn());
     String authReqId = issue.getAuthReqId();
+    if (config.ciba().mode() == LatticeConfig.CibaMode.BUILTIN) {
+      awaitApproval(user, backchannelResponse, issue, pending);
+      return;
+    }
     CompletableFuture.runAsync(
         () -> {
           try {
@@ -172,6 +187,7 @@ public final class CibaHandler {
                 cache.set(key(requestId), pending, Math.max(issue.getExpiresIn(), 60));
               }
               case POLL -> poll(pending, device.poll(user.getSubject(), message, timeout, authReqId));
+              case BUILTIN -> throw new IllegalStateException("handled above");
             }
           } catch (RuntimeException e) {
             LOG.warn("CIBA authentication device interaction failed: {}", e.getMessage());
@@ -179,6 +195,71 @@ public final class CibaHandler {
           }
         },
         executionContext.current());
+  }
+
+  /**
+   * Built-in mode: keeps the request for the end-user's approval page until it expires. Requests are
+   * also indexed by subject so the page can list them.
+   */
+  private void awaitApproval(
+      User user, BackchannelAuthenticationResponse backchannelResponse, BackchannelAuthenticationIssueResponse issue, Pending pending) {
+    int ttl = Math.max(issue.getExpiresIn(), 60);
+    List<String> permissions =
+        backchannelResponse.getScopes() == null
+            ? List.of()
+            : Arrays.stream(backchannelResponse.getScopes())
+                .map(scope -> ConsentLabels.scope(scope.getName(), scope.getDescription()))
+                .toList();
+    String id = com.lattice.oidc.security.UserSessions.randomId();
+    CibaApproval approval =
+        new CibaApproval(
+            id,
+            backchannelResponse.getClientName() != null ? backchannelResponse.getClientName() : String.valueOf(backchannelResponse.getClientId()),
+            Optional.ofNullable(backchannelResponse.getBindingMessage()),
+            permissions,
+            System.currentTimeMillis() / 1000L + issue.getExpiresIn());
+    cache.set(approvalKey(id), new Waiting(approval, user.getSubject(), pending), ttl);
+    synchronized (this) {
+      List<String> ids = new ArrayList<>(cache.<List<String>>get(userKey(user.getSubject())).orElse(List.of()));
+      ids.add(id);
+      cache.set(userKey(user.getSubject()), List.copyOf(ids), ttl);
+    }
+  }
+
+  /** Built-in mode: the requests waiting for this end-user's decision, oldest first. */
+  public List<CibaApproval> pendingFor(String subject) {
+    long now = System.currentTimeMillis() / 1000L;
+    return cache.<List<String>>get(userKey(subject)).orElse(List.of()).stream()
+        .map(id -> cache.<Waiting>get(approvalKey(id)))
+        .flatMap(Optional::stream)
+        .map(Waiting::approval)
+        .filter(approval -> !approval.expired(now))
+        .toList();
+  }
+
+  /**
+   * Built-in mode: completes a request with the end-user's decision. Only the end-user the request
+   * is for can decide it, and only once. Returns the request, or empty if it is unknown, expired,
+   * already decided or someone else's.
+   */
+  public Optional<CibaApproval> decide(String subject, String id, boolean approve) {
+    Optional<Waiting> waiting = id == null ? Optional.empty() : cache.<Waiting>get(approvalKey(id));
+    if (waiting.isEmpty()
+        || !waiting.get().subject().equals(subject)
+        || waiting.get().approval().expired(System.currentTimeMillis() / 1000L)) {
+      return Optional.empty();
+    }
+    synchronized (this) {
+      if (cache.get(approvalKey(id)).isEmpty()) {
+        return Optional.empty();
+      }
+      cache.remove(approvalKey(id));
+      List<String> ids = new ArrayList<>(cache.<List<String>>get(userKey(subject)).orElse(List.of()));
+      ids.remove(id);
+      cache.set(userKey(subject), List.copyOf(ids), 3600);
+    }
+    complete(waiting.get().pending(), approve ? AuthenticationDevice.Outcome.ALLOW : AuthenticationDevice.Outcome.DENY);
+    return Optional.of(waiting.get().approval());
   }
 
   /** Handles the device's asynchronous callback. Returns false for unknown request ids. */
@@ -330,5 +411,13 @@ public final class CibaHandler {
 
   private static String key(String requestId) {
     return "ciba:" + requestId;
+  }
+
+  private static String approvalKey(String id) {
+    return "ciba-approval:" + id;
+  }
+
+  private static String userKey(String subject) {
+    return "ciba-user:" + subject;
   }
 }

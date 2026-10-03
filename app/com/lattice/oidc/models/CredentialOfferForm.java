@@ -17,6 +17,17 @@ public record CredentialOfferForm(
     Optional<String> error,
     Optional<Created> created) {
 
-  /** A created offer, by value ({@code credential_offer}) and by reference ({@code credential_offer_uri}). */
-  public record Created(String offerLink, String offerUri, String offerUriLink, String offerJson) {}
+  /**
+   * A created offer, by value ({@code credential_offer}) and by reference ({@code
+   * credential_offer_uri}), with a QR code of the by-reference link (shorter, so easier to scan)
+   * and the transaction code the wallet will ask for, if any.
+   */
+  public record Created(
+      String offerLink,
+      String offerUri,
+      String offerUriLink,
+      String offerJson,
+      String qrSvg,
+      Optional<String> txCode,
+      java.util.List<String> credentials) {}
 }

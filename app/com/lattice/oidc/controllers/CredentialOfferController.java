@@ -4,6 +4,7 @@ import com.authlete.common.dto.CredentialOfferCreateRequest;
 import com.authlete.common.dto.CredentialOfferCreateResponse;
 import com.authlete.common.dto.CredentialOfferInfo;
 import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.QrCodes;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.common.Requests;
 import com.lattice.oidc.common.Responses;
@@ -23,8 +24,9 @@ import play.mvc.Result;
 
 /**
  * A page for an authenticated end-user to create a credential offer for themselves: {@code GET|POST
- * /api/offer/issue}. The created offer is shown both by value ({@code credential_offer}) and by
- * reference ({@code credential_offer_uri}), as links for a wallet.
+ * /api/offer/issue}. The created offer is shown as a QR code to scan with a wallet, with the
+ * transaction code and links that open a wallet on the same device (by value, {@code
+ * credential_offer}, and by reference, {@code credential_offer_uri}).
  */
 public final class CredentialOfferController extends BaseController {
 
@@ -115,19 +117,30 @@ public final class CredentialOfferController extends BaseController {
           }
           CredentialOfferInfo info = r.getInfo();
           String offerUri = info.getCredentialIssuer() + "/api/offer/" + info.getIdentifier();
+          String offerUriLink = form.endpoint() + "?credential_offer_uri=" + urlEncode(offerUri);
           CredentialOfferForm.Created created =
               new CredentialOfferForm.Created(
                   form.endpoint() + "?credential_offer=" + urlEncode(info.getCredentialOffer()),
                   offerUri,
-                  form.endpoint() + "?credential_offer_uri=" + urlEncode(offerUri),
-                  Jsons.pretty(Jsons.readMap(info.getCredentialOffer())));
+                  offerUriLink,
+                  Jsons.pretty(Jsons.readMap(info.getCredentialOffer())),
+                  QrCodes.svg(offerUriLink, "QR code: credential offer for your wallet"),
+                  Optional.ofNullable(info.getTxCode()).filter(code -> !code.isEmpty()),
+                  java.util.List.of(ids));
           CredentialOfferForm done =
               new CredentialOfferForm(
                   form.credentialConfigurationIds(), form.authorizationCodeGrant(), form.issuerState(),
                   form.preAuthorizedCodeGrant(), form.txCode(), form.txCodeInputMode(),
                   form.txCodeDescription(), form.duration(), form.endpoint(), shown, Optional.empty(),
                   Optional.of(created));
-          return sessions.apply(page(request, 200, done), request, sessionOut);
+          return sessions.apply(
+              Responses.of(
+                  200,
+                  views.html.oidc.credentialOfferResult.render(done, created, request).body(),
+                  Responses.HTML,
+                  null),
+              request,
+              sessionOut);
         });
   }
 

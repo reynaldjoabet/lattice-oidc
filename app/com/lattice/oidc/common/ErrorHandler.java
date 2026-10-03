@@ -118,7 +118,11 @@ public final class ErrorHandler extends DefaultHttpErrorHandler {
    * send {@code Accept: *}{@code /*}.
    */
   private static boolean isBrowserPage(String path) {
-    return BROWSER_PAGES.contains(path) || path.startsWith("/api/federation/");
+    return BROWSER_PAGES.contains(path)
+        || path.startsWith("/api/federation/")
+        || path.startsWith("/account")
+        || path.startsWith("/ciba")
+        || path.startsWith("/admin");
   }
 
   private static final java.util.Set<String> BROWSER_PAGES =

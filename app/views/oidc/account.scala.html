@@ -1,0 +1,73 @@
+@*
+ * The end-user's account: profile, apps with access (removable), sign-in methods and waiting
+ * CIBA requests. Screen 11 in docs/screens.
+ *@
+@import com.lattice.oidc.models.AccountPage
+@import scala.jdk.CollectionConverters._
+@import scala.jdk.OptionConverters._
+@(page: AccountPage)(implicit request: Http.Request)
+@signOut = {
+  <a class="button small" href="@com.lattice.oidc.controllers.routes.LogoutController.get()">Sign out</a>
+}
+@layout("Your account", aside = signOut) {
+  <div class="profile">
+    <span class="avatar lg" aria-hidden="true">@page.initial()</span>
+    <div>
+      <h1>@page.name()</h1>
+      @for(email <- page.email().toScala) { <p class="muted">@email</p> }
+    </div>
+  </div>
+
+  @if(page.waitingRequests() > 0) {
+    <div class="alert alert-warning" role="status">
+      @icon("clock")
+      <span>@if(page.waitingRequests() == 1){A sign-in request is} else {@page.waitingRequests() sign-in requests are} waiting for you. <a href="@com.lattice.oidc.controllers.routes.CibaApprovalController.page()">Review</a></span>
+    </div>
+  }
+
+  <section>
+    <h2 class="section">Connected apps</h2>
+    @if(page.appsUnavailable()) {
+      <div class="alert alert-error" role="alert">@icon("alert")<span>Your connected apps can't be shown right now. Try again later.</span></div>
+    } else {
+      <ul class="rows">
+        @if(page.apps().isEmpty()) {
+          <li class="empty">No apps have access to your account.</li>
+        }
+        @for(app <- page.apps().asScala) {
+          <li>
+            @app.logoUri().toScala match {
+              case Some(logo) => { <img class="client-logo" src="@logo" alt="" referrerpolicy="no-referrer"> }
+              case None => { <span class="monogram sm" aria-hidden="true">@app.initials()</span> }
+            }
+            <span class="grow">
+              <strong>@app.name()</strong>
+              @for(uri <- app.uri().toScala) { <span class="meta">@uri</span> }
+            </span>
+            <form method="post" action="@com.lattice.oidc.controllers.routes.AccountController.removeApp(app.clientId())">
+              @helper.CSRF.formField
+              <button type="submit" class="danger" aria-label="Remove access for @app.name()">Remove</button>
+            </form>
+          </li>
+        }
+      </ul>
+      <p class="small">Removing an app revokes its access; it will have to ask again next time you use it.</p>
+    }
+  </section>
+
+  <section>
+    <h2 class="section">Sign-in methods</h2>
+    <ul class="rows">
+      @for(method <- page.signInMethods().asScala) {
+        <li><span class="grow"><strong>@method.name()</strong></span><span class="meta">@method.detail()</span></li>
+      }
+    </ul>
+  </section>
+
+  <div class="stack">
+    <a class="button" href="@com.lattice.oidc.controllers.routes.DeviceController.verificationPage()">Connect a device</a>
+    @if(page.admin()) {
+      <a class="button" href="@com.lattice.oidc.controllers.routes.AdminController.index()">Operator console</a>
+    }
+  </div>
+}

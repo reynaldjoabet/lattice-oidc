@@ -61,6 +61,9 @@ object Dependencies {
     // --- Cache ---
     val caffeine = "3.3.0"
 
+    // --- UI ---
+    val qrcodegen = "1.8.0"
+
     // --- Observability ---
     val datadog = "2.60.0"
     val kamon   = "2.7.7"
@@ -240,6 +243,9 @@ object Dependencies {
 
   lazy val logback =
     "ch.qos.logback" % "logback-classic" % Version.logback
+
+  // UI: QR codes for credential offers (MIT, no dependencies)
+  lazy val qrcodegen = "io.nayuki" % "qrcodegen" % Version.qrcodegen
 
   // Cache
   lazy val caffeine =

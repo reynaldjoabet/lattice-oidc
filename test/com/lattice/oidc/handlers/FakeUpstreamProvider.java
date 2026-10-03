@@ -37,6 +37,7 @@ public final class FakeUpstreamProvider implements AutoCloseable {
   public volatile String nonce;
   public volatile String idTokenSubject = "alice";
   public volatile String userInfoSubject = "alice";
+  public volatile String email = "alice@upstream.example";
 
   public FakeUpstreamProvider() throws IOException, JOSEException {
     key = new RSAKeyGenerator(2048).keyID("k1").generate();
@@ -45,13 +46,31 @@ public final class FakeUpstreamProvider implements AutoCloseable {
     server.createContext("/.well-known/openid-configuration", ex -> json(ex, discovery()));
     server.createContext("/jwks", ex -> json(ex, new JWKSet(key.toPublicJWK()).toString()));
     server.createContext("/token", this::token);
+    // Pretends the user signed in at the provider: back to Lattice with a code (for manual demos).
+    server.createContext(
+        "/authorize",
+        ex -> {
+          java.util.Map<String, String> query = new java.util.HashMap<>();
+          for (String pair : ex.getRequestURI().getRawQuery().split("&")) {
+            String[] parts = pair.split("=", 2);
+            query.put(parts[0], java.net.URLDecoder.decode(parts.length > 1 ? parts[1] : "", StandardCharsets.UTF_8));
+          }
+          nonce = query.get("nonce");
+          String back =
+              query.get("redirect_uri")
+                  + "?code=upstream-code&state="
+                  + java.net.URLEncoder.encode(query.get("state"), StandardCharsets.UTF_8);
+          ex.getResponseHeaders().set("Location", back);
+          ex.sendResponseHeaders(302, -1);
+          ex.close();
+        });
     server.createContext(
         "/userinfo",
         ex ->
             json(
                 ex,
                 "{\"sub\":\"" + userInfoSubject + "\",\"name\":\"Alice Upstream\","
-                    + "\"email\":\"alice@upstream.example\"}"));
+                    + "\"email\":\"" + email + "\"}"));
     server.start();
   }
 

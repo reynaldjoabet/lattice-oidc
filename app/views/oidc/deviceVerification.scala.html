@@ -1,16 +1,20 @@
 @*
- * Device flow, step 1: the user types the code shown on the device (and logs in if needed).
+ * Device flow, step 1: the user types the code shown on the device (and signs in if needed).
+ * Screen 05 in docs/screens.
  *@
 @import scala.jdk.OptionConverters._
 @(userCode: String, user: java.util.Optional[String], notice: java.util.Optional[String])(implicit request: Http.Request)
 @layout("Connect a device") {
-  <h1>Connect a device</h1>
-  <p class="lead">Enter the code shown on your TV, console or other device.</p>
-  @for(n <- notice.toScala) { <div class="alert alert-error" role="alert" id="code-error">@n</div> }
+  <span class="tile-icon">@icon("device", "")</span>
+  <div class="intro">
+    <h1>Connect a device</h1>
+    <p class="lead">Enter the code shown on your TV, console or other device.</p>
+  </div>
+  @for(message <- notice.toScala) { <div class="alert alert-error" role="alert" id="code-error">@icon("alert")<span>@message</span></div> }
   <form method="post" action="@com.lattice.oidc.controllers.routes.DeviceController.verify()">
     @helper.CSRF.formField
     <div class="field">
-      <label for="userCode">Device code</label>
+      <label for="userCode">Code</label>
       <input type="text" id="userCode" name="userCode" class="code-input" value="@userCode" placeholder="XXXX-XXXX"
              autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" maxlength="32" required
              @if(userCode.isEmpty()){autofocus}
@@ -19,8 +23,8 @@
     @user.toScala match {
       case Some(name) => {
         <div class="account">
-          <span><span class="avatar" aria-hidden="true">@name.take(1)</span>Signed in as <strong>@name</strong></span>
-          <a href="@com.lattice.oidc.controllers.routes.LogoutController.get()">Not you?</a>
+          <span class="who"><span class="avatar" aria-hidden="true">@name.take(1)</span><span>Signed in as <strong>@name</strong></span></span>
+          <a class="button small" href="@com.lattice.oidc.controllers.routes.LogoutController.get()">Not you?</a>
         </div>
       }
       case None => {
@@ -37,6 +41,6 @@
         </div>
       }
     }
-    <div class="stack"><button type="submit" class="primary">Continue</button></div>
+    <button type="submit" class="primary">Continue</button>
   </form>
 }

@@ -1,27 +1,33 @@
 @*
  * Start page of the sign-in service. Applications send users to the authorization endpoint; this
- * page explains where they are, offers device sign-in and lets a signed-in user sign out.
+ * page explains where they are and links to the account page, device sign-in and sign-out.
  *@
 @import scala.jdk.OptionConverters._
 @(user: java.util.Optional[String])(implicit request: Http.Request)
 @layout("Sign-in") {
   @user.toScala match {
     case Some(name) => {
-      <h1>You're signed in</h1>
-      <p class="lead">Applications that use this service will sign you in with this account.</p>
+      <div class="intro">
+        <h1>You're signed in</h1>
+        <p class="lead">Applications that use this service will sign you in with this account.</p>
+      </div>
       <div class="account">
-        <span><span class="avatar" aria-hidden="true">@name.take(1)</span><strong>@name</strong></span>
+        <span class="who"><span class="avatar" aria-hidden="true">@name.take(1)</span><strong>@name</strong></span>
       </div>
       <div class="stack">
+        <a class="button primary" href="@com.lattice.oidc.controllers.routes.AccountController.index()">Your account</a>
         <a class="button" href="@com.lattice.oidc.controllers.routes.DeviceController.verificationPage()">Connect a device</a>
         <a class="button" href="@com.lattice.oidc.controllers.routes.LogoutController.get()">Sign out</a>
       </div>
     }
     case None => {
-      <h1>Sign-in service</h1>
-      <p class="lead">To sign in, start from the application you want to use. It will bring you here.</p>
+      <div class="intro">
+        <h1>Sign-in service</h1>
+        <p class="lead">To sign in, start from the application you want to use. It will bring you here.</p>
+      </div>
       <div class="stack">
-        <a class="button primary" href="@com.lattice.oidc.controllers.routes.DeviceController.verificationPage()">Connect a device</a>
+        <a class="button primary" href="@com.lattice.oidc.controllers.routes.AccountController.index()">Manage your account</a>
+        <a class="button" href="@com.lattice.oidc.controllers.routes.DeviceController.verificationPage()">Connect a device</a>
       </div>
     }
   }

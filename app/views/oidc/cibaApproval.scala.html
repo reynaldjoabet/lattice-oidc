@@ -1,0 +1,47 @@
+@*
+ * Built-in CIBA approval: sign-in requests made for the user on another device (a counter
+ * terminal, a call centre). The binding message must match what the other screen shows.
+ * Screen 08 in docs/screens.
+ *@
+@import com.lattice.oidc.models.CibaApproval
+@import scala.jdk.CollectionConverters._
+@import scala.jdk.OptionConverters._
+@(approvals: java.util.List[CibaApproval], userName: String)(implicit request: Http.Request)
+@layout("Approve sign-in") {
+  @if(approvals.isEmpty()) {
+    <div class="status">
+      <span class="status-icon info">@icon("check", "")</span>
+      <h1>No sign-in requests</h1>
+      <p class="lead">Nothing is waiting for your approval. Requests appear here when an app asks to sign you in on another device.</p>
+    </div>
+    <a class="button" href="@com.lattice.oidc.controllers.routes.AccountController.index()">Your account</a>
+  }
+  @for(approval <- approvals.asScala) {
+    <section class="stack">
+      <div class="card-head">
+        <h1>Approve sign-in to @approval.clientName()?</h1>
+        <span class="pill">@icon("clock", "")<span>Expires in @approval.remaining()</span></span>
+      </div>
+      <p class="lead">Someone is signing in to @approval.clientName() as <strong>@userName</strong> on another device.</p>
+      @for(message <- approval.bindingMessage().toScala) {
+        <div class="code-panel">
+          <span class="label">Message from @approval.clientName()</span>
+          <span class="value text">@message</span>
+          <span class="hint">It must match what the other screen shows. If it doesn't, deny the request.</span>
+        </div>
+      }
+      @if(!approval.permissions().isEmpty()) {
+        <h2 class="section">@approval.clientName() will be able to</h2>
+        <ul class="checklist">@for(permission <- approval.permissions().asScala) { <li>@permission</li> }</ul>
+      }
+      <form method="post" action="@com.lattice.oidc.controllers.routes.CibaApprovalController.decide()">
+        @helper.CSRF.formField
+        <input type="hidden" name="id" value="@approval.id()">
+        <div class="buttons">
+          <button type="submit" name="deny" value="true">Deny</button>
+          <button type="submit" name="approve" value="true" class="primary">Approve</button>
+        </div>
+      </form>
+    </section>
+  }
+}

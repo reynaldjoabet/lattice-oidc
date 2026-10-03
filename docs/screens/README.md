@@ -2,10 +2,7 @@
 
 Designs for every end-user and operator screen of Lattice. The screenshots below are rendered from the design canvas; the editable source lives in the canvas ([Lattice OIDC screens](https://claude.ai/artifact/CRds8ufKFuZjJGn3n1aqBB), private until shared).
 
-**Status** in each table says whether the screen exists in the app today:
-
-- **Built**: a Twirl template exists; the design refines it.
-- **New**: needs a template and, usually, backend work.
+All 15 screens are implemented. The last column of each table names the template and endpoint behind the screen.
 
 ## Design language
 
@@ -29,12 +26,12 @@ Rules that every screen follows:
 
 ## Sign-in and consent
 
-| Screen | Purpose | Flow | Status |
+| Screen | Purpose | Flow | Implemented in |
 | ------ | ------- | ---- | ------ |
-| 01 Sign in | Password sign-in plus "continue with" upstream providers | Authorization code (`/api/authorization`), identity brokering | Built, as part of `authorization.scala.html` |
-| 02 Sign in: locked | Shown after `lattice.login.max-failures` wrong passwords | Same | Built (error state) |
-| 03 Consent | What the app gets, in plain language; switch account | Authorization decision (`/api/authorization/decision`) | Built; the design splits sign-in and consent into two steps |
-| 04 Link accounts | A brokered sign-in matches an existing account's email; confirm with the password | Identity brokering callback | **New** |
+| 01 Sign in | Password sign-in plus "continue with" upstream providers | Authorization code (`/api/authorization`), identity brokering | `signIn.scala.html` (step 1 of 2) |
+| 02 Sign in: locked | Shown after `lattice.login.max-failures` wrong passwords | Same | `signIn.scala.html`, error state |
+| 03 Consent | What the app gets, in plain language; switch account | Authorization decision (`/api/authorization/decision`) | `authorization.scala.html` (step 2 of 2) |
+| 04 Link accounts | A brokered sign-in matches an existing account's email; confirm with the password | Identity brokering callback, `POST /api/federation/link` | `accountLink.scala.html`, `IdentityLinkStore` |
 
 <table>
   <tr>
@@ -47,12 +44,12 @@ Rules that every screen follows:
 
 ## Devices and decoupled sign-in
 
-| Screen | Purpose | Flow | Status |
+| Screen | Purpose | Flow | Implemented in |
 | ------ | ------- | ---- | ------ |
-| 05 Enter code | Type the code a TV or console shows | Device flow (RFC 8628), `/api/device/verification` | Built (`deviceVerification.scala.html`) |
-| 06 Confirm device | Match the code, see what the device gets | `/api/device/complete` | Built (`deviceAuthorization.scala.html`) |
-| 07 Device connected | Success, with a pointer to removing the device | Same | Built (generic message page) |
-| 08 Approve sign-in | Approve a sign-in started on another device; binding message and countdown | CIBA, completed through `CibaHandler.callback` | **New**: replaces the external CIBA simulator |
+| 05 Enter code | Type the code a TV or console shows | Device flow (RFC 8628), `/api/device/verification` | `deviceVerification.scala.html` |
+| 06 Confirm device | Match the code, see what the device gets | `/api/device/complete` | `deviceAuthorization.scala.html` |
+| 07 Device connected | Success, with a pointer to removing the device | Same | `message.scala.html` (success) |
+| 08 Approve sign-in | Approve a sign-in started on another device; binding message and countdown | CIBA with `lattice.ciba.mode = builtin`: `GET /ciba`, `POST /ciba/decision` | `cibaApproval.scala.html`; the simulator modes remain |
 
 <table>
   <tr>
@@ -65,12 +62,12 @@ Rules that every screen follows:
 
 ## Session and account
 
-| Screen | Purpose | Flow | Status |
+| Screen | Purpose | Flow | Implemented in |
 | ------ | ------- | ---- | ------ |
-| 09 Sign out? | Confirm when the logout request has no matching `id_token_hint`; lists the apps that will be signed out | RP-initiated logout (`/api/logout`) | Built (`logoutConfirm.scala.html`) |
-| 10 Signed out | Confirmation, with a return link to the app | Same, with back-channel logout | Built (generic message page) |
-| 11 Account | Connected apps, devices and sign-in methods, each removable | Grant management, session clients | **New** |
-| 12 Request expired | Expired or foreign-browser request, with a request ID for support | Any browser flow | Built (`error.scala.html` / message page) |
+| 09 Sign out? | Confirm when the logout request has no matching `id_token_hint`; lists the apps that will be signed out | RP-initiated logout (`/api/logout`) | `logoutConfirm.scala.html` |
+| 10 Signed out | Confirmation, with a return link to the app | Same, with back-channel logout | `message.scala.html` (success) |
+| 11 Account | Connected apps (removable), sign-in methods, waiting CIBA requests | `GET /account`, `POST /account/apps/:clientId/remove` (Authlete client authorizations) | `account.scala.html`, `login.scala.html` |
+| 12 Request expired | Expired or foreign-browser request, with a request ID for support | Any browser flow | `message.scala.html` / `error.scala.html` |
 
 <table>
   <tr>
@@ -83,10 +80,10 @@ Rules that every screen follows:
 
 ## Wallets and open banking
 
-| Screen | Purpose | Flow | Status |
+| Screen | Purpose | Flow | Implemented in |
 | ------ | ------- | ---- | ------ |
-| 13 Credential offer | Scan a QR code or open the wallet; shows the transaction code | OpenID4VCI credential offer | **New** end-user view (today's `credentialOffer.scala.html` is a developer tool) |
-| 14 Open banking consent | Choose the account, see each permission and the expiry | Open Banking Brasil consents | **New** as a dedicated screen |
+| 13 Credential offer | Scan a QR code or open the wallet; shows the transaction code | OpenID4VCI credential offer (`POST /api/offer/issue`) | `credentialOfferResult.scala.html`, QR via `QrCodes` (qrcodegen) |
+| 14 Open banking consent | The account, each permission and the expiry | Open Banking Brasil consents (`consent:` scope) | `authorization.scala.html` with `ObbConsentView` |
 
 <table>
   <tr>
@@ -97,8 +94,8 @@ Rules that every screen follows:
 
 ## Operator console
 
-| Screen | Purpose | Status |
+| Screen | Purpose | Implemented in |
 | ------ | ------- | ------ |
-| 15 Overview | Authlete status, active sessions, identity providers, locked logins, the six caches (sizes and hit rates from `record-stats`) and recent audit events | **New**: must sit behind real admin authentication before it ships |
+| 15 Overview | Authlete status, active sessions, identity providers, accounts with failed logins, the six caches (sizes and hit rates from `record-stats`) and recent audit events | `GET /admin`, `admin.scala.html`; only login IDs in `lattice.admin.login-ids` (`ADMIN_LOGIN_IDS`) |
 
 <img src="15-operator-console.png" width="720" alt="15 Operator console">

@@ -14,4 +14,8 @@ public final class Caches {
   public static final String DEVICE_SECRETS = "lattice-device-secrets";
   public static final String CIBA = "lattice-ciba";
   public static final String OBB_CONSENTS = "lattice-obb-consents";
+
+  /** Every named cache, in the order the operator console lists them. */
+  public static final java.util.List<String> ALL =
+      java.util.List.of(SESSIONS, INTERACTIONS, LOGIN_FAILURES, DEVICE_SECRETS, CIBA, OBB_CONSENTS);
 }

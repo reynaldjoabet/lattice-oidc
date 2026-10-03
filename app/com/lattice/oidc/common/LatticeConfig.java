@@ -12,6 +12,8 @@ import javax.inject.Singleton;
 public final class LatticeConfig {
 
   public enum CibaMode {
+    /** Signed-in end-users approve requests on Lattice's own page. */
+    BUILTIN,
     SYNC,
     ASYNC,
     POLL
@@ -64,6 +66,7 @@ public final class LatticeConfig {
   private final Optional<String> obbDirectoryJwksUri;
   private final Duration backchannelLogoutTimeout;
   private final String pairwiseSecret;
+  private final List<String> adminLoginIds;
 
   @Inject
   public LatticeConfig(Config root) {
@@ -114,6 +117,7 @@ public final class LatticeConfig {
     obbRootCertificates = lattice.getStringList("obb.root-certificates");
     obbDirectoryJwksUri = optionalString(lattice, "obb.directory-jwks-uri");
     backchannelLogoutTimeout = lattice.getDuration("logout.backchannel-timeout");
+    adminLoginIds = stringList(lattice, "admin.login-ids");
     pairwiseSecret =
         optionalString(lattice, "pairwise-secret")
             .orElseGet(
@@ -126,6 +130,18 @@ public final class LatticeConfig {
     }
     String value = config.getString(path).trim();
     return value.isEmpty() ? Optional.empty() : Optional.of(value);
+  }
+
+  /** A list setting that may also be given as one comma-separated string (environment variables). */
+  private static List<String> stringList(Config config, String path) {
+    if (!config.hasPath(path)) {
+      return List.of();
+    }
+    List<String> values =
+        config.getValue(path).valueType() == com.typesafe.config.ConfigValueType.LIST
+            ? config.getStringList(path)
+            : List.of(config.getString(path).split(","));
+    return values.stream().map(String::trim).filter(value -> !value.isEmpty()).toList();
   }
 
   private static String stripSlash(String url) {
@@ -210,5 +226,10 @@ public final class LatticeConfig {
 
   public Duration backchannelLogoutTimeout() {
     return backchannelLogoutTimeout;
+  }
+
+  /** Login IDs allowed to open the operator console (empty: nobody). */
+  public List<String> adminLoginIds() {
+    return adminLoginIds;
   }
 }

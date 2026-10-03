@@ -20,6 +20,9 @@ import com.authlete.common.dto.Client;
 import com.authlete.common.dto.Scope;
 import com.authlete.common.dto.Service;
 import com.lattice.oidc.client.FakeAuthleteApi;
+import com.lattice.oidc.models.Consent;
+import com.lattice.oidc.stores.ConsentStore;
+import java.util.List;
 import java.util.Map;
 import org.junit.After;
 import org.junit.Before;
@@ -186,9 +189,50 @@ public class AuthorizationFlowTest {
     assertTrue(contentAsString(r).contains("invalid_request"));
   }
 
+  /** Step 1 of the two-step flow: sign in on the sign-in page; returns the consent page. */
+  private Result signIn(Result page, String password) {
+    return route(
+        app, decision(page, Map.of("ticket", "ticket-1", "loginId", "john", "password", password, "login", "true")));
+  }
+
+  @Test
+  public void signInThenConsentIssuesForTheSignedInUser() {
+    Result page = consentPage();
+    String signInHtml = contentAsString(page);
+    assertTrue("step 1 asks for credentials", signInHtml.contains("name=\"password\""));
+    assertTrue("step 1 does not ask for consent yet", !signInHtml.contains("name=\"authorized\""));
+
+    Result consent = signIn(page, "john");
+    assertEquals(200, consent.status());
+    String html = contentAsString(consent);
+    assertTrue(html.contains("Signed in as"));
+    assertTrue(html.contains("name=\"authorized\""));
+    assertNotNull("signing in starts a session", consent.session().get("session_id").orElse(null));
+    assertEquals(0, fake.count("authorizationIssue"));
+
+    Result issued =
+        route(
+            app,
+            withCsrf(post("/api/authorization/decision", Map.of("ticket", "ticket-1", "authorized", "true")))
+                .session(consent.session().data()));
+    assertEquals(302, issued.status());
+    AuthorizationIssueRequest issue = fake.lastRequest("authorizationIssue");
+    assertEquals("1001", issue.getSubject());
+  }
+
+  @Test
+  public void failedSignInStaysOnTheSignInStep() {
+    Result r = signIn(consentPage(), "nope");
+    assertEquals(401, r.status());
+    String html = contentAsString(r);
+    assertTrue(html.contains("Invalid login ID or password."));
+    assertTrue(html.contains("name=\"password\""));
+    assertTrue(!html.contains("Signed in as"));
+  }
+
   @Test
   public void consentPageUsesPlainLanguage() {
-    String html = contentAsString(consentPage());
+    String html = contentAsString(signIn(consentPage(), "john"));
     assertTrue(html.contains("Sign you in with your account"));
     assertTrue(html.contains("Your basic profile"));
     assertTrue(html.contains("Full name"));
@@ -245,5 +289,29 @@ public class AuthorizationFlowTest {
     assertEquals(302, jane.status());
     AuthorizationIssueRequest issue = fake.lastRequest("authorizationIssue");
     assertEquals("1002", issue.getSubject());
+  }
+
+  @Test
+  public void openBankingConsentShowsTheAccountPermissionsAndExpiry() {
+    Consent consent =
+        app.injector()
+            .instanceOf(ConsentStore.class)
+            .create(List.of("ACCOUNTS_READ", "ACCOUNTS_BALANCES_READ"), "2030-01-01T00:00:00Z", 42L);
+    fake.answer(
+        "authorization",
+        args -> {
+          AuthorizationResponse r = interaction("ticket-1", null);
+          r.setScopes(
+              new Scope[] {
+                new Scope().setName("openid"), new Scope().setName("consent:" + consent.consentId())
+              });
+          return r;
+        });
+    String html = contentAsString(signIn(consentPage(), "john"));
+    assertTrue(html.contains("Share your account data with"));
+    assertTrue(html.contains("Account details"));
+    assertTrue(html.contains("ACCOUNTS_BALANCES_READ"));
+    assertTrue(html.contains("1 Jan 2030"));
+    assertTrue(html.contains("Confirm sharing"));
   }
 }

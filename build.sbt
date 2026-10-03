@@ -1,4 +1,13 @@
-import Dependencies.{bouncycastle, flyway, hikaricp, nimbusOauth2Oidc, password4j, postgres, slf4j}
+import Dependencies.{
+  bouncycastle,
+  flyway,
+  hikaricp,
+  nimbusOauth2Oidc,
+  password4j,
+  postgres,
+  qrcodegen,
+  slf4j
+}
 
 ThisBuild / organization := "com.lattice"
 
@@ -68,6 +77,7 @@ ThisBuild / libraryDependencies ++= Seq(
   flyway,
   postgres,
   nimbusOauth2Oidc,
+  qrcodegen,
   "net.minidev"              % "json-smart"             % "2.6.0",
   "com.cronutils"            % "cron-utils"             % "9.2.1",
   "org.mindrot"              % "jbcrypt"                % "0.4",

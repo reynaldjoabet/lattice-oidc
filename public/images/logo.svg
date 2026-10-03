@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="lattice-oidc">
+  <!-- Concept C: a hexagonal (graphene-like) lattice cell around a central identity atom -->
+  <rect width="64" height="64" rx="14" fill="#3b5bdb"/>
+  <g stroke="#fff" stroke-width="2.5" stroke-linejoin="round" fill="none">
+    <path d="M32 13L48.45 22.5V41.5L32 51L15.55 41.5V22.5Z" stroke-opacity=".9"/>
+    <path d="M32 32V13M32 32L48.45 22.5M32 32L48.45 41.5M32 32V51M32 32L15.55 41.5M32 32L15.55 22.5" stroke-opacity=".45"/>
+  </g>
+  <g fill="#fff">
+    <circle cx="32" cy="13" r="4"/><circle cx="48.45" cy="22.5" r="4"/><circle cx="48.45" cy="41.5" r="4"/>
+    <circle cx="32" cy="51" r="4"/><circle cx="15.55" cy="41.5" r="4"/><circle cx="15.55" cy="22.5" r="4"/>
+  </g>
+  <circle cx="32" cy="32" r="7" fill="#ffb547" stroke="#fff" stroke-width="2.5"/>
+</svg>

@@ -28,6 +28,7 @@ public final class AuditService {
     LOGIN_LOCKED,
     BROKERED_LOGIN,
     BROKERED_LOGIN_FAILED,
+    ACCOUNT_LINKED,
     CONSENT_GRANTED,
     CONSENT_DENIED,
     DEVICE_AUTHORIZED,
@@ -35,8 +36,16 @@ public final class AuditService {
     LOGOUT,
     CLIENT_REGISTERED,
     CLIENT_UPDATED,
-    CLIENT_DELETED
+    CLIENT_DELETED,
+    APP_ACCESS_REMOVED,
+    CIBA_APPROVED,
+    CIBA_DENIED
   }
+
+  /** How many recent events the operator console shows (kept in memory, newest first). */
+  public static final int RECENT_LIMIT = 50;
+
+  private final java.util.Deque<Map<String, Object>> recent = new java.util.ArrayDeque<>();
 
   /** Destination of audit records. */
   @ImplementedBy(LogSink.class)
@@ -82,5 +91,18 @@ public final class AuditService {
       }
     }
     sink.write(record);
+    synchronized (recent) {
+      recent.addFirst(java.util.Collections.unmodifiableMap(record));
+      while (recent.size() > RECENT_LIMIT) {
+        recent.removeLast();
+      }
+    }
+  }
+
+  /** The most recent events on this node, newest first (for the operator console). */
+  public java.util.List<Map<String, Object>> recent() {
+    synchronized (recent) {
+      return java.util.List.copyOf(recent);
+    }
   }
 }

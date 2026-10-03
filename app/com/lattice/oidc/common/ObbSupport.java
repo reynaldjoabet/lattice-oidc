@@ -13,6 +13,9 @@ public final class ObbSupport {
 
   public static final String X_FAPI_INTERACTION_ID = "x-fapi-interaction-id";
 
+  /** How the sample account served by the accounts API is described on the consent page. */
+  public static final String SAMPLE_ACCOUNT_LABEL = "Checking account · branch 6272 · ending 8392";
+
   private ObbSupport() {}
 
   public static String now() {

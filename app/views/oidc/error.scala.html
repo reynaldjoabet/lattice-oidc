@@ -3,8 +3,11 @@
  *@
 @(status: Int, description: String, reference: String)(implicit request: Http.RequestHeader)
 @layout("Something went wrong") {
-  <h1>Something went wrong</h1>
-  <p class="lead">@description</p>
-  <p class="muted">Error @status · Reference <code>@reference</code></p>
-  <div class="stack"><a class="button" href="/">Go to the start page</a></div>
+  <div class="status">
+    <span class="status-icon warning">@icon("alert", "")</span>
+    <h1>Something went wrong</h1>
+    <p class="lead">@description</p>
+  </div>
+  <div class="kv"><span>Error @status · reference</span><code>@reference</code></div>
+  <a class="button" href="/">Go to the start page</a>
 }

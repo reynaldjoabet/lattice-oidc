@@ -1,128 +1,119 @@
 @*
- * Consent page: who is asking, which account, what will be shared, then Allow / Deny.
- * Protocol details stay available but collapsed.
+ * Authorization, step 2: consent. Who is asking, which account, what will be shared (plain
+ * language), then Deny / Allow. Open Banking consents also show the account, each permission and
+ * the expiry. Protocol details stay available but collapsed. Screens 03 and 14 in docs/screens.
  *@
 @import com.lattice.oidc.models.AuthorizationPage
 @import scala.jdk.CollectionConverters._
 @import scala.jdk.OptionConverters._
 @(page: AuthorizationPage)(implicit request: Http.Request)
-@layout("Sign in to " + page.clientName(), wide = true) {
-  <div class="client">
-    @page.logoUri().toScala match {
-      case Some(logo) => { <img class="logo" src="@logo" alt="@page.clientName() logo" referrerpolicy="no-referrer"> }
-      case None => { <span class="monogram" aria-hidden="true">@page.clientName().take(1)</span> }
-    }
-    <div>
-      <h1>@page.clientName()</h1>
-      <p class="lead">wants to access your @page.serviceName() account</p>
-    </div>
-  </div>
-  @for(d <- page.description().toScala) { <p class="muted">@d</p> }
-  @if(page.clientUri().isPresent() || page.policyUri().isPresent() || page.tosUri().isPresent()) {
-    <ul class="links">
-      @for(u <- page.clientUri().toScala) { <li><a href="@u" target="_blank" rel="noopener noreferrer">Website</a></li> }
-      @for(u <- page.policyUri().toScala) { <li><a href="@u" target="_blank" rel="noopener noreferrer">Privacy policy</a></li> }
-      @for(u <- page.tosUri().toScala) { <li><a href="@u" target="_blank" rel="noopener noreferrer">Terms of service</a></li> }
-    </ul>
+@clientMark = {
+  @page.logoUri().toScala match {
+    case Some(logo) => { <img class="client-logo" src="@logo" alt="@page.clientName() logo" referrerpolicy="no-referrer"> }
+    case None => { <span class="monogram" aria-hidden="true">@page.clientInitials()</span> }
   }
-
+}
+@layout("Allow " + page.clientName(), aside = clientMark) {
   <form method="post" action="@com.lattice.oidc.controllers.routes.AuthorizationController.decision()">
     @helper.CSRF.formField
     <input type="hidden" name="ticket" value="@page.ticket()">
 
-    <h2>Your account</h2>
-    @for(e <- page.error().toScala) { <div class="alert alert-error" role="alert" id="login-error">@e</div> }
-    @page.loggedInAs().toScala match {
-      case Some(user) => {
-        <div class="account">
-          <span><span class="avatar" aria-hidden="true">@user.take(1)</span>Signed in as <strong>@user</strong></span>
-          <button type="submit" name="switchAccount" value="true" class="link" formnovalidate>Use a different account</button>
-        </div>
+    @for(user <- page.loggedInAs().toScala) {
+      <div class="account">
+        <span class="who"><span class="avatar" aria-hidden="true">@user.take(1)</span><span>Signed in as <strong>@user</strong></span></span>
+        <button type="submit" name="switchAccount" value="true" class="link" formnovalidate>Switch</button>
+      </div>
+    }
+    @for(error <- page.error().toScala) { <div class="alert alert-error" role="alert">@icon("alert")<span>@error</span></div> }
+
+    <div class="intro">
+      @if(page.obbConsent().isPresent()) {
+        <h1>Share your account data with @page.clientName()?</h1>
+      } else {
+        <h1>Allow @page.clientName() to access your account?</h1>
       }
-      case None => {
-        <div class="field">
-          <label for="loginId">Login ID</label>
-          <input type="text" id="loginId" name="loginId" value="@page.loginId()" autocomplete="username"
-                 autocapitalize="off" spellcheck="false" required
-                 @if(page.loginIdReadOnly()){readonly} else {autofocus}
-                 @if(page.error().isPresent()){aria-describedby="login-error" aria-invalid="true"}>
-        </div>
-        <div class="field">
-          <label for="password">Password</label>
-          <div class="password">
-            <input type="password" id="password" name="password" autocomplete="current-password" required
-                   @if(page.loginIdReadOnly()){autofocus}
-                   @if(page.error().isPresent()){aria-invalid="true"}>
-          </div>
-        </div>
+      @if(page.clientUri().isPresent() || page.policyUri().isPresent() || page.tosUri().isPresent()) {
+        <ul class="links">
+          @for(uri <- page.clientUri().toScala) { <li><a href="@uri" target="_blank" rel="noopener noreferrer">Website</a></li> }
+          @for(uri <- page.policyUri().toScala) { <li><a href="@uri" target="_blank" rel="noopener noreferrer">Privacy policy</a></li> }
+          @for(uri <- page.tosUri().toScala) { <li><a href="@uri" target="_blank" rel="noopener noreferrer">Terms</a></li> }
+        </ul>
       }
+      @for(description <- page.description().toScala) { <p class="muted">@description</p> }
+    </div>
+
+    @for(obb <- page.obbConsent().toScala) {
+      <section>
+        <h2 class="section">From account</h2>
+        <div class="kv"><span>Account</span><strong>@obb.account()</strong></div>
+      </section>
+      <section>
+        <h2 class="section">Data shared</h2>
+        <ul class="checklist">
+          @for(permission <- obb.permissions().asScala) { <li>@permission.label()<span class="code">@permission.code()</span></li> }
+        </ul>
+      </section>
+      @for(expires <- obb.expires().toScala) { <div class="kv"><span>Access until</span><strong>@expires</strong></div> }
     }
 
-    @if(!page.scopes().isEmpty()) {
-      <h2>This will allow @page.clientName() to</h2>
-      <ul class="checklist">
-        @for(s <- page.scopes().asScala) {
-          <li>@s.description()<span class="scope-name">@s.name()</span></li>
-        }
-      </ul>
+    @if(!page.displayScopes().isEmpty()) {
+      <section>
+        <h2 class="section">@page.clientName() will be able to</h2>
+        <ul class="checklist">
+          @for(scope <- page.displayScopes().asScala) { <li>@scope.description()</li> }
+        </ul>
+      </section>
     }
 
     @if(!page.sharedInformation().isEmpty()) {
-      <h2>Information that will be shared</h2>
-      <ul class="checklist">
-        @for(label <- page.sharedInformation().asScala) { <li>@label</li> }
-      </ul>
+      <section>
+        <h2 class="section">Information shared</h2>
+        <ul class="chips">
+          @for(label <- page.sharedInformation().asScala) { <li>@label</li> }
+        </ul>
+      </section>
     }
 
-    @for(p <- page.purpose().toScala) {
-      <div class="alert alert-info"><strong>Why this is requested:</strong> @p</div>
+    @for(purpose <- page.purpose().toScala) {
+      <div class="alert alert-info"><span><strong>Why this is requested:</strong> @purpose</span></div>
     }
 
-    @if(page.hasTechnicalDetails()) {
-      <details>
-        <summary>Technical details</summary>
-        @if(!page.claimsForIdToken().isEmpty()) {
-          <h3>Claims in the ID token</h3>
-          <ul>@for(c <- page.claimsForIdToken().asScala) { <li>@c</li> }</ul>
-        }
-        @if(!page.claimsForUserInfo().isEmpty()) {
-          <h3>Claims from the UserInfo endpoint</h3>
-          <ul>@for(c <- page.claimsForUserInfo().asScala) { <li>@c</li> }</ul>
-        }
-        @if(!page.verifiedClaimsForIdToken().isEmpty()) {
-          <table>
-            <caption>Verified claims in the ID token</caption>
-            <thead><tr><th scope="col">Claim</th><th scope="col">Purpose</th></tr></thead>
-            <tbody>@for(c <- page.verifiedClaimsForIdToken().asScala) { <tr><td><code>@c.claim()</code></td><td>@c.purpose()</td></tr> }</tbody>
-          </table>
-        }
-        @if(!page.verifiedClaimsForUserInfo().isEmpty()) {
-          <table>
-            <caption>Verified claims from UserInfo</caption>
-            <thead><tr><th scope="col">Claim</th><th scope="col">Purpose</th></tr></thead>
-            <tbody>@for(c <- page.verifiedClaimsForUserInfo().asScala) { <tr><td><code>@c.claim()</code></td><td>@c.purpose()</td></tr> }</tbody>
-          </table>
-        }
-        @for(details <- page.authorizationDetails().toScala) {
-          <h3>Authorization details</h3>
-          <pre>@details</pre>
-        }
-      </details>
-    }
+    <details>
+      <summary>Technical details</summary>
+      <h3>Scopes</h3>
+      <ul>@for(scope <- page.scopes().asScala) { <li>@scope.name()</li> }</ul>
+      @if(!page.claimsForIdToken().isEmpty()) {
+        <h3>Claims in the ID token</h3>
+        <ul>@for(claim <- page.claimsForIdToken().asScala) { <li>@claim</li> }</ul>
+      }
+      @if(!page.claimsForUserInfo().isEmpty()) {
+        <h3>Claims from the UserInfo endpoint</h3>
+        <ul>@for(claim <- page.claimsForUserInfo().asScala) { <li>@claim</li> }</ul>
+      }
+      @if(!page.verifiedClaimsForIdToken().isEmpty()) {
+        <table>
+          <caption class="visually-hidden">Verified claims in the ID token</caption>
+          <thead><tr><th scope="col">Verified claim (ID token)</th><th scope="col">Purpose</th></tr></thead>
+          <tbody>@for(claim <- page.verifiedClaimsForIdToken().asScala) { <tr><td><code>@claim.claim()</code></td><td>@claim.purpose()</td></tr> }</tbody>
+        </table>
+      }
+      @if(!page.verifiedClaimsForUserInfo().isEmpty()) {
+        <table>
+          <caption class="visually-hidden">Verified claims from UserInfo</caption>
+          <thead><tr><th scope="col">Verified claim (UserInfo)</th><th scope="col">Purpose</th></tr></thead>
+          <tbody>@for(claim <- page.verifiedClaimsForUserInfo().asScala) { <tr><td><code>@claim.claim()</code></td><td>@claim.purpose()</td></tr> }</tbody>
+        </table>
+      }
+      @for(details <- page.authorizationDetails().toScala) {
+        <h3>Authorization details</h3>
+        <pre>@details</pre>
+      }
+    </details>
 
     <div class="buttons">
       <button type="submit" name="denied" value="true" formnovalidate>Deny</button>
-      <button type="submit" name="authorized" value="true" class="primary">Allow</button>
+      <button type="submit" name="authorized" value="true" class="primary">@if(page.obbConsent().isPresent()){Confirm sharing} else {Allow}</button>
     </div>
-    <p class="notice">Only allow access if you trust @page.clientName(). You can revoke access later.</p>
+    <p class="small">You can remove this access any time in <a href="@com.lattice.oidc.controllers.routes.AccountController.index()">your account</a>.</p>
   </form>
-
-  @if(page.loggedInAs().isEmpty() && !page.identityProviders().isEmpty()) {
-    <div class="divider">or continue with</div>
-    <ul class="providers">
-      @for(p <- page.identityProviders().asScala) {
-        <li><a class="button" href="@com.lattice.oidc.controllers.routes.IdentityBrokerController.initiation(p.id(), page.ticket())">@p.name()</a></li>
-      }
-    </ul>
-  }
 }

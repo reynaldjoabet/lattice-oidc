@@ -30,7 +30,7 @@ public abstract class BaseController extends Controller {
   private static final Logger LOG = LoggerFactory.getLogger(BaseController.class);
 
   @Inject private Provider<AuthleteApi> apiProvider;
-  @Inject private AuthleteExecutionContext authleteEc;
+  @Inject private AuthleteExecutionContext executionContext;
   @Inject protected AuditService audit;
   @Inject protected Requests requests;
 
@@ -39,7 +39,7 @@ public abstract class BaseController extends Controller {
   }
 
   protected CompletionStage<Result> async(Supplier<Result> work) {
-    return CompletableFuture.supplyAsync(() -> run(work), authleteEc.current());
+    return CompletableFuture.supplyAsync(() -> run(work), executionContext.current());
   }
 
   /** Audits the outcome of a password login attempt. */

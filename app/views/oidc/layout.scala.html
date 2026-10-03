@@ -1,11 +1,12 @@
 @*
- * Shell of all end-user pages: brand inside the card, optional footer links (lattice.ui).
- * No inline scripts or styles (CSP), not indexed by search engines, light/dark from the OS.
- * `wide` is for pages with more content (consent, developer tools).
+ * Shell of all end-user pages: brand (hexagonal lattice logo) inside the card, an optional element
+ * on the right of the brand row (`aside`), optional footer links (lattice.ui). No inline scripts
+ * or styles (CSP), not indexed by search engines, light/dark from the OS. `wide` is for pages with
+ * more content (developer tools).
  *@
 @import com.lattice.oidc.models.UiSettings
 @import scala.jdk.OptionConverters._
-@(title: String, wide: Boolean = false)(content: Html)(implicit request: Http.RequestHeader)
+@(title: String, wide: Boolean = false, aside: Html = play.twirl.api.HtmlFormat.empty)(content: Html)(implicit request: Http.RequestHeader)
 @ui = @{ UiSettings.of(request) }
 <!DOCTYPE html>
 <html lang="en">
@@ -22,17 +23,20 @@
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
     <main id="main" class="card@if(wide){ wide}">
-      <div class="brand">
-        <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="currentColor"/><path d="M10 9.5v13h12" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="21.5" cy="10.5" r="2.75" fill="#fff"/></svg>
-        <span>@ui.brandName()</span>
+      <div class="card-head">
+        <a class="brand" href="@com.lattice.oidc.controllers.routes.HomeController.index()">
+          <img src="@routes.Assets.versioned("images/logo.svg")" alt="">
+          <span>@ui.brandName()</span>
+        </a>
+        @aside
       </div>
       @content
     </main>
     @if(ui.hasFooterLinks()) {
       <footer class="site-footer">
-        @for(u <- ui.privacyUrl().toScala) { <a href="@u">Privacy</a> }
-        @for(u <- ui.termsUrl().toScala) { <a href="@u">Terms</a> }
-        @for(u <- ui.helpUrl().toScala) { <a href="@u">Help</a> }
+        @for(url <- ui.privacyUrl().toScala) { <a href="@url">Privacy</a> }
+        @for(url <- ui.termsUrl().toScala) { <a href="@url">Terms</a> }
+        @for(url <- ui.helpUrl().toScala) { <a href="@url">Help</a> }
       </footer>
     }
   </body>

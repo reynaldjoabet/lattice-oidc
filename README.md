@@ -758,3 +758,10 @@ updateState(currCert);          // prevPubKey = currCert.getPublicKey(); prevSub
 ```
 
 The initial "previous key" is the root's public key. The first certificate that gets checked is not the root.
+
+
+### Why I'd still self-host rather than use the CDN:
+
+| | Self-hosted (now) | Google Fonts CDN |
+| --- | --- | --- |
+| Privacy | No third party sees your users | Every visit to your sign-in page sends the user's IP to Google. A German court ruled this a GDPR violation in 2022. |

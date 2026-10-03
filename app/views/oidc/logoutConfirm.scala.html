@@ -1,12 +1,26 @@
 @*
- * RP-initiated logout without a matching id_token_hint: ask before signing out.
+ * RP-initiated logout without a matching id_token_hint: ask before signing out, listing the apps
+ * the user will also be signed out of. Screen 09 in docs/screens.
  *@
+@import com.lattice.oidc.models.Initials
 @import com.lattice.oidc.models.LogoutRequest
+@import scala.jdk.CollectionConverters._
 @import scala.jdk.OptionConverters._
-@(logoutRequest: LogoutRequest)(implicit request: Http.Request)
+@(logoutRequest: LogoutRequest, apps: java.util.List[String])(implicit request: Http.Request)
 @layout("Sign out") {
-  <h1>Sign out?</h1>
-  <p class="lead">You will be signed out here and from the applications you used with this account.</p>
+  <div class="intro">
+    <h1>Sign out?</h1>
+    @if(apps.isEmpty()) {
+      <p class="lead">You'll be signed out of this account.</p>
+    } else {
+      <p class="lead">You'll be signed out here and of the apps you used with this account:</p>
+    }
+  </div>
+  @if(!apps.isEmpty()) {
+    <ul class="rows">
+      @for(app <- apps.asScala) { <li><span class="monogram sm" aria-hidden="true">@Initials.of(app)</span><span class="grow"><strong>@app</strong></span></li> }
+    </ul>
+  }
   <form method="post" action="@com.lattice.oidc.controllers.routes.LogoutController.confirm()">
     @helper.CSRF.formField
     @for(value <- logoutRequest.idTokenHint().toScala) { <input type="hidden" name="id_token_hint" value="@value"> }

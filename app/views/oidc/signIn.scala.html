@@ -1,0 +1,61 @@
+@*
+ * Authorization, step 1: sign in (password or an upstream identity provider). Step 2 is the
+ * consent page (authorization.scala.html). Screens 01 and 02 in docs/screens.
+ *@
+@import com.lattice.oidc.models.AuthorizationPage
+@import scala.jdk.CollectionConverters._
+@import scala.jdk.OptionConverters._
+@(page: AuthorizationPage)(implicit request: Http.Request)
+@layout("Sign in to " + page.clientName()) {
+  <div class="intro">
+    <h1>Sign in</h1>
+    <p class="lead">to continue to <strong>@page.clientName()</strong></p>
+  </div>
+
+  @for(error <- page.error().toScala) {
+    <div class="alert alert-error" role="alert" id="login-error">
+      @icon(if (error.startsWith("Too many")) "lock" else "alert")
+      <span>@error</span>
+    </div>
+  }
+
+  <form method="post" action="@com.lattice.oidc.controllers.routes.AuthorizationController.decision()">
+    @helper.CSRF.formField
+    <input type="hidden" name="ticket" value="@page.ticket()">
+    <div class="field">
+      <label for="loginId">Login ID</label>
+      <input type="text" id="loginId" name="loginId" value="@page.loginId()" autocomplete="username"
+             autocapitalize="off" spellcheck="false" required
+             @if(page.loginIdReadOnly()){readonly} else {autofocus}
+             @if(page.error().isPresent()){aria-describedby="login-error" aria-invalid="true"}>
+    </div>
+    <div class="field">
+      <label for="password">Password</label>
+      <div class="password">
+        <input type="password" id="password" name="password" autocomplete="current-password" required
+               @if(page.loginIdReadOnly()){autofocus}
+               @if(page.error().isPresent()){aria-invalid="true"}>
+      </div>
+    </div>
+    <button type="submit" name="login" value="true" class="primary">Continue</button>
+  </form>
+
+  @if(!page.identityProviders().isEmpty()) {
+    <div class="divider">or continue with</div>
+    <ul class="providers">
+      @for(provider <- page.identityProviders().asScala) {
+        <li>
+          <a class="button" href="@com.lattice.oidc.controllers.routes.IdentityBrokerController.initiation(provider.id(), page.ticket())">
+            <span class="mark" aria-hidden="true">@provider.name().take(1)</span>@provider.name()
+          </a>
+        </li>
+      }
+    </ul>
+  }
+
+  <form method="post" action="@com.lattice.oidc.controllers.routes.AuthorizationController.decision()">
+    @helper.CSRF.formField
+    <input type="hidden" name="ticket" value="@page.ticket()">
+    <p class="muted">Wrong app? <button type="submit" name="denied" value="true" class="link">Cancel and return to @page.clientName()</button></p>
+  </form>
+}

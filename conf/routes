@@ -12,6 +12,14 @@ GET     /assets/*file               controllers.Assets.versioned(path="/public",
 GET     /health/live                com.lattice.oidc.controllers.HealthController.live()
 GET     /health/ready               com.lattice.oidc.controllers.HealthController.ready()
 
+# End-user account, built-in CIBA approval and operator console
+GET     /account                    com.lattice.oidc.controllers.AccountController.index(request: Request)
+POST    /account/login              com.lattice.oidc.controllers.AccountController.login(request: Request)
+POST    /account/apps/:clientId/remove com.lattice.oidc.controllers.AccountController.removeApp(request: Request, clientId: Long)
+GET     /ciba                       com.lattice.oidc.controllers.CibaApprovalController.page(request: Request)
+POST    /ciba/decision              com.lattice.oidc.controllers.CibaApprovalController.decide(request: Request)
+GET     /admin                      com.lattice.oidc.controllers.AdminController.index(request: Request)
+
 # Authorization (RFC 6749 / OIDC Core)
 GET     /api/authorization                          com.lattice.oidc.controllers.AuthorizationController.get(request: Request)
 + nocsrf
@@ -26,6 +34,7 @@ POST    /api/federation/register                    com.lattice.oidc.controllers
 # Identity brokering: sign in with an upstream identity provider (paths kept for registered redirect URIs)
 GET     /api/federation/initiation/:id              com.lattice.oidc.controllers.IdentityBrokerController.initiation(request: Request, id: String, ticket: String)
 GET     /api/federation/callback/:id                com.lattice.oidc.controllers.IdentityBrokerController.callback(request: Request, id: String)
+POST    /api/federation/link                        com.lattice.oidc.controllers.IdentityBrokerController.link(request: Request)
 
 # Token endpoint (RFC 6749, 8693, 7523, OIDC Native SSO)
 + nocsrf

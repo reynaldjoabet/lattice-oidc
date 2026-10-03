@@ -1,0 +1,32 @@
+@*
+ * Sign-in for pages outside an authorization request: the account page, the CIBA approval page
+ * and the operator console (`next`).
+ *@
+@import scala.jdk.OptionConverters._
+@(next: String, purpose: String, error: java.util.Optional[String])(implicit request: Http.Request)
+@layout("Sign in") {
+  <div class="intro">
+    <h1>Sign in</h1>
+    <p class="lead">@purpose</p>
+  </div>
+  @for(message <- error.toScala) {
+    <div class="alert alert-error" role="alert" id="login-error">@icon(if (message.startsWith("Too many")) "lock" else "alert")<span>@message</span></div>
+  }
+  <form method="post" action="@com.lattice.oidc.controllers.routes.AccountController.login()">
+    @helper.CSRF.formField
+    <input type="hidden" name="next" value="@next">
+    <div class="field">
+      <label for="loginId">Login ID</label>
+      <input type="text" id="loginId" name="loginId" autocomplete="username" autocapitalize="off" spellcheck="false" required autofocus
+             @if(error.isPresent()){aria-describedby="login-error" aria-invalid="true"}>
+    </div>
+    <div class="field">
+      <label for="password">Password</label>
+      <div class="password">
+        <input type="password" id="password" name="password" autocomplete="current-password" required
+               @if(error.isPresent()){aria-invalid="true"}>
+      </div>
+    </div>
+    <button type="submit" class="primary">Continue</button>
+  </form>
+}

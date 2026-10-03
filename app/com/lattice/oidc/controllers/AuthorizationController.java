@@ -4,17 +4,21 @@ import com.authlete.common.dto.AuthorizationFailRequest.Reason;
 import com.authlete.common.dto.AuthorizationRequest;
 import com.authlete.common.dto.AuthorizationResponse;
 import com.authlete.common.types.Prompt;
+import com.lattice.oidc.common.LatticeConfig;
+import com.lattice.oidc.common.ObbSupport;
 import com.lattice.oidc.common.Requests;
 import com.lattice.oidc.common.Responses;
 import com.lattice.oidc.handlers.AuthorizationHandler;
 import com.lattice.oidc.handlers.IdentityProviders;
 import com.lattice.oidc.models.AuthorizationInteraction;
 import com.lattice.oidc.models.AuthorizationPage;
+import com.lattice.oidc.models.ObbConsentView;
 import com.lattice.oidc.security.AuditService;
 import com.lattice.oidc.security.Interactions;
 import com.lattice.oidc.security.LoginService;
 import com.lattice.oidc.security.UserSessions.LoginState;
 import com.lattice.oidc.security.UserSessions;
+import com.lattice.oidc.stores.ConsentStore;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -33,6 +37,9 @@ import play.mvc.Result;
  *   <li>{@code POST /api/authorization/decision}
  * </ul>
  *
+ * <p>The end-user interaction has two steps: sign in (skipped when a reusable login session
+ * exists), then consent. Both pages post to the decision endpoint.
+ *
  * @see <a href="https://www.rfc-editor.org/rfc/rfc6749.html#section-3.1">RFC 6749, 3.1. Authorization Endpoint</a>
  * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#AuthorizationEndpoint">OpenID Connect Core 1.0, 3.1.2. Authorization Endpoint (Authorization Code Flow)</a>
  * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#ImplicitAuthorizationEndpoint">OpenID Connect Core 1.0, 3.2.2. Authorization Endpoint (Implicit Flow)</a>
@@ -47,6 +54,8 @@ public final class AuthorizationController extends BaseController {
   private final LoginService login;
   private final AuthorizationHandler service;
   private final IdentityProviders identityProviders;
+  private final ConsentStore consents;
+  private final LatticeConfig config;
 
   @Inject
   public AuthorizationController(
@@ -54,12 +63,16 @@ public final class AuthorizationController extends BaseController {
       Interactions interactions,
       LoginService login,
       AuthorizationHandler service,
-      IdentityProviders identityProviders) {
+      IdentityProviders identityProviders,
+      ConsentStore consents,
+      LatticeConfig config) {
     this.sessions = sessions;
     this.interactions = interactions;
     this.login = login;
     this.service = service;
     this.identityProviders = identityProviders;
+    this.consents = consents;
+    this.config = config;
   }
 
   /**
@@ -118,8 +131,8 @@ public final class AuthorizationController extends BaseController {
   }
 
   /**
-   * Shows the authorization page that asks the end-user to log in (if necessary) and to grant
-   * authorization to the client application.
+   * Shows the sign-in page, or the consent page when the current login session can be reused, for
+   * the end-user to grant authorization to the client application.
    *
    * <p>The state needed to process the decision is stored server-side, keyed by Authlete's ticket
    * and bound to this browser. The current login session is offered only when the request allows
@@ -128,7 +141,8 @@ public final class AuthorizationController extends BaseController {
   private Result interaction(Http.Request request, AuthorizationResponse info) {
     Optional<LoginState> current = reusableSession(request, info);
     Optional<String> shown = current.map(loginState -> loginState.user().displayName());
-    AuthorizationPage page = AuthorizationPage.from(info, shown, identityProviders.links());
+    AuthorizationPage page =
+        AuthorizationPage.from(info, shown, identityProviders.links()).withObbConsent(obbConsent(info));
     String browserId = sessions.browserId(request);
     interactions.put(
         KIND,
@@ -136,10 +150,23 @@ public final class AuthorizationController extends BaseController {
         browserId,
         AuthorizationInteraction.from(
             info, page, current.map(loginState -> loginState.user().getSubject()).orElse(null)));
-    return sessions.withBrowserId(
-        Responses.of(200, views.html.oidc.authorization.render(page, request).body(), Responses.HTML, null),
-        request,
-        browserId);
+    return sessions.withBrowserId(Pages.authorization(request, page, 200), request, browserId);
+  }
+
+  /** The Open Banking consent referenced by a {@code consent:...} scope, for the consent page. */
+  private Optional<ObbConsentView> obbConsent(AuthorizationResponse info) {
+    if (!config.obbEnabled() || info.getScopes() == null) {
+      return Optional.empty();
+    }
+    String scope =
+        ObbSupport.consentScope(
+            Arrays.stream(info.getScopes()).map(s -> s.getName()).toArray(String[]::new));
+    if (scope == null) {
+      return Optional.empty();
+    }
+    return consents
+        .find(scope.substring("consent:".length()))
+        .map(consent -> ObbConsentView.of(consent, ObbSupport.SAMPLE_ACCOUNT_LABEL));
   }
 
   /**
@@ -205,11 +232,18 @@ public final class AuthorizationController extends BaseController {
   }
 
   /**
-   * Processes a request from the form in the authorization page.
+   * Processes a request from the sign-in or consent page.
    *
-   * <p>This implementation uses {@code authorized}, {@code loginId} and {@code password} in the form
-   * parameters. When the pair of login ID and password is wrong, the authorization page is displayed
-   * again with an error message (the authorization request stays pending).
+   * <ul>
+   *   <li>{@code login} (sign-in page): authenticate with {@code loginId} and {@code password}, then
+   *       show the consent page. A wrong pair shows the sign-in page again with an error.
+   *   <li>{@code switchAccount} (consent page): show the sign-in page for this request.
+   *   <li>{@code denied}: reject the request.
+   *   <li>{@code authorized}: issue for the signed-in user. A {@code loginId} and {@code password}
+   *       sent together with it sign in and authorize in one step.
+   * </ul>
+   *
+   * <p>The authorization request stays pending until it is authorized or denied.
    *
    * @return A response to the user agent. Basically, the response will trigger redirection to the
    *     client's redirect endpoint.
@@ -234,14 +268,31 @@ public final class AuthorizationController extends BaseController {
     }
     AuthorizationInteraction interaction = found.get();
 
-    // "Use a different account": show the login form for this request. The existing session is
-    // not ended; it is just no longer offered for this authorization request.
+    // "Switch": show the sign-in page for this request. The existing session is not ended; it is
+    // just no longer offered for this authorization request.
     if (form.containsKey("switchAccount")) {
       AuthorizationInteraction anonymous =
           interaction.withPage(interaction.page().withLoggedInAs(Optional.empty()).withError(null))
               .withShownSubject(null);
       interactions.put(KIND, ticket, browserId, anonymous);
       return rerender(request, anonymous, null, 200);
+    }
+
+    // Step 1 (sign-in page): authenticate, then show the consent page for the signed-in user.
+    if (form.containsKey("login")) {
+      String loginId = Requests.first(form, "loginId");
+      LoginService.Result result = login.authenticate(loginId, Requests.first(form, "password"));
+      auditLogin(request, loginId, result);
+      if (result.outcome() != LoginService.Outcome.SUCCESS) {
+        return rerender(request, interaction.withShownSubject(null), failureMessage(result), 401);
+      }
+      Map<String, String> sessionOut = new HashMap<>();
+      sessions.login(result.user().get(), System.currentTimeMillis() / 1000L, null, sessionOut);
+      AuthorizationInteraction signedIn =
+          interaction.withPage(interaction.page().withLoggedInAs(Optional.of(result.user().get().displayName())).withError(null))
+              .withShownSubject(result.user().get().getSubject());
+      interactions.put(KIND, ticket, browserId, signedIn);
+      return sessions.apply(rerender(request, signedIn, null, 200), request, sessionOut);
     }
 
     // If the end-user did not grant authorization to the client application.
@@ -261,11 +312,7 @@ public final class AuthorizationController extends BaseController {
       LoginService.Result result = login.authenticate(loginId, Requests.first(form, "password"));
       auditLogin(request, loginId, result);
       if (result.outcome() != LoginService.Outcome.SUCCESS) {
-        String message =
-            result.outcome() == LoginService.Outcome.LOCKED
-                ? "Too many failed attempts. Try again later."
-                : "Invalid login ID or password.";
-        return rerender(request, interaction, message, 401);
+        return rerender(request, interaction.withShownSubject(null), failureMessage(result), 401);
       }
       long authTime = System.currentTimeMillis() / 1000L;
       String sessionId = sessions.login(result.user().get(), authTime, null, sessionOut);
@@ -275,8 +322,11 @@ public final class AuthorizationController extends BaseController {
       if (current.isEmpty()
           || interaction.shownSubject() == null
           || !interaction.shownSubject().equals(current.get().user().getSubject())) {
-        // The end-user is not authenticated.
-        return rerender(request, interaction, "Please log in.", 401);
+        // The end-user is not authenticated: back to the sign-in page.
+        AuthorizationInteraction anonymous =
+            interaction.withPage(interaction.page().withLoggedInAs(Optional.empty())).withShownSubject(null);
+        interactions.put(KIND, ticket, browserId, anonymous);
+        return rerender(request, anonymous, "Please sign in.", 401);
       }
       LoginState loginState = current.get();
       grant = new AuthorizationHandler.Grant(loginState.user(), loginState.authTime(), loginState.sessionId());
@@ -296,12 +346,21 @@ public final class AuthorizationController extends BaseController {
   }
 
   /**
-   * Displays the authorization page again, with a message (e.g. after a failed login).
+   * Displays the sign-in or consent page again, with a message (e.g. after a failed login). A
+   * failed login always shows the sign-in page.
    */
   private Result rerender(
       Http.Request request, AuthorizationInteraction interaction, String message, int status) {
     AuthorizationPage page = interaction.page().withError(message);
-    return Responses.of(
-        status, views.html.oidc.authorization.render(page, request).body(), Responses.HTML, null);
+    if (interaction.shownSubject() == null) {
+      page = page.withLoggedInAs(Optional.empty());
+    }
+    return Pages.authorization(request, page, status);
+  }
+
+  static String failureMessage(LoginService.Result result) {
+    return result.outcome() == LoginService.Outcome.LOCKED
+        ? "Too many failed attempts. Try again later."
+        : "Invalid login ID or password.";
   }
 }

@@ -192,13 +192,13 @@ public final class DeviceController extends BaseController {
           return switch (action) {
             // The API call has been processed successfully.
             case SUCCESS ->
-                Pages.message(
-                    request,
-                    200,
-                    authorized ? "Device authorized" : "Request denied",
-                    authorized
-                        ? "You can return to your device."
-                        : "The device was not given access.");
+                authorized
+                    ? Pages.success(
+                        request,
+                        "Device connected",
+                        approval.get().clientName()
+                            + " can now use your account. You can return to your device; it will continue on its own.")
+                    : Pages.message(request, 200, "Request denied", "The device was not given access.");
             // The user code has expired.
             case USER_CODE_EXPIRED -> Pages.message(request, 400, "Code expired", "Restart the flow on your device.");
             // The user code does not exist.

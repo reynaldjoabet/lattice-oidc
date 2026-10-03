@@ -1,6 +1,8 @@
 package com.lattice.oidc.controllers;
 
 import static com.lattice.oidc.OidcTestSupport.app;
+import static com.lattice.oidc.OidcTestSupport.get;
+import static com.lattice.oidc.OidcTestSupport.withCsrf;
 import static com.lattice.oidc.OidcTestSupport.post;
 import static com.lattice.oidc.OidcTestSupport.route;
 import static org.junit.Assert.assertEquals;
@@ -25,6 +27,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.After;
 import org.junit.Test;
 import play.Application;
@@ -260,5 +264,70 @@ public class CibaTest {
     assertEquals(400, deviceCallback("not json").status());
     assertEquals(400, deviceCallback("{\"result\":\"allow\"}").status());
     assertEquals(400, deviceCallback("{\"request_id\":\"dev-failRequest-1\"}").status());
+  }
+
+  // --- Built-in approval page (lattice.ciba.mode = builtin) ---
+
+  private Map<String, String> signIn(String loginId) {
+    return route(
+            app,
+            withCsrf(post("/account/login", Map.of("loginId", loginId, "password", loginId, "next", "ciba"))))
+        .session()
+        .data();
+  }
+
+  private Result decide(Map<String, String> session, String id, String choice) {
+    return route(
+        app, withCsrf(post("/ciba/decision", Map.of("id", id, choice, "true"))).session(session));
+  }
+
+  /** The id of the first waiting request shown on john's approval page. */
+  private String waitingRequestId(Map<String, String> session, String expectedText) {
+    String html = Helpers.contentAsString(route(app, get("/ciba").session(session)));
+    assertTrue(html, html.contains(expectedText));
+    Matcher matcher = Pattern.compile("name=\"id\" value=\"([^\"]+)\"").matcher(html);
+    assertTrue("a request is waiting", matcher.find());
+    return matcher.group(1);
+  }
+
+  @Test
+  public void builtinModeWaitsForTheUsersApprovalOnLattice() throws Exception {
+    start("builtin");
+    authleteSays(r -> r.setBindingMessage("Reference 7Q4K"));
+    assertEquals(200, authenticate().status());
+    assertTrue("the external simulator is not used", deviceRequests.isEmpty());
+
+    Map<String, String> john = signIn("john");
+    String id = waitingRequestId(john, "Reference 7Q4K");
+
+    Map<String, String> jane = signIn("jane");
+    assertEquals("someone else cannot decide john's request", 400, decide(jane, id, "approve").status());
+    assertEquals(0, fake.count("backchannelAuthenticationComplete"));
+
+    Result approved = decide(john, id, "approve");
+    assertEquals(200, approved.status());
+    assertTrue(Helpers.contentAsString(approved).contains("Sign-in approved"));
+    BackchannelAuthenticationCompleteRequest done = fake.lastRequest("backchannelAuthenticationComplete");
+    assertEquals(BackchannelAuthenticationCompleteRequest.Result.AUTHORIZED, done.getResult());
+    assertEquals("1001", done.getSubject());
+
+    assertEquals("a request is decided once", 400, decide(john, id, "approve").status());
+    assertEquals(1, fake.count("backchannelAuthenticationComplete"));
+  }
+
+  @Test
+  public void builtinDenialCompletesWithAccessDenied() throws Exception {
+    start("builtin");
+    authenticate();
+    Map<String, String> john = signIn("john");
+    assertEquals(200, decide(john, waitingRequestId(john, "Bank App"), "deny").status());
+    BackchannelAuthenticationCompleteRequest done = fake.lastRequest("backchannelAuthenticationComplete");
+    assertEquals(BackchannelAuthenticationCompleteRequest.Result.ACCESS_DENIED, done.getResult());
+  }
+
+  @Test
+  public void approvalPageIsOffWhenTheSimulatorIsUsed() throws Exception {
+    start("sync");
+    assertEquals(404, route(app, get("/ciba")).status());
   }
 }
