@@ -2,7 +2,7 @@
 
 Designs for every end-user and operator screen of Lattice. The screenshots below are rendered from the design canvas; the editable source lives in the canvas ([Lattice OIDC screens](https://claude.ai/artifact/CRds8ufKFuZjJGn3n1aqBB), private until shared).
 
-All 15 screens are implemented. The last column of each table names the template and endpoint behind the screen.
+Screens 01–15 are implemented; the last column of their tables names the template and endpoint behind each one. Screens 16–38 are designs for the next features and are not built yet.
 
 ## Design language
 
@@ -99,3 +99,109 @@ Rules that every screen follows:
 | 15 Overview | Authlete status, active sessions, identity providers, accounts with failed logins, the six caches (sizes and hit rates from `record-stats`) and recent audit events | `GET /admin`, `admin.scala.html`; only login IDs in `lattice.admin.login-ids` (`ADMIN_LOGIN_IDS`) |
 
 <img src="15-operator-console.png" width="720" alt="15 Operator console">
+
+## Passkeys (designed)
+
+| Screen | Purpose |
+| ------ | ------- |
+| 16 Sign in with a passkey | The Login ID field offers saved passkeys (WebAuthn conditional UI); password and providers stay one click away |
+| 17 Passkey prompt | Waiting for Touch ID, Face ID, Windows Hello or a security key, with a password fallback |
+| 18 Offer a passkey | After a password sign-in, at most once a week: benefits, create or skip |
+| 19 Passkey created | Success, with an editable name |
+| 20 Account: passkeys | Each passkey with type (synced or device-only), last use and Manage |
+
+<table>
+  <tr>
+    <td><img src="16-sign-in-with-a-passkey.png" width="240" alt="16 sign in with a passkey"></td>
+    <td><img src="17-passkey-prompt.png" width="240" alt="17 passkey prompt"></td>
+    <td><img src="18-offer-a-passkey.png" width="240" alt="18 offer a passkey"></td>
+    <td><img src="19-passkey-created.png" width="240" alt="19 passkey created"></td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td><img src="20-account-passkeys.png" width="240" alt="20 account passkeys"></td>
+  </tr>
+</table>
+
+## Step-up and secure approvals (designed)
+
+| Screen | Purpose |
+| ------ | ------- |
+| 21 Remove a passkey | Confirm with another passkey or the password first |
+| 22 Step-up verification | An app requires phishing-resistant sign-in; confirm with a passkey without signing in again |
+| 23 Approve a payment | CIBA with RFC 9396 payment details in plain words, approved with a passkey |
+| 24 Passkey didn't work | Nothing changed; try again or use a password |
+
+<table>
+  <tr>
+    <td><img src="21-remove-a-passkey.png" width="240" alt="21 remove a passkey"></td>
+    <td><img src="22-step-up-verification.png" width="240" alt="22 step up verification"></td>
+    <td><img src="23-approve-a-payment-ciba-rar.png" width="240" alt="23 approve a payment ciba rar"></td>
+    <td><img src="24-passkey-didn-t-work.png" width="240" alt="24 passkey didn t work"></td>
+  </tr>
+</table>
+
+## Sessions and identifier-first sign-in (designed)
+
+| Screen | Purpose |
+| ------ | ------- |
+| 25 Where you're signed in | Sessions with browser, device, last activity, IP and apps; sign out one or all others |
+| 26 Sign out everywhere | Lists the apps told to sign out (back-channel logout); optional password change |
+| 27 Identifier-first sign-in | Email or login ID first |
+| 28 Continue to your organisation | Work email domains go straight to their identity provider |
+| 29 New sign-in alert | "Was this you?" on the account page; "No" ends that session |
+
+<table>
+  <tr>
+    <td><img src="25-account-active-sessions.png" width="240" alt="25 account active sessions"></td>
+    <td><img src="26-sign-out-everywhere.png" width="240" alt="26 sign out everywhere"></td>
+    <td><img src="27-identifier-first-sign-in.png" width="240" alt="27 identifier first sign in"></td>
+    <td><img src="28-continue-to-your-organisation.png" width="240" alt="28 continue to your organisation"></td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td><img src="29-new-sign-in-alert.png" width="240" alt="29 new sign in alert"></td>
+  </tr>
+</table>
+
+## Account recovery (designed)
+
+| Screen | Purpose |
+| ------ | ------- |
+| 30 Reset your password | Email or login ID |
+| 31 Check your email | Same message whether or not the account exists |
+| 32 Choose a new password | Length and common-password checks; signs out everywhere else by default |
+| 33 Password changed | Confirmation, with a passkey suggestion |
+
+<table>
+  <tr>
+    <td><img src="30-forgot-password.png" width="240" alt="30 forgot password"></td>
+    <td><img src="31-check-your-email.png" width="240" alt="31 check your email"></td>
+    <td><img src="32-choose-a-new-password.png" width="240" alt="32 choose a new password"></td>
+    <td><img src="33-password-changed.png" width="240" alt="33 password changed"></td>
+  </tr>
+</table>
+
+## Operator console: clients, signals and security (designed)
+
+| Screen | Purpose |
+| ------ | ------- |
+| 34 Clients | Registered applications, filterable by how they were registered |
+| 35 Client detail | Display details, redirect URIs, scopes, security settings, secret rotation, delete |
+| 36 Secret rotated | The new secret is shown once; the old one works for a grace period |
+| 37 Shared Signals | Apps receiving CAEP/RISC security events, and what triggers each event |
+| 38 Security | Failed sign-ins, locked accounts, passkey adoption, top failing IPs |
+
+<img src="34-console-clients.png" width="720" alt="34 Console: clients">
+
+<img src="35-console-client-detail.png" width="720" alt="35 Console: client detail">
+
+<img src="36-console-secret-rotated.png" width="720" alt="36 Console: secret rotated">
+
+<img src="37-console-shared-signals.png" width="720" alt="37 Console: Shared Signals">
+
+<img src="38-console-security.png" width="720" alt="38 Console: security">
