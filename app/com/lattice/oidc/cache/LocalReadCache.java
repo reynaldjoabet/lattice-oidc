@@ -1,0 +1,62 @@
+package com.lattice.oidc.cache;
+
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.typesafe.config.Config;
+import java.util.Optional;
+import javax.inject.Inject;
+import javax.inject.Singleton;
+
+/**
+ * {@code lattice.cache = local}: a bounded cache in each server's memory (Caffeine). Changes are
+ * announced on the {@link InvalidationBus}, so every server drops its copy; with PostgreSQL storage
+ * the bus is PostgreSQL's {@code LISTEN}/{@code NOTIFY}.
+ *
+ * <p>One race remains, as with any invalidated cache: a server that read the old value just before a
+ * change can store it just after the announcement. {@code lattice.cache.ttl} bounds how long that
+ * stale copy can live.
+ */
+@Singleton
+public final class LocalReadCache implements ReadCache {
+
+  private final Cache<String, String> entries;
+  private final InvalidationBus bus;
+
+  @Inject
+  public LocalReadCache(Config config, InvalidationBus bus) {
+    this.entries =
+        Caffeine.newBuilder()
+            .maximumSize(config.getLong("lattice.cache.maximum-size"))
+            .expireAfterWrite(config.getDuration("lattice.cache.ttl"))
+            .build();
+    this.bus = bus;
+    bus.subscribe(
+        (region, key) -> {
+          if (key == null) {
+            entries.invalidateAll();
+          } else {
+            entries.invalidate(entryKey(region, key));
+          }
+        });
+  }
+
+  @Override
+  public Optional<String> get(String region, String key) {
+    return Optional.ofNullable(entries.getIfPresent(entryKey(region, key)));
+  }
+
+  @Override
+  public void put(String region, String key, String json) {
+    entries.put(entryKey(region, key), json);
+  }
+
+  @Override
+  public void invalidate(String region, String key) {
+    entries.invalidate(entryKey(region, key));
+    bus.publish(region, key);
+  }
+
+  private static String entryKey(String region, String key) {
+    return region + ":" + key;
+  }
+}

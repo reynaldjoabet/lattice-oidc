@@ -60,6 +60,7 @@ object Dependencies {
 
     // --- Cache ---
     val caffeine = "3.3.0"
+    val jedis    = "8.0.1"
 
     // --- UI ---
     val qrcodegen = "1.8.0"
@@ -266,5 +267,8 @@ object Dependencies {
   // Cache
   lazy val caffeine =
     "com.github.ben-manes.caffeine" % "caffeine" % Version.caffeine
+
+  // Redis client for the shared read cache and short-lived state (no Netty, so no clash with Play)
+  lazy val jedis = "redis.clients" % "jedis" % Version.jedis
 
 }

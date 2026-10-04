@@ -36,6 +36,7 @@ public final class AdminController extends BaseController {
 
   private final UserSessions sessions;
   private final LatticeConfig config;
+  private final com.typesafe.config.Config rawConfig;
   private final AuthleteHealth authlete;
   private final ServerMetadata server;
   private final IdentityProviders providers;
@@ -46,6 +47,7 @@ public final class AdminController extends BaseController {
   public AdminController(
       UserSessions sessions,
       LatticeConfig config,
+      com.typesafe.config.Config rawConfig,
       AuthleteHealth authlete,
       ServerMetadata server,
       IdentityProviders providers,
@@ -53,6 +55,7 @@ public final class AdminController extends BaseController {
       CounterStore counters) {
     this.sessions = sessions;
     this.config = config;
+    this.rawConfig = rawConfig;
     this.authlete = authlete;
     this.server = server;
     this.providers = providers;
@@ -99,12 +102,31 @@ public final class AdminController extends BaseController {
                   activeSessions,
                   providers.links().stream().map(link -> link.name()).toList(),
                   counters.countAtLeast(LoginService.ACCOUNT_PREFIX, 1),
-                  config.storage().name().toLowerCase(java.util.Locale.ROOT),
+                  storageDescription(),
                   rows,
                   audit.recent().stream().map(AdminController::event).toList());
           return Responses.of(200, views.html.oidc.admin.render(page, request).body(), Responses.HTML, null)
               .withHeader(CACHE_CONTROL, "no-store");
         });
+  }
+
+  /** Where state is kept, in words, from lattice.storage, short-lived-state and cache.type. */
+  private String storageDescription() {
+    String storage =
+        config.storage() == LatticeConfig.Storage.POSTGRES
+            ? "PostgreSQL, shared by every server"
+            : "In memory on this server; lost on restart";
+    String shortLived =
+        rawConfig.getString("lattice.short-lived-state").equalsIgnoreCase("redis")
+            ? "Single-use state and counters in Redis."
+            : "";
+    String cache =
+        switch (rawConfig.getString("lattice.cache.type").toLowerCase(java.util.Locale.ROOT)) {
+          case "local" -> "Read cache on each server.";
+          case "redis" -> "Read cache in Redis.";
+          default -> "";
+        };
+    return String.join(" ", storage + ".", shortLived, cache).trim();
   }
 
   private static AdminPage.Event event(Map<String, Object> record) {

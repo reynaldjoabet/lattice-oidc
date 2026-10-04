@@ -236,6 +236,28 @@ With `postgres`:
 
 With `lattice.demo-users` on, the demo accounts are added only to an empty `users` table, so a real database is never changed.
 
+### Short-lived state and the read cache
+
+Two more settings decide where the fast-moving data goes. Each is independent of `lattice.storage`:
+
+| Setting | Values | What it controls |
+| --- | --- | --- |
+| `lattice.short-lived-state` (`LATTICE_SHORT_LIVED_STATE`) | `storage` (default), `redis` | Single-use state: sign-in state and nonce, consent tickets, reset links, CIBA approvals, device secrets, sign-in alerts. Also the rate-limit counters. This data needs no durability, so Redis suits it. |
+| `lattice.cache.type` (`LATTICE_CACHE`) | `none` (default), `local`, `redis` | A read cache in front of the two lookups made on every signed-in request: the user by subject and the session by id. |
+
+How the cache stays correct:
+- **Changes invalidate it everywhere.** A sign-out, a password change or a removed passkey invalidates the cached copy on every server at once. With `local`, each server keeps its own copy and changes are announced through PostgreSQL `LISTEN`/`NOTIFY`. With `redis`, there is one shared copy.
+- **`lattice.cache.ttl` (30 seconds)** bounds the rare race where a copy is read just before a change and stored just after it.
+- **Never cached:** single-use state and counters. They rely on one atomic step in their store; a cached copy would allow reuse or under-counting.
+- **Password hashes are cached** along with the user, so secure Redis as you would the database.
+
+| Redis setting | Environment variable | Default |
+| --- | --- | --- |
+| `lattice.redis.url` | `REDIS_URL` | `redis://localhost:6379` (use `rediss://` for TLS, `redis://:password@host:6379` for a password) |
+| `lattice.redis.key-prefix` | `REDIS_KEY_PREFIX` | `lattice:` (lets several deployments share one Redis) |
+
+PostgreSQL and Redis are both checked at startup, so a wrong address stops the server at startup instead of the first sign-in.
+
 ## Tickets: a handle for pending requests
 
 A ticket is Authlete's handle for a request it is in the middle of processing. When Authlete can't finish a request on its own (for example, it needs the user to log in and consent), it remembers the parsed request on its side and gives Lattice an opaque string, the ticket. Lattice later sends that ticket back to finish the request (issue) or reject it (fail).
