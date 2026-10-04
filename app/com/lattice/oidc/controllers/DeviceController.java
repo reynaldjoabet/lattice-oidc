@@ -5,6 +5,7 @@ import com.authlete.common.dto.DeviceAuthorizationResponse;
 import com.authlete.common.dto.DeviceCompleteResponse;
 import com.authlete.common.dto.DeviceVerificationResponse;
 import com.authlete.common.web.BasicCredentials;
+import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.common.Requests;
 import com.lattice.oidc.common.Responses;
 import com.lattice.oidc.handlers.DeviceHandler;
@@ -14,6 +15,7 @@ import com.lattice.oidc.security.Interactions;
 import com.lattice.oidc.security.LoginService;
 import com.lattice.oidc.security.UserSessions.LoginState;
 import com.lattice.oidc.security.UserSessions;
+import com.lattice.oidc.stores.CounterStore;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -48,13 +50,28 @@ public final class DeviceController extends BaseController {
   private final LoginService login;
   private final DeviceHandler device;
 
+  private final CounterStore counters;
+  private final LatticeConfig config;
+
   @Inject
   public DeviceController(
-      UserSessions sessions, Interactions interactions, LoginService login, DeviceHandler device) {
+      UserSessions sessions,
+      Interactions interactions,
+      LoginService login,
+      DeviceHandler device,
+      CounterStore counters,
+      LatticeConfig config) {
     this.sessions = sessions;
     this.interactions = interactions;
     this.login = login;
     this.device = device;
+    this.counters = counters;
+    this.config = config;
+  }
+
+  /** Wrong user codes from this IP address within the window (RFC 8628 section 5.1). */
+  private String guessesKey(Http.Request request) {
+    return "device:ip:" + request.remoteAddress();
   }
 
   /**
@@ -123,7 +140,7 @@ public final class DeviceController extends BaseController {
           Optional<String> shown = current.map(loginState -> loginState.user().displayName());
           if (current.isEmpty()) {
             LoginService.Result auth =
-                login.authenticate(Requests.first(form, "loginId"), Requests.first(form, "password"));
+                login.authenticate(Requests.first(form, "loginId"), Requests.first(form, "password"), request.remoteAddress());
             auditLogin(request, Requests.first(form, "loginId"), auth);
             if (auth.outcome() != LoginService.Outcome.SUCCESS) {
               String message =
@@ -136,8 +153,20 @@ public final class DeviceController extends BaseController {
             shown = Optional.of(auth.user().get().displayName());
           }
 
+          // Too many wrong codes from this IP address: refuse before asking Authlete, so user codes
+          // can't be guessed.
+          if (counters.count(guessesKey(request)) >= config.device().maxAttempts()) {
+            return sessions.apply(
+                page(request, 429, userCode, shown, Optional.of("Too many wrong codes. Try again later.")),
+                request,
+                sessionOut);
+          }
+
           // Call Authlete's /api/device/verification API.
           DeviceVerificationResponse r = device.verify(userCode);
+          if (r.getAction() == DeviceVerificationResponse.Action.NOT_EXIST) {
+            counters.increment(guessesKey(request), config.device().window());
+          }
           Result result =
               switch (r.getAction()) {
                 // The user code is valid. Ask the user to authorize the client.

@@ -69,6 +69,11 @@ public final class User implements com.authlete.common.types.User {
     return claims;
   }
 
+  /** Non-claim data (for example the CIBA user code, mdoc namespaces). */
+  public Map<String, Object> attributes() {
+    return attributes;
+  }
+
   /** eKYC/IDA verified-claims datasets (each a {@code verified_claims} object). */
   public List<Map<String, Object>> verifiedClaims() {
     return verifiedClaims;

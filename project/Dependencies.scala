@@ -200,6 +200,10 @@ object Dependencies {
   lazy val hikaricp = "com.zaxxer"     % "HikariCP"    % Version.hikaricp
   lazy val flyway   = "org.flywaydb"   % "flyway-core" % Version.flyway
 
+  // Flyway 10+ ships database support separately; this is the PostgreSQL one.
+  lazy val flywayPostgres =
+    "org.flywaydb" % "flyway-database-postgresql" % Version.flyway
+
   lazy val auth0 = "com.auth0" % "java-jwt" % Version.auth0
 
   lazy val password4j =

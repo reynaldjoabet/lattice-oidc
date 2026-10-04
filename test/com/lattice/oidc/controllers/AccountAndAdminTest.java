@@ -128,7 +128,8 @@ public class AccountAndAdminTest {
     assertEquals(200, console.status());
     String html = contentAsString(console);
     assertTrue(html.contains("Connected"));
-    assertTrue(html.contains("lattice-sessions"));
+    assertTrue("the storage panel lists sessions", html.contains(">sessions<"));
+    assertTrue(html.contains("<h2>Storage</h2>"));
     assertTrue("recent audit events are listed", html.contains("LOGIN_SUCCEEDED"));
     assertEquals("no-store", console.header("Cache-Control").orElse(null));
   }

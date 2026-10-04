@@ -79,7 +79,7 @@ public final class CredentialOfferController extends BaseController {
             user = current.get().user();
           } else {
             LoginService.Result auth =
-                login.authenticate(Requests.first(f, "loginId"), Requests.first(f, "password"));
+                login.authenticate(Requests.first(f, "loginId"), Requests.first(f, "password"), request.remoteAddress());
             auditLogin(request, Requests.first(f, "loginId"), auth);
             if (auth.outcome() != LoginService.Outcome.SUCCESS) {
               return page(request, 401, withError(form, Optional.empty(), "Invalid login ID or password."));

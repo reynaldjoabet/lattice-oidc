@@ -231,7 +231,7 @@ public final class IdentityBrokerController extends BaseController {
             return signIn(request, browserId, link.ticket(), interaction.get(), separate, link.providerId());
           }
 
-          LoginService.Result result = login.authenticate(local.get().loginId(), Requests.first(form, "password"));
+          LoginService.Result result = login.authenticate(local.get().loginId(), Requests.first(form, "password"), request.remoteAddress());
           auditLogin(request, local.get().loginId(), result);
           if (result.outcome() != LoginService.Outcome.SUCCESS) {
             return linkPage(

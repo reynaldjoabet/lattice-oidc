@@ -148,4 +148,21 @@ public class DeviceFlowTest {
     assertEquals(404, unknown.status());
     assertTrue(contentAsString(unknown).contains("does not exist"));
   }
+
+  @Test
+  public void wrongCodesFromOneAddressAreLimited() {
+    Helpers.stop(app);
+    fake.answer("deviceVerification", args -> verification(DeviceVerificationResponse.Action.NOT_EXIST));
+    app = app(fake, Map.of("lattice.device.max-attempts", 2));
+    Helpers.start(app);
+    assertEquals(404, enterCode("john").status());
+    Map<String, String> session = enterCode("john").session().data();
+    Result refused =
+        route(
+            app,
+            withCsrf(post("/api/device/verification", Map.of("userCode", "AAAA-BBBB"))).session(session));
+    assertEquals(429, refused.status());
+    assertTrue(contentAsString(refused).contains("Too many wrong codes"));
+    assertEquals("Authlete isn't asked once the limit is reached", 2, fake.count("deviceVerification"));
+  }
 }

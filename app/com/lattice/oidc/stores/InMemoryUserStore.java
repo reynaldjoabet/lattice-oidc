@@ -34,12 +34,15 @@ public final class InMemoryUserStore implements UserStore {
   @Inject
   public InMemoryUserStore(LatticeConfig config, Environment environment) {
     if (config.demoUsers()) {
-      seed(environment);
+      demoUsers(environment).forEach(this::save);
+      LOG.warn("Seeded {} DEMO user accounts; disable lattice.demo-users in production.", bySubject.size());
     }
   }
 
+  /** The demo accounts in {@code conf/demo-users.json}, with Argon2-hashed passwords. */
   @SuppressWarnings("unchecked")
-  private void seed(Environment environment) {
+  public static List<User> demoUsers(Environment environment) {
+    List<User> users = new ArrayList<>();
     Map<String, Object> root = Jsons.readMap(resource(environment, "demo-users.json"));
     for (Object entry : (List<Object>) root.get("users")) {
       Map<String, Object> account = (Map<String, Object>) entry;
@@ -48,7 +51,7 @@ public final class InMemoryUserStore implements UserStore {
         Map<String, Object> doc = Jsons.readMap(resource(environment, (String) file));
         datasets.add((Map<String, Object>) doc.get("verified_claims"));
       }
-      save(
+      users.add(
           new User(
               (String) account.get("subject"),
               (String) account.get("loginId"),
@@ -57,7 +60,7 @@ public final class InMemoryUserStore implements UserStore {
               (Map<String, Object>) account.get("attributes"),
               datasets));
     }
-    LOG.warn("Seeded {} DEMO user accounts; disable lattice.demo-users in production.", bySubject.size());
+    return users;
   }
 
   private static String resource(Environment environment, String name) {

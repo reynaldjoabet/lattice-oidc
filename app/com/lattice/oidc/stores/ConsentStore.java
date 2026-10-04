@@ -1,6 +1,6 @@
 package com.lattice.oidc.stores;
 
-import com.lattice.oidc.common.Caches;
+import com.google.inject.ImplementedBy;
 import com.lattice.oidc.common.ObbSupport;
 import com.lattice.oidc.models.Consent;
 import java.time.Duration;
@@ -9,26 +9,24 @@ import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import play.cache.NamedCache;
-import play.cache.SyncCacheApi;
 
-/** Consent persistence (cache-backed; entries live until the consent expires, at most 1 year). */
-@Singleton
-public final class ConsentStore {
+/**
+ * Open Banking consents. A consent is kept until it expires (at most a year), or a day when it has
+ * no expiry.
+ */
+@ImplementedBy(InMemoryConsentStore.class)
+public interface ConsentStore {
 
-  private static final Duration MAX_TTL = Duration.ofDays(365);
-  private static final Duration DEFAULT_TTL = Duration.ofDays(1);
+  Duration MAX_TTL = Duration.ofDays(365);
+  Duration DEFAULT_TTL = Duration.ofDays(1);
 
-  private final SyncCacheApi cache;
+  Optional<Consent> find(String consentId);
 
-  @Inject
-  public ConsentStore(@NamedCache(Caches.OBB_CONSENTS) SyncCacheApi cache) {
-    this.cache = cache;
-  }
+  void save(Consent consent);
 
-  public Consent create(List<String> permissions, String expirationDateTime, long clientId) {
+  void delete(String consentId);
+
+  default Consent create(List<String> permissions, String expirationDateTime, long clientId) {
     String now = ObbSupport.now();
     Consent consent =
         new Consent(
@@ -44,34 +42,20 @@ public final class ConsentStore {
     return consent;
   }
 
-  public Optional<Consent> find(String consentId) {
-    return consentId == null ? Optional.empty() : cache.get(key(consentId));
-  }
-
-  public void save(Consent consent) {
-    cache.set(key(consent.consentId()), consent, (int) ttl(consent.expirationDateTime()).toSeconds());
-  }
-
-  public void delete(String consentId) {
-    cache.remove(key(consentId));
-  }
-
-  private static Duration ttl(String expiration) {
+  /** When a consent with this expiry may be deleted. */
+  static Instant keepUntil(String expiration) {
+    Instant now = Instant.now();
     if (expiration == null) {
-      return DEFAULT_TTL;
+      return now.plus(DEFAULT_TTL);
     }
     try {
-      Duration d = Duration.between(Instant.now(), Instant.parse(expiration));
-      if (d.isNegative() || d.isZero()) {
-        return Duration.ofMinutes(1);
+      Instant expires = Instant.parse(expiration);
+      if (!expires.isAfter(now)) {
+        return now.plus(Duration.ofMinutes(1));
       }
-      return d.compareTo(MAX_TTL) > 0 ? MAX_TTL : d;
+      return expires.isAfter(now.plus(MAX_TTL)) ? now.plus(MAX_TTL) : expires;
     } catch (DateTimeParseException e) {
-      return DEFAULT_TTL;
+      return now.plus(DEFAULT_TTL);
     }
-  }
-
-  private static String key(String id) {
-    return "obb-consent:" + id;
   }
 }

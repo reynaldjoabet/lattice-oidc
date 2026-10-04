@@ -56,6 +56,7 @@ public final class RecoveryController extends BaseController {
               recovery.request(
                   identifier,
                   next,
+                  request.remoteAddress(),
                   token -> base + com.lattice.oidc.controllers.routes.RecoveryController.resetForm(token).url());
           audit.record(request, AuditService.Event.PASSWORD_RESET_REQUESTED, "sent", sent);
           return page(

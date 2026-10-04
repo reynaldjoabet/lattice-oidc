@@ -4,10 +4,11 @@ import com.authlete.common.api.AuthleteApi;
 import com.authlete.common.dto.NativeSsoRequest;
 import com.authlete.common.dto.NativeSsoResponse;
 import com.authlete.common.dto.TokenResponse;
-import com.lattice.oidc.common.Caches;
+import com.lattice.oidc.common.Jsons;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.common.Responses;
 import com.lattice.oidc.security.UserSessions;
+import com.lattice.oidc.stores.EphemeralStore;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -18,8 +19,6 @@ import java.util.Optional;
 import javax.inject.Inject;
 import javax.inject.Provider;
 import javax.inject.Singleton;
-import play.cache.NamedCache;
-import play.cache.SyncCacheApi;
 import play.mvc.Result;
 
 /**
@@ -29,25 +28,29 @@ import play.mvc.Result;
  * This class then validates or issues the device secret and calls Authlete's /nativesso API, which
  * generates the token response containing the {@code device_secret} and an ID token with the
  * {@code ds_hash} and {@code sid} claims. Device secrets are bound to the login session in which
- * they were created and stop working when that session ends.
+ * they were created and stop working when that session ends. Only a hash of each secret is stored.
  */
 @Singleton
 public final class NativeSsoHandler {
 
   record DeviceSecret(String value, String hash, String sessionId) {}
 
+  /** What is stored about a device secret: its hash and session, never the secret itself. */
+  record Registered(String hash, String sessionId) {}
+
+  private static final String NAMESPACE = "device-secret";
+
   private final Provider<AuthleteApi> api;
   private final UserSessions sessions;
-  private final SyncCacheApi cache;
+  private final EphemeralStore store;
   private final LatticeConfig config;
 
   @Inject
   public NativeSsoHandler(
-      Provider<AuthleteApi> api, UserSessions sessions,
-      @NamedCache(Caches.DEVICE_SECRETS) SyncCacheApi cache, LatticeConfig config) {
+      Provider<AuthleteApi> api, UserSessions sessions, EphemeralStore store, LatticeConfig config) {
     this.api = api;
     this.sessions = sessions;
-    this.cache = cache;
+    this.store = store;
     this.config = config;
   }
 
@@ -99,11 +102,12 @@ public final class NativeSsoHandler {
     if (presented == null) {
       return register(sessionId);
     }
-    Optional<DeviceSecret> known = cache.get(key(presented));
+    Optional<Registered> known =
+        store.get(NAMESPACE, hash(presented)).map(entry -> Jsons.read(entry.json(), Registered.class));
     if (known.isPresent()
         && (presentedHash == null || Objects.equals(known.get().hash(), presentedHash))
         && Objects.equals(known.get().sessionId(), sessionId)) {
-      return known.get();
+      return new DeviceSecret(presented, known.get().hash(), sessionId);
     }
     if (presentedHash == null) {
       // An unknown secret during a regular login simply gets replaced.
@@ -115,7 +119,13 @@ public final class NativeSsoHandler {
   private DeviceSecret register(String sessionId) {
     String value = UserSessions.randomId();
     DeviceSecret deviceSecret = new DeviceSecret(value, hash(value), sessionId);
-    cache.set(key(value), deviceSecret, (int) config.sessionMaxLifespan().toSeconds());
+    store.put(
+        NAMESPACE,
+        deviceSecret.hash(),
+        null,
+        null,
+        Jsons.write(new Registered(deviceSecret.hash(), sessionId)),
+        config.sessionMaxLifespan());
     return deviceSecret;
   }
 
@@ -127,9 +137,5 @@ public final class NativeSsoHandler {
     } catch (NoSuchAlgorithmException e) {
       throw new IllegalStateException(e);
     }
-  }
-
-  private static String key(String value) {
-    return "device-secret:" + hash(value);
   }
 }

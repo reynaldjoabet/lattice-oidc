@@ -150,7 +150,7 @@ public final class TokenController extends BaseController {
   private Result password(
       Http.Request request, TokenResponse response, Map<String, String> headers) {
     // Validate the credentials of the resource owner (with brute-force protection).
-    LoginService.Result auth = login.authenticate(response.getUsername(), response.getPassword());
+    LoginService.Result auth = login.authenticate(response.getUsername(), response.getPassword(), request.remoteAddress());
     auditLogin(request, response.getUsername(), auth);
     if (auth.outcome() != LoginService.Outcome.SUCCESS) {
       // The credentials are invalid. An access token is not issued; Authlete's /api/auth/token/fail

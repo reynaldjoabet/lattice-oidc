@@ -12,16 +12,16 @@ import com.authlete.common.dto.BackchannelAuthenticationIssueResponse;
 import com.authlete.common.dto.BackchannelAuthenticationResponse;
 import com.authlete.common.dto.Scope;
 import com.lattice.oidc.client.AuthleteExecutionContext;
-import com.lattice.oidc.common.Caches;
+import com.lattice.oidc.common.Jsons;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.common.Responses;
 import com.lattice.oidc.common.WebException;
 import com.lattice.oidc.models.CibaApproval;
 import com.lattice.oidc.models.ConsentLabels;
 import com.lattice.oidc.models.User;
+import com.lattice.oidc.stores.EphemeralStore;
 import com.lattice.oidc.stores.UserStore;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -34,8 +34,7 @@ import javax.inject.Provider;
 import javax.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import play.cache.NamedCache;
-import play.cache.SyncCacheApi;
+import org.apache.pekko.actor.ActorSystem;
 import play.libs.ws.WSClient;
 import play.libs.ws.WSResponse;
 
@@ -43,7 +42,7 @@ import play.libs.ws.WSResponse;
  * Drives the end-user's decision on the authentication device and reports it to Authlete
  * (/backchannel/authentication/complete), delivering ping/push notifications to the client.
  *
- * <p>In {@code builtin} mode the "device" is Lattice itself: the request waits in the CIBA cache
+ * <p>In {@code builtin} mode the "device" is Lattice itself: the request waits in the shared store
  * until the signed-in end-user approves or denies it on the approval page ({@link #pendingFor},
  * {@link #decide}).
  */
@@ -58,10 +57,16 @@ public final class CibaHandler {
   /** A request waiting on the built-in approval page, with what is needed to complete it. */
   private record Waiting(CibaApproval approval, String subject, Pending pending) {}
 
+  /** Requests waiting for the device's asynchronous callback, by device request id. */
+  private static final String CALLBACKS = "ciba-callback";
+  /** Requests waiting on the built-in approval page, by approval id, indexed by account. */
+  private static final String APPROVALS = "ciba-approval";
+
   private final Provider<AuthleteApi> api;
   private final AuthenticationDevice device;
   private final UserStore users;
-  private final SyncCacheApi cache;
+  private final EphemeralStore store;
+  private final ActorSystem actorSystem;
   private final WSClient ws;
   private final AuthleteExecutionContext executionContext;
   private final LatticeConfig config;
@@ -71,14 +76,16 @@ public final class CibaHandler {
       Provider<AuthleteApi> api,
       AuthenticationDevice device,
       UserStore users,
-      @NamedCache(Caches.CIBA) SyncCacheApi cache,
+      EphemeralStore store,
+      ActorSystem actorSystem,
       WSClient ws,
       AuthleteExecutionContext executionContext,
       LatticeConfig config) {
     this.api = api;
     this.device = device;
     this.users = users;
-    this.cache = cache;
+    this.store = store;
+    this.actorSystem = actorSystem;
     this.ws = ws;
     this.executionContext = executionContext;
     this.config = config;
@@ -184,7 +191,13 @@ public final class CibaHandler {
               case SYNC -> complete(pending, device.sync(user.getSubject(), message, timeout, authReqId));
               case ASYNC -> {
                 String requestId = device.async(user.getSubject(), message, timeout, authReqId);
-                cache.set(key(requestId), pending, Math.max(issue.getExpiresIn(), 60));
+                store.put(
+                    CALLBACKS,
+                    requestId,
+                    null,
+                    null,
+                    Jsons.write(pending),
+                    Duration.ofSeconds(Math.max(issue.getExpiresIn(), 60)));
               }
               case POLL -> poll(pending, device.poll(user.getSubject(), message, timeout, authReqId));
               case BUILTIN -> throw new IllegalStateException("handled above");
@@ -198,8 +211,8 @@ public final class CibaHandler {
   }
 
   /**
-   * Built-in mode: keeps the request for the end-user's approval page until it expires. Requests are
-   * also indexed by subject so the page can list them.
+   * Built-in mode: keeps the request for the end-user's approval page until it expires, indexed by
+   * the end-user so the page can list them.
    */
   private void awaitApproval(
       User user, BackchannelAuthenticationResponse backchannelResponse, BackchannelAuthenticationIssueResponse issue, Pending pending) {
@@ -224,20 +237,20 @@ public final class CibaHandler {
             System.currentTimeMillis() / 1000L + issue.getExpiresIn(),
             com.lattice.oidc.common.Jsons.readList(detailsJson),
             detailsJson);
-    cache.set(approvalKey(id), new Waiting(approval, user.getSubject(), pending), ttl);
-    synchronized (this) {
-      List<String> ids = new ArrayList<>(cache.<List<String>>get(userKey(user.getSubject())).orElse(List.of()));
-      ids.add(id);
-      cache.set(userKey(user.getSubject()), List.copyOf(ids), ttl);
-    }
+    store.put(
+        APPROVALS,
+        id,
+        null,
+        user.getSubject(),
+        Jsons.write(new Waiting(approval, user.getSubject(), pending)),
+        Duration.ofSeconds(ttl));
   }
 
   /** Built-in mode: the requests waiting for this end-user's decision, oldest first. */
   public List<CibaApproval> pendingFor(String subject) {
     long now = System.currentTimeMillis() / 1000L;
-    return cache.<List<String>>get(userKey(subject)).orElse(List.of()).stream()
-        .map(id -> cache.<Waiting>get(approvalKey(id)))
-        .flatMap(Optional::stream)
+    return store.bySubject(APPROVALS, subject).stream()
+        .map(entry -> Jsons.read(entry.json(), Waiting.class))
         .map(Waiting::approval)
         .filter(approval -> !approval.expired(now))
         .toList();
@@ -257,20 +270,16 @@ public final class CibaHandler {
    * user confirmed the decision (a passkey), asserted if the request asked for it.
    */
   public Optional<CibaApproval> decide(String subject, String id, boolean approve, Optional<String> verifiedAcr) {
-    Optional<Waiting> waiting = id == null ? Optional.empty() : cache.<Waiting>get(approvalKey(id));
+    Optional<Waiting> waiting =
+        id == null ? Optional.empty() : store.get(APPROVALS, id).map(entry -> Jsons.read(entry.json(), Waiting.class));
     if (waiting.isEmpty()
         || !waiting.get().subject().equals(subject)
         || waiting.get().approval().expired(System.currentTimeMillis() / 1000L)) {
       return Optional.empty();
     }
-    synchronized (this) {
-      if (cache.get(approvalKey(id)).isEmpty()) {
-        return Optional.empty();
-      }
-      cache.remove(approvalKey(id));
-      List<String> ids = new ArrayList<>(cache.<List<String>>get(userKey(subject)).orElse(List.of()));
-      ids.remove(id);
-      cache.set(userKey(subject), List.copyOf(ids), 3600);
+    // Taking the request is the single-use step: of two concurrent decisions, only one proceeds.
+    if (store.take(APPROVALS, id).isEmpty()) {
+      return Optional.empty();
     }
     if (approve) {
       authorize(waiting.get().pending(), verifiedAcr.orElse(null));
@@ -282,31 +291,39 @@ public final class CibaHandler {
 
   /** Handles the device's asynchronous callback. Returns false for unknown request ids. */
   public boolean callback(String requestId, AuthenticationDevice.Outcome outcome) {
-    Optional<Pending> pending = cache.get(key(requestId));
+    Optional<Pending> pending = store.take(CALLBACKS, requestId).map(entry -> Jsons.read(entry.json(), Pending.class));
     if (pending.isEmpty()) {
       return false;
     }
-    cache.remove(key(requestId));
     complete(pending.get(), outcome);
     return true;
   }
 
+  /**
+   * Polls the device for the result: one check now, then one per {@code poll-interval}, each
+   * scheduled separately so no thread sleeps while the end-user decides.
+   */
   private void poll(Pending pending, String requestId) {
-    Duration interval = config.ciba().pollInterval();
-    for (int i = 1; i <= config.ciba().pollMaxCount(); i++) {
+    poll(pending, requestId, 1);
+  }
+
+  private void poll(Pending pending, String requestId, int attempt) {
+    try {
       AuthenticationDevice.Outcome outcome = device.result(requestId);
       if (outcome != null) {
         complete(pending, outcome);
         return;
       }
-      try {
-        TimeUnit.MILLISECONDS.sleep(interval.toMillis());
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-        break;
-      }
+    } catch (RuntimeException e) {
+      LOG.warn("CIBA authentication device poll failed: {}", e.getMessage());
     }
-    fail(pending, Result.TRANSACTION_FAILED, "The end-user did not respond in time.");
+    if (attempt >= config.ciba().pollMaxCount()) {
+      fail(pending, Result.TRANSACTION_FAILED, "The end-user did not respond in time.");
+      return;
+    }
+    actorSystem
+        .scheduler()
+        .scheduleOnce(config.ciba().pollInterval(), () -> poll(pending, requestId, attempt + 1), executionContext);
   }
 
   /**
@@ -428,17 +445,5 @@ public final class CibaHandler {
       sb.append(" [Binding message]: ").append(backchannelResponse.getBindingMessage());
     }
     return sb.toString();
-  }
-
-  private static String key(String requestId) {
-    return "ciba:" + requestId;
-  }
-
-  private static String approvalKey(String id) {
-    return "ciba-approval:" + id;
-  }
-
-  private static String userKey(String subject) {
-    return "ciba-user:" + subject;
   }
 }

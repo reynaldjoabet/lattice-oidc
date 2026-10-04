@@ -1,9 +1,11 @@
 package com.lattice.oidc.security;
 
-import com.lattice.oidc.common.Caches;
+import com.lattice.oidc.common.Jsons;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.common.Mailer;
 import com.lattice.oidc.models.User;
+import com.lattice.oidc.stores.CounterStore;
+import com.lattice.oidc.stores.EphemeralStore;
 import com.lattice.oidc.stores.UserStore;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -16,14 +18,14 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import play.cache.NamedCache;
-import play.cache.SyncCacheApi;
 
 /**
  * Password reset links ({@code lattice.recovery}). A link carries a random token; only its SHA-256
  * is stored, it works once, expires after {@code link-lifetime}, and only the account's newest
- * link works. At most {@code max-requests} links are sent per account per {@code window}.
- * Callers show the same page whether or not an account matched, so the form reveals nothing.
+ * link works. At most {@code max-requests} links are sent per account, and {@code
+ * max-requests-per-ip} requests are accepted per IP address, per {@code window}. Callers show the
+ * same page whether or not an account matched, so the form reveals nothing. Links and counters are
+ * shared by every server, so a link works whichever server opens it.
  */
 @Singleton
 public final class RecoveryService {
@@ -32,9 +34,12 @@ public final class RecoveryService {
   private static final SecureRandom RANDOM = new SecureRandom();
 
   /** A link waiting to be used: whose password it resets, and where to continue afterwards. */
-  public record Pending(String subject, String next) implements java.io.Serializable {}
+  public record Pending(String subject, String next) {}
 
-  private final SyncCacheApi cache;
+  private static final String TOKENS = "reset-token";
+
+  private final EphemeralStore store;
+  private final CounterStore counters;
   private final LoginService login;
   private final UserStore users;
   private final Mailer mailer;
@@ -42,12 +47,14 @@ public final class RecoveryService {
 
   @Inject
   public RecoveryService(
-      @NamedCache(Caches.INTERACTIONS) SyncCacheApi cache,
+      EphemeralStore store,
+      CounterStore counters,
       LoginService login,
       UserStore users,
       Mailer mailer,
       LatticeConfig config) {
-    this.cache = cache;
+    this.store = store;
+    this.counters = counters;
     this.login = login;
     this.users = users;
     this.mailer = mailer;
@@ -56,30 +63,30 @@ public final class RecoveryService {
 
   /**
    * Emails a reset link if {@code identifier} is an account with an email address and the account
-   * is under its rate limit. {@code link} builds the link's URL from the token.
+   * and the requesting IP address are under their rate limits. {@code link} builds the link's URL
+   * from the token.
    *
    * @return whether a link was sent (for the audit log only; never shown)
    */
-  public boolean request(String identifier, String next, Function<String, String> link) {
+  public boolean request(String identifier, String next, String ip, Function<String, String> link) {
+    if (ip != null && counters.increment("reset:ip:" + ip, config.window()) > config.maxRequestsPerIp()) {
+      LOG.info("Password reset rate limit reached for IP {}", ip);
+      return false;
+    }
     Optional<User> user = login.find(identifier == null ? null : identifier.trim());
     if (user.isEmpty() || user.get().email().isEmpty() || user.get().passwordHash() == null) {
       return false;
     }
     String subject = user.get().getSubject();
-    String countKey = "recovery-requests:" + subject;
-    int sent = cache.<Integer>get(countKey).orElse(0);
-    if (sent >= config.maxRequests()) {
+    if (counters.increment("reset:account:" + subject, config.window()) > config.maxRequests()) {
       LOG.info("Password reset rate limit reached for {}", subject);
       return false;
     }
-    cache.set(countKey, sent + 1, (int) config.window().toSeconds());
 
+    // Only the newest link works: earlier ones for this account are deleted.
     String token = randomToken();
-    String hash = sha256(token);
-    int lifetime = (int) config.linkLifetime().toSeconds();
-    cache.<String>get(currentKey(subject)).ifPresent(previous -> cache.remove(tokenKey(previous)));
-    cache.set(tokenKey(hash), new Pending(subject, next), lifetime);
-    cache.set(currentKey(subject), hash, lifetime);
+    store.deleteBySubject(TOKENS, subject);
+    store.put(TOKENS, sha256(token), null, subject, Jsons.write(new Pending(subject, next)), config.linkLifetime());
 
     long minutes = config.linkLifetime().toMinutes();
     mailer.send(
@@ -95,18 +102,23 @@ public final class RecoveryService {
 
   /** The account a link resets, without using it up (to show the form). */
   public Optional<Pending> peek(String token) {
-    return token == null || token.isEmpty() ? Optional.empty() : cache.get(tokenKey(sha256(token)));
+    return token == null || token.isEmpty()
+        ? Optional.empty()
+        : store.get(TOKENS, sha256(token)).map(entry -> Jsons.read(entry.json(), Pending.class));
   }
 
   /** Sets the new password and uses the link up. Empty if the link has expired or was used. */
-  public synchronized Optional<User> reset(String token, String newPassword) {
-    Optional<Pending> pending = peek(token);
+  public Optional<User> reset(String token, String newPassword) {
+    if (token == null || token.isEmpty()) {
+      return Optional.empty();
+    }
+    // Taking the link is the single-use step: of two concurrent resets, only one gets it.
+    Optional<Pending> pending =
+        store.take(TOKENS, sha256(token)).map(entry -> Jsons.read(entry.json(), Pending.class));
     if (pending.isEmpty()) {
       return Optional.empty();
     }
     Optional<User> user = users.bySubject(pending.get().subject());
-    cache.remove(tokenKey(sha256(token)));
-    cache.remove(currentKey(pending.get().subject()));
     if (user.isEmpty()) {
       return Optional.empty();
     }
@@ -118,14 +130,6 @@ public final class RecoveryService {
 
   public long linkLifetimeMinutes() {
     return config.linkLifetime().toMinutes();
-  }
-
-  private static String tokenKey(String hash) {
-    return "recovery:" + hash;
-  }
-
-  private static String currentKey(String subject) {
-    return "recovery-current:" + subject;
   }
 
   private static String randomToken() {

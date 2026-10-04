@@ -169,4 +169,21 @@ public class AccountRecoveryTest {
     assertFalse(after.contains("John Flibble Smith"));
     assertTrue(after.contains("to manage your account"));
   }
+
+  @Test
+  public void requestsFromOneAddressAreLimitedAcrossAccounts() {
+    Helpers.stop(app);
+    app =
+        new GuiceApplicationBuilder()
+            .configure(Map.of("lattice.recovery.max-requests-per-ip", 2))
+            .overrides(
+                bind(AuthleteApi.class).toInstance(fake.api()),
+                bind(Mailer.class).toInstance((to, subject, text) -> sent.add(new Mail(to, subject, text))))
+            .build();
+    Helpers.start(app);
+    for (String account : List.of("john", "jane", "max")) {
+      assertEquals("the page never changes", 200, requestLink(account).status());
+    }
+    assertEquals(2, sent.size());
+  }
 }

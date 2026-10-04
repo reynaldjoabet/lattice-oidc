@@ -64,8 +64,41 @@ public final class PasskeyController extends BaseController {
       String next,
       String subject,
       String approvalId,
-      PublicKeyCredentialCreationOptions creation,
-      AssertionRequest assertion) {}
+      String creationJson,
+      String assertionJson) {
+
+    static Ceremony registration(String next, String subject, PublicKeyCredentialCreationOptions options) {
+      try {
+        return new Ceremony("register", next, subject, null, options.toJson(), null);
+      } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+        throw new IllegalStateException(e);
+      }
+    }
+
+    static Ceremony assertion(String purpose, String next, String subject, String approvalId, AssertionRequest request) {
+      try {
+        return new Ceremony(purpose, next, subject, approvalId, null, request.toJson());
+      } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+        throw new IllegalStateException(e);
+      }
+    }
+
+    PublicKeyCredentialCreationOptions creation() {
+      try {
+        return PublicKeyCredentialCreationOptions.fromJson(creationJson);
+      } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+        throw new IllegalStateException(e);
+      }
+    }
+
+    AssertionRequest assertion() {
+      try {
+        return assertionJson == null ? null : AssertionRequest.fromJson(assertionJson);
+      } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+        throw new IllegalStateException(e);
+      }
+    }
+  }
 
   private final UserSessions sessions;
   private final Interactions interactions;
@@ -130,7 +163,7 @@ public final class PasskeyController extends BaseController {
     PublicKeyCredentialCreationOptions options = passkeys.startRegistration(current.get().user());
     String id = UserSessions.randomId();
     String browserId = sessions.browserId(request);
-    interactions.put(KIND, id, browserId, new Ceremony("register", next, current.get().user().getSubject(), null, options, null));
+    interactions.put(KIND, id, browserId, Ceremony.registration(next, current.get().user().getSubject(), options));
     return sessions.withBrowserId(
         json(Map.of("ceremony", id, "options", Jsons.readMap(toJson(options)))), request, browserId);
   }
@@ -223,7 +256,7 @@ public final class PasskeyController extends BaseController {
     }
     String id = UserSessions.randomId();
     String browserId = sessions.browserId(request);
-    interactions.put(KIND, id, browserId, new Ceremony(purpose, next, subject, approvalId, null, assertion));
+    interactions.put(KIND, id, browserId, Ceremony.assertion(purpose, next, subject, approvalId, assertion));
     return sessions.withBrowserId(
         json(Map.of("ceremony", id, "options", Jsons.readMap(toJson(assertion)))), request, browserId);
   }
@@ -335,7 +368,7 @@ public final class PasskeyController extends BaseController {
           boolean confirmed = recentlyConfirmed(request, current.get());
           String password = Requests.first(Requests.form(request), "password");
           if (!confirmed && password != null && !password.isEmpty() && user.loginId() != null) {
-            LoginService.Result check = login.authenticate(user.loginId(), password);
+            LoginService.Result check = login.authenticate(user.loginId(), password, request.remoteAddress());
             auditLogin(request, user.loginId(), check);
             if (check.outcome() != LoginService.Outcome.SUCCESS) {
               return removeView(request, current.get(), passkey.get(), Optional.of(AuthorizationController.failureMessage(check)), 401);

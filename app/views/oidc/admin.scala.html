@@ -1,6 +1,7 @@
 @*
- * Operator console overview (admins only): Authlete status, sessions, identity providers, caches
- * and recent audit events, all for this node. Screen 15 in docs/screens.
+ * Operator console overview (admins only): Authlete status, sessions, identity providers, storage
+ * and recent audit events. Sessions and storage count every server; audit events are this
+ * server's. Screen 15 in docs/screens.
  *@
 @import com.lattice.oidc.models.AdminPage
 @import scala.jdk.CollectionConverters._
@@ -28,7 +29,7 @@
     <section class="panel stat">
       <h2>Active sessions</h2>
       <span class="big">@{"%,d".format(page.activeSessions())}</span>
-      @for(maximum <- page.sessionsMaximum().toScala) { <span class="muted">of @{"%,d".format(maximum)} maximum</span> }
+      <span class="muted">signed in, on every server</span>
     </section>
     <section class="panel stat">
       <h2>Identity providers</h2>
@@ -42,19 +43,17 @@
     </section>
   </div>
 
-  <section class="panel" id="caches">
-    <h2>Caches</h2>
+  <section class="panel" id="storage">
+    <h2>Storage</h2>
+    <p class="muted">@if(page.storage() == "postgres"){PostgreSQL, shared by every server} else {In memory on this server; lost on restart}</p>
     <div class="table-wrap">
       <table>
-        <thead><tr><th scope="col">Cache</th><th scope="col">Entries</th><th scope="col">Maximum</th><th scope="col">Hit rate</th><th scope="col">Evictions</th></tr></thead>
+        <thead><tr><th scope="col">Kind</th><th scope="col">Entries</th></tr></thead>
         <tbody>
-          @for(row <- page.caches().asScala) {
+          @for(row <- page.storageRows().asScala) {
             <tr>
               <td class="mono">@row.name()</td>
               <td class="mono">@{"%,d".format(row.entries())}</td>
-              <td class="mono">@row.maximum().toScala.map(maximum => "%,d".format(maximum)).getOrElse("—")</td>
-              <td class="mono">@row.hitRatePercent()</td>
-              <td class="mono">@{"%,d".format(row.evictions())}</td>
             </tr>
           }
         </tbody>

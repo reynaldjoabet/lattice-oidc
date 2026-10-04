@@ -53,7 +53,12 @@ public final class LatticeConfig {
   private final Optional<String> appleAppSiteAssociation;
   private final Duration interactionTtl;
   private final Duration sessionMaxLifespan;
+  private final Duration sessionIdleTimeout;
+  private final Storage storage;
   private final int loginMaxFailures;
+  private final int loginMaxFailuresPerAccount;
+  private final int loginMaxFailuresPerIp;
+  private final Device device;
   private final Duration loginLockout;
   private final List<String> satisfiedAcrs;
   private final List<TrustedIssuer> trustedIssuers;
@@ -79,8 +84,17 @@ public final class LatticeConfig {
       String from, Optional<String> smtpHost, int smtpPort, Optional<String> smtpUsername,
       Optional<String> smtpPassword, boolean startTls) {}
 
-  /** Password reset links: lifetime and per-account rate limit. */
-  public record Recovery(Duration linkLifetime, int maxRequests, Duration window) {}
+  /** Password reset links: lifetime, and rate limits per account and per IP address. */
+  public record Recovery(Duration linkLifetime, int maxRequests, int maxRequestsPerIp, Duration window) {}
+
+  /** Device authorization grant: wrong user codes allowed per IP address per window. */
+  public record Device(int maxAttempts, Duration window) {}
+
+  /** Where state is kept ({@code lattice.storage}). */
+  public enum Storage {
+    MEMORY,
+    POSTGRES
+  }
 
   @Inject
   public LatticeConfig(Config root) {
@@ -92,7 +106,12 @@ public final class LatticeConfig {
     appleAppSiteAssociation = optionalString(lattice, "apple-app-site-association");
     interactionTtl = lattice.getDuration("session.interaction-ttl");
     sessionMaxLifespan = lattice.getDuration("session.max-lifespan");
+    sessionIdleTimeout = lattice.getDuration("session.idle-timeout");
+    storage = Storage.valueOf(lattice.getString("storage").trim().toUpperCase(java.util.Locale.ROOT));
     loginMaxFailures = lattice.getInt("login.max-failures");
+    loginMaxFailuresPerAccount = lattice.getInt("login.max-failures-per-account");
+    loginMaxFailuresPerIp = lattice.getInt("login.max-failures-per-ip");
+    device = new Device(lattice.getInt("device.max-attempts"), lattice.getDuration("device.window"));
     loginLockout = lattice.getDuration("login.lockout");
     satisfiedAcrs = lattice.getStringList("login.satisfied-acrs");
     trustedIssuers =
@@ -150,6 +169,7 @@ public final class LatticeConfig {
         new Recovery(
             lattice.getDuration("recovery.link-lifetime"),
             lattice.getInt("recovery.max-requests"),
+            lattice.getInt("recovery.max-requests-per-ip"),
             lattice.getDuration("recovery.window"));
     pairwiseSecret =
         optionalString(lattice, "pairwise-secret")
@@ -209,8 +229,32 @@ public final class LatticeConfig {
     return sessionMaxLifespan;
   }
 
+  /** Inactivity after which a login session ends; zero means no idle limit. */
+  public Duration sessionIdleTimeout() {
+    return sessionIdleTimeout;
+  }
+
+  public Storage storage() {
+    return storage;
+  }
+
+  /** Failed sign-ins allowed for one account from one IP address within the lockout window. */
   public int loginMaxFailures() {
     return loginMaxFailures;
+  }
+
+  /** Failed sign-ins allowed for one account from any IP address within the lockout window. */
+  public int loginMaxFailuresPerAccount() {
+    return loginMaxFailuresPerAccount;
+  }
+
+  /** Failed sign-ins allowed from one IP address for any accounts within the lockout window. */
+  public int loginMaxFailuresPerIp() {
+    return loginMaxFailuresPerIp;
+  }
+
+  public Device device() {
+    return device;
   }
 
   public Duration loginLockout() {

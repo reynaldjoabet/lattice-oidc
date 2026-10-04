@@ -1,26 +1,21 @@
 package com.lattice.oidc.security;
 
-import com.lattice.oidc.common.Caches;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.common.UserAgents;
 import com.lattice.oidc.models.User;
+import com.lattice.oidc.stores.SessionStore;
+import com.lattice.oidc.stores.SessionStore.Session;
 import com.lattice.oidc.stores.UserStore;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Base64;
-import java.util.Comparator;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import play.cache.NamedCache;
-import play.cache.SyncCacheApi;
 import play.mvc.Http;
 import play.mvc.Result;
 
@@ -35,8 +30,10 @@ import play.mvc.Result;
  * tokens.
  *
  * <p>Each session also records how it was started (browser, IP, sign-in method) and when it was
- * last used, and sessions are indexed per account, so users can see and end them. A session lives
- * at most {@code lattice.session.max-lifespan} from sign-in; activity does not extend it.
+ * last used, so users can see and end their sessions. A session lives at most {@code
+ * lattice.session.max-lifespan} from sign-in, and ends earlier after {@code
+ * lattice.session.idle-timeout} without activity. Sessions are kept in the {@link SessionStore}, so
+ * every server sees the same ones.
  */
 @Singleton
 public final class UserSessions {
@@ -80,38 +77,14 @@ public final class UserSessions {
   private static final String ACR = "acr";
   private static final Duration TOUCH_INTERVAL = Duration.ofMinutes(1);
 
-  /** Server-side state of a login session; mutable fields are only the client set and last use. */
-  private static final class SessionRecord {
-    final String subject;
-    final Set<String> clients = new LinkedHashSet<>();
-    final String userAgent;
-    final String ip;
-    final String method;
-    final Instant createdAt;
-    volatile Instant lastSeenAt;
-
-    SessionRecord(String subject, String userAgent, String ip, String method, Instant now) {
-      this.subject = subject;
-      this.userAgent = userAgent;
-      this.ip = ip;
-      this.method = method;
-      this.createdAt = now;
-      this.lastSeenAt = now;
-    }
-  }
-
-  private final SyncCacheApi cache;
+  private final SessionStore store;
   private final UserStore users;
   private final LatticeConfig config;
   private final SignInAlerts alerts;
 
   @Inject
-  public UserSessions(
-      @NamedCache(Caches.SESSIONS) SyncCacheApi cache,
-      UserStore users,
-      LatticeConfig config,
-      SignInAlerts alerts) {
-    this.cache = cache;
+  public UserSessions(SessionStore store, UserStore users, LatticeConfig config, SignInAlerts alerts) {
+    this.store = store;
     this.users = users;
     this.config = config;
     this.alerts = alerts;
@@ -123,7 +96,7 @@ public final class UserSessions {
     return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
   }
 
-  /** The logged-in user, if the session is still registered and within its maximum lifetime. */
+  /** The logged-in user, if the session is still registered, within its lifetime and not idle. */
   public Optional<LoginState> current(Http.Request request) {
     Http.Session session = request.session();
     Optional<String> sessionId = session.get(SESSION_ID);
@@ -132,8 +105,8 @@ public final class UserSessions {
     if (sessionId.isEmpty() || subject.isEmpty() || authTimeValue.isEmpty()) {
       return Optional.empty();
     }
-    Optional<SessionRecord> record = cache.get(key(sessionId.get()));
-    if (record.isEmpty() || !record.get().subject.equals(subject.get())) {
+    Optional<Session> record = live(sessionId.get());
+    if (record.isEmpty() || !record.get().subject().equals(subject.get())) {
       return Optional.empty();
     }
     long authTime;
@@ -142,19 +115,39 @@ public final class UserSessions {
     } catch (NumberFormatException e) {
       return Optional.empty();
     }
-    Instant now = Instant.now();
-    if (record.get().lastSeenAt.plus(TOUCH_INTERVAL).isBefore(now)) {
-      record.get().lastSeenAt = now;
-    }
+    store.touch(sessionId.get(), Instant.now(), TOUCH_INTERVAL);
     String acr = session.get(ACR).filter(value -> !value.isEmpty()).orElse(null);
     return users
         .bySubject(subject.get())
         .map(user -> new LoginState(user, sessionId.get(), authTime, acr));
   }
 
-  /** Whether a login session id is still active (used by native SSO). */
+  /**
+   * Whether a login session id is still active (used by native SSO). An app using the session
+   * counts as activity.
+   */
   public boolean isActive(String sessionId) {
-    return sessionId != null && cache.get(key(sessionId)).isPresent();
+    if (sessionId == null || live(sessionId).isEmpty()) {
+      return false;
+    }
+    store.touch(sessionId, Instant.now(), TOUCH_INTERVAL);
+    return true;
+  }
+
+  /** The session, if it exists, is within its maximum lifetime and hasn't been idle too long. */
+  private Optional<Session> live(String sessionId) {
+    Instant now = Instant.now();
+    Optional<Session> found = store.find(sessionId);
+    if (found.isPresent() && idle(found.get(), now)) {
+      store.end(sessionId);
+      return Optional.empty();
+    }
+    return found;
+  }
+
+  private boolean idle(Session session, Instant now) {
+    Duration idleTimeout = config.sessionIdleTimeout();
+    return !idleTimeout.isZero() && !session.lastSeenAt().plus(idleTimeout).isAfter(now);
   }
 
   /**
@@ -196,14 +189,10 @@ public final class UserSessions {
         request == null ? null : request.session().get(BROWSER_ID).orElseGet(UserSessions::randomId);
     String userAgent = request == null ? null : request.header("User-Agent").orElse(null);
     String ip = request == null ? null : request.remoteAddress();
-    SessionRecord record = new SessionRecord(user.getSubject(), userAgent, ip, method, Instant.now());
-    cache.set(key(sessionId), record, (int) config.sessionMaxLifespan().toSeconds());
-    synchronized (this) {
-      Set<String> ids =
-          cache.<Set<String>>get(indexKey(user.getSubject())).orElseGet(ConcurrentHashMap::newKeySet);
-      ids.add(sessionId);
-      cache.set(indexKey(user.getSubject()), ids, (int) config.sessionMaxLifespan().toSeconds());
-    }
+    Instant now = Instant.now();
+    store.create(
+        new Session(
+            sessionId, user.getSubject(), userAgent, ip, method, now, now, now.plus(config.sessionMaxLifespan())));
     if (browserId != null) {
       sessionOut.put(BROWSER_ID, browserId);
       alerts.onSignIn(user.getSubject(), browserId, sessionId, UserAgents.describe(userAgent), ip, method);
@@ -234,49 +223,30 @@ public final class UserSessions {
     if (sessionId == null || clientIdentifier == null) {
       return;
     }
-    cache.<SessionRecord>get(key(sessionId))
-        .ifPresent(
-            record -> {
-              synchronized (record.clients) {
-                record.clients.add(clientIdentifier);
-              }
-            });
+    store.addClient(sessionId, clientIdentifier);
   }
 
   public Set<String> clients(String sessionId) {
-    return cache.<SessionRecord>get(key(sessionId))
-        .map(
-            record -> {
-              synchronized (record.clients) {
-                return Set.copyOf(record.clients);
-              }
-            })
-        .orElse(Set.of());
+    return sessionId == null ? Set.of() : store.clients(sessionId);
   }
 
   /** The account's active sessions, most recently used first. */
   public List<SessionInfo> sessionsOf(String subject) {
-    Set<String> ids = cache.<Set<String>>get(indexKey(subject)).orElse(Set.of());
-    List<SessionInfo> sessions = new ArrayList<>();
-    for (String id : List.copyOf(ids)) {
-      Optional<SessionRecord> record = cache.get(key(id));
-      if (record.isEmpty()) {
-        ids.remove(id);
-        continue;
-      }
-      SessionRecord found = record.get();
-      sessions.add(
-          new SessionInfo(
-              id,
-              UserAgents.describe(found.userAgent),
-              found.ip,
-              found.method,
-              found.createdAt,
-              found.lastSeenAt,
-              clients(id)));
-    }
-    sessions.sort(Comparator.comparing(SessionInfo::lastSeenAt).reversed());
-    return sessions;
+    Instant now = Instant.now();
+    return store.forSubject(subject).stream()
+        .filter(session -> !idle(session, now))
+        .map(
+            session ->
+                new SessionInfo(
+                    session.id(),
+                    UserAgents.describe(session.userAgent()),
+                    session.ip(),
+                    session.method(),
+                    session.createdAt(),
+                    session.lastSeenAt(),
+                    store.clients(session.id())))
+        .sorted(java.util.Comparator.comparing(SessionInfo::lastSeenAt).reversed())
+        .toList();
   }
 
   /** The session, if it is still active and belongs to {@code subject}. */
@@ -284,29 +254,21 @@ public final class UserSessions {
     return sessionsOf(subject).stream().filter(info -> info.sessionId().equals(sessionId)).findFirst();
   }
 
+  /** Active sessions on every server (for the operator console). */
+  public long countActive() {
+    return store.countActive();
+  }
+
   /** Ends a session server-side (its cookie stops working). Back-channel logout is the caller's. */
   public void end(String sessionId) {
-    if (sessionId == null) {
-      return;
+    if (sessionId != null) {
+      store.end(sessionId);
     }
-    Optional<SessionRecord> record = cache.get(key(sessionId));
-    cache.remove(key(sessionId));
-    record
-        .flatMap(found -> cache.<Set<String>>get(indexKey(found.subject)))
-        .ifPresent(ids -> ids.remove(sessionId));
   }
 
   /** Ends the login session server-side and strips it from the cookie (keeps the browser id). */
   public Result logout(Result result, Http.Request request, String sessionId) {
     end(sessionId);
     return result.removingFromSession(request, SESSION_ID, SUBJECT, AUTH_TIME, ACR);
-  }
-
-  private static String key(String sessionId) {
-    return "session:" + sessionId;
-  }
-
-  private static String indexKey(String subject) {
-    return "user-sessions:" + subject;
   }
 }

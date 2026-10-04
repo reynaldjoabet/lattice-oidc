@@ -2,14 +2,15 @@ package com.lattice.oidc.controllers;
 
 import com.lattice.oidc.client.AuthleteHealth;
 import com.lattice.oidc.client.ServerMetadata;
-import com.lattice.oidc.common.CacheStatistics;
-import com.lattice.oidc.common.Caches;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.common.Responses;
 import com.lattice.oidc.handlers.IdentityProviders;
 import com.lattice.oidc.models.AdminPage;
 import com.lattice.oidc.models.User;
+import com.lattice.oidc.security.LoginService;
 import com.lattice.oidc.security.UserSessions;
+import com.lattice.oidc.stores.CounterStore;
+import com.lattice.oidc.stores.EphemeralStore;
 import com.lattice.oidc.security.UserSessions.LoginState;
 import java.util.List;
 import java.util.Map;
@@ -38,7 +39,8 @@ public final class AdminController extends BaseController {
   private final AuthleteHealth authlete;
   private final ServerMetadata server;
   private final IdentityProviders providers;
-  private final CacheStatistics caches;
+  private final EphemeralStore ephemeral;
+  private final CounterStore counters;
 
   @Inject
   public AdminController(
@@ -47,13 +49,15 @@ public final class AdminController extends BaseController {
       AuthleteHealth authlete,
       ServerMetadata server,
       IdentityProviders providers,
-      CacheStatistics caches) {
+      EphemeralStore ephemeral,
+      CounterStore counters) {
     this.sessions = sessions;
     this.config = config;
     this.authlete = authlete;
     this.server = server;
     this.providers = providers;
-    this.caches = caches;
+    this.ephemeral = ephemeral;
+    this.counters = counters;
   }
 
   /** Whether the user may open the operator console. Accounts without a login ID never may. */
@@ -82,19 +86,20 @@ public final class AdminController extends BaseController {
               issuer = Optional.empty();
             }
           }
-          List<CacheStatistics.Row> rows = caches.rows();
-          Optional<Long> sessionsMaximum =
-              rows.stream().filter(row -> row.name().equals(Caches.SESSIONS)).findFirst().flatMap(row -> row.maximum());
+          long activeSessions = sessions.countActive();
+          List<AdminPage.StorageRow> rows = new java.util.ArrayList<>();
+          rows.add(new AdminPage.StorageRow("sessions", activeSessions));
+          ephemeral.counts().forEach((name, entries) -> rows.add(new AdminPage.StorageRow(name, entries)));
           AdminPage page =
               new AdminPage(
                   current.get().user().displayName(),
                   issuer,
                   up,
                   Optional.ofNullable(health.get("reason")),
-                  caches.entries(Caches.SESSIONS),
-                  sessionsMaximum,
+                  activeSessions,
                   providers.links().stream().map(link -> link.name()).toList(),
-                  caches.entries(Caches.LOGIN_FAILURES),
+                  counters.countAtLeast(LoginService.ACCOUNT_PREFIX, 1),
+                  config.storage().name().toLowerCase(java.util.Locale.ROOT),
                   rows,
                   audit.recent().stream().map(AdminController::event).toList());
           return Responses.of(200, views.html.oidc.admin.render(page, request).body(), Responses.HTML, null)

@@ -171,4 +171,15 @@ public class AccountSecurityTest {
     assertFalse("other sessions are signed out", signedIn(windows));
     assertTrue("this one stays", signedIn(mac));
   }
+
+  @Test
+  public void anIdleSessionEnds() throws InterruptedException {
+    Helpers.stop(app);
+    app = app(fake, Map.of("lattice.session.idle-timeout", "1s"));
+    Helpers.start(app);
+    Map<String, String> mac = signInFromNewBrowser(MAC_SAFARI);
+    assertTrue(signedIn(mac));
+    Thread.sleep(1_200);
+    assertFalse("idle longer than lattice.session.idle-timeout", signedIn(mac));
+  }
 }

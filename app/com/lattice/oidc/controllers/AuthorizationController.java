@@ -313,7 +313,7 @@ public final class AuthorizationController extends BaseController {
     // the offer to create a passkey).
     if (form.containsKey("login")) {
       String loginId = Requests.first(form, "loginId");
-      LoginService.Result result = login.authenticate(loginId, Requests.first(form, "password"));
+      LoginService.Result result = login.authenticate(loginId, Requests.first(form, "password"), request.remoteAddress());
       auditLogin(request, loginId, result);
       if (result.outcome() != LoginService.Outcome.SUCCESS) {
         // Stay on the password step for the same identifier.
@@ -357,7 +357,7 @@ public final class AuthorizationController extends BaseController {
     // or the one already logged in when the page was shown.
     String loginId = Requests.first(form, "loginId");
     if (loginId != null && !loginId.isBlank()) {
-      LoginService.Result result = login.authenticate(loginId, Requests.first(form, "password"));
+      LoginService.Result result = login.authenticate(loginId, Requests.first(form, "password"), request.remoteAddress());
       auditLogin(request, loginId, result);
       if (result.outcome() != LoginService.Outcome.SUCCESS) {
         return rerender(request, interaction.withShownSubject(null), failureMessage(result), 401);
