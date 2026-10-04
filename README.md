@@ -765,3 +765,37 @@ The initial "previous key" is the root's public key. The first certificate that 
 | | Self-hosted (now) | Google Fonts CDN |
 | --- | --- | --- |
 | Privacy | No third party sees your users | Every visit to your sign-in page sends the user's IP to Google. A German court ruled this a GDPR violation in 2022. |
+
+
+### Keyspace and brute-force resistance
+
+A keyspace is the theoretical set of all keys an algorithm can use. For uniformly random binary keys of length `n` bits, the keyspace contains `2^n` possible keys. A larger keyspace makes exhaustive brute-force search more difficult, assuming keys are generated securely.
+
+- **AES-128:** 2^128 possible keys, roughly 3.4 * 10^38.
+- **AES-256:** 2^256 possible keys, roughly 1.1 * 10^77.
+
+Because a 256-bit ECC key provides the exact same security as a massive 3072-bit RSA key, ECC offers significant performance advantages. For example, ECDSA with the P-256 curve is widely used in TLS and other protocols, providing strong security with smaller key sizes and faster computations.
+
+When a cryptographic library executes an algorithm, the speed depends heavily on whether the operands fit cleanly inside the CPU's hardware registers.
+
+- `ECC 256`: A 256-bit number is relatively small. It fits entirely into just four standard 64-bit CPU registers, or a single 256-bit SIMD (like AVX-256) register. The CPU can execute arithmetic on these numbers using a highly optimized, short pipeline of micro-operations entirely within the CPU core, without constantly hitting the memory bus.
+- `RSA 3072`: A 3072-bit integer is massive; it completely exceeds native hardware register capacities. To process it, the CPU must break the number down into an array of forty-eight 64-bit words and perform arbitrary-precision ("BigInteger") arithmetic. Multiplying two 3072-bit numbers requires thousands of CPU cycles, constant load/store instructions to shuttle data back and forth from memory, and heavy utilization of the instruction decoder just to manage the arrays.
+
+
+`RSA (Modular Exponentiation)`: RSA operations rely on equations like c congruent m^e (mod n). Exponentiating a 3072-bit number requires a process called "repeated squaring and multiplication." Even with algorithmic shortcuts like the Chinese Remainder Theorem, the CPU is forced to perform computationally expensive, multi-word multiplications over and over again until the exponent is resolved.
+- `ECC (Elliptic Curve Point Multiplication)`: ECC operations involve finding a point on a curve defined by y^2 = x^3 + ax + b. The mathematics of elliptic curves allows for much smaller numbers to be used while still providing equivalent security. Point multiplication is a more efficient operation than modular exponentiation, and it can be performed using optimized algorithms that take advantage of the curve's properties.
+
+
+`The mathematics of RSA require the resulting digital signature to be exactly the same size as the cryptographic modulus (the key size)`
+
+- When you sign a token with a 3072-bit RSA key, the algorithm outputs a 3072-bit signature.
+- In computer memory, 3072 bits translates to exactly 384 bytes of raw binary data.
+
+An Elliptic Curve signature (like ECDSA used in ES256) consists of two distinct coordinates, commonly referred to as r and s. Each of these coordinates is the size of the curve itself.
+
+- When you sign a token with a 256-bit ECC key, the algorithm outputs two 256-bit numbers, totaling 512 bits.
+- In computer memory, 512 bits translates to exactly 64 bytes of raw binary data.
+
+## The Base64Url Encoding Penalty
+
+JWTs cannot be transmitted over HTTP as raw binary; they must be encoded into text using Base64Url. Base64Url encoding expands the size of binary data by roughly 33%. This is where the size difference explodes and severely impacts your server's HTTP traffic:
