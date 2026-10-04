@@ -1,0 +1,41 @@
+@*
+ * Remove a passkey after confirming it's you (password, or another passkey).
+ * Screen 21 in docs/screens.
+ *@
+@import com.lattice.oidc.models.Passkey
+@import scala.jdk.OptionConverters._
+@(passkey: Passkey, hasPassword: Boolean, otherPasskeys: Boolean, error: java.util.Optional[String])(implicit request: Http.Request)
+@layout("Remove passkey") {
+  <div class="intro">
+    <h1>Remove “@passkey.name()”?</h1>
+    <p class="lead">You won't be able to sign in with this passkey any more. It stays on your device until you delete it there.</p>
+  </div>
+  <div class="kv"><span>@passkey.kind()</span><code>created @passkey.created() · @passkey.lastUsed()</code></div>
+  @if(!hasPassword && !otherPasskeys) {
+    <div class="alert alert-warning" role="alert">@icon("alert")<span>This is your only way to sign in. Add another passkey first.</span></div>
+  }
+  @for(message <- error.toScala) {
+    <div class="alert alert-error" role="alert" id="remove-error">@icon("alert")<span>@message</span></div>
+  }
+  <form method="post" action="@com.lattice.oidc.controllers.routes.PasskeyController.remove(passkey.id())" id="remove-passkey" class="stack">
+    @helper.CSRF.formField
+    @if(hasPassword) {
+      <div class="field">
+        <label for="password">Confirm with your password</label>
+        <div class="password">
+          <input type="password" id="password" name="password" autocomplete="current-password"
+                 @if(error.isPresent()){aria-describedby="remove-error" aria-invalid="true"}>
+        </div>
+      </div>
+    }
+    <div class="buttons">
+      <a class="button" href="@com.lattice.oidc.controllers.routes.AccountController.index()">Cancel</a>
+      <button type="submit" class="destructive" @if(!hasPassword && !otherPasskeys){disabled}>Remove passkey</button>
+    </div>
+  </form>
+  @if(otherPasskeys) {
+    <div class="stack" data-passkey-only hidden>
+      <button type="button" data-passkey="reauth" data-submit="remove-passkey" data-next="account">@icon("passkey")Confirm with another passkey</button>
+    </div>
+  }
+}

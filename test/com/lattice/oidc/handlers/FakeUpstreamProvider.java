@@ -151,6 +151,11 @@ public final class FakeUpstreamProvider implements AutoCloseable {
 
   /** Writes an identity providers file that registers this provider under {@code id}. */
   public Path configFile(String id, String redirectUri) throws IOException {
+    return configFile(id, redirectUri, java.util.List.of());
+  }
+
+  /** As {@link #configFile(String, String)}, for users of the given email {@code domains}. */
+  public Path configFile(String id, String redirectUri, java.util.List<String> domains) throws IOException {
     Path file = Files.createTempFile("identity-providers", ".json");
     file.toFile().deleteOnExit();
     Files.writeString(
@@ -158,7 +163,8 @@ public final class FakeUpstreamProvider implements AutoCloseable {
         "{\"identityProviders\":[{\"id\":\"" + id + "\","
             + "\"server\":{\"name\":\"Upstream\",\"issuer\":\"" + issuer + "\"},"
             + "\"client\":{\"clientId\":\"" + CLIENT_ID + "\",\"clientSecret\":\"s3cret\","
-            + "\"redirectUri\":\"" + redirectUri + "\"}}]}");
+            + "\"redirectUri\":\"" + redirectUri + "\"},"
+            + "\"domains\":[" + String.join(",", domains.stream().map(domain -> "\"" + domain + "\"").toList()) + "]}]}");
     return file;
   }
 

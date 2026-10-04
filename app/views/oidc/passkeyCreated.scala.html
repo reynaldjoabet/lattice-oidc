@@ -1,0 +1,24 @@
+@*
+ * A passkey was created: name it (the browser and OS are suggested), then continue.
+ * Screen 19 in docs/screens.
+ *@
+@import com.lattice.oidc.models.Passkey
+@(passkey: Passkey, next: String)(implicit request: Http.Request)
+@layout("Passkey created") {
+  <div class="status">
+    <span class="status-icon success">@icon("check", "")</span>
+    <h1>Passkey created</h1>
+    <p class="lead">Next time, sign in with your passkey instead of your password.</p>
+  </div>
+  <form method="post" action="@com.lattice.oidc.controllers.routes.PasskeyController.name()" class="stack">
+    @helper.CSRF.formField
+    <input type="hidden" name="id" value="@passkey.id()">
+    <input type="hidden" name="next" value="@next">
+    <div class="field">
+      <label for="name">Name</label>
+      <input type="text" id="name" name="name" value="@passkey.name()" maxlength="60" required>
+      <span class="hint">@passkey.kind(). The name helps you recognise it in your account.</span>
+    </div>
+    <button type="submit" class="primary">Continue</button>
+  </form>
+}

@@ -36,7 +36,8 @@ public record AuthorizationPage(
     Optional<String> loggedInAs,
     List<IdentityProviders.Link> identityProviders,
     Optional<String> error,
-    Optional<ObbConsentView> obbConsent) {
+    Optional<ObbConsentView> obbConsent,
+    boolean identified) {
 
   /** A requested scope and its plain-language description. */
   public record ScopeItem(String name, String description) {}
@@ -79,7 +80,8 @@ public record AuthorizationPage(
         loggedInAs,
         identityProviders,
         Optional.empty(),
-        Optional.empty());
+        Optional.empty(),
+        info.getSubject() != null || info.getLoginHint() != null);
   }
 
   public AuthorizationPage withError(String message) {
@@ -87,7 +89,7 @@ public record AuthorizationPage(
         ticket, serviceName, clientName, description, logoUri, clientUri, policyUri, tosUri, scopes,
         claimsForIdToken, claimsForUserInfo, purpose, verifiedClaimsForIdToken,
         verifiedClaimsForUserInfo, authorizationDetails, loginId, loginIdReadOnly, loggedInAs,
-        identityProviders, Optional.ofNullable(message), obbConsent);
+        identityProviders, Optional.ofNullable(message), obbConsent, identified);
   }
 
   public AuthorizationPage withLoggedInAs(Optional<String> user) {
@@ -95,7 +97,7 @@ public record AuthorizationPage(
         ticket, serviceName, clientName, description, logoUri, clientUri, policyUri, tosUri, scopes,
         claimsForIdToken, claimsForUserInfo, purpose, verifiedClaimsForIdToken,
         verifiedClaimsForUserInfo, authorizationDetails, loginId, loginIdReadOnly, user,
-        identityProviders, error, obbConsent);
+        identityProviders, error, obbConsent, identified);
   }
 
   /** The page for an Open Banking consent ({@code consent:...} scope). */
@@ -104,7 +106,19 @@ public record AuthorizationPage(
         ticket, serviceName, clientName, description, logoUri, clientUri, policyUri, tosUri, scopes,
         claimsForIdToken, claimsForUserInfo, purpose, verifiedClaimsForIdToken,
         verifiedClaimsForUserInfo, authorizationDetails, loginId, loginIdReadOnly, loggedInAs,
-        identityProviders, error, consent);
+        identityProviders, error, consent, identified);
+  }
+
+  /**
+   * After the email-first step: the sign-in page asks for the password of {@code identifier}. A
+   * null identifier goes back to the first step.
+   */
+  public AuthorizationPage withIdentifier(String identifier) {
+    return new AuthorizationPage(
+        ticket, serviceName, clientName, description, logoUri, clientUri, policyUri, tosUri, scopes,
+        claimsForIdToken, claimsForUserInfo, purpose, verifiedClaimsForIdToken,
+        verifiedClaimsForUserInfo, authorizationDetails, identifier == null ? "" : identifier,
+        loginIdReadOnly, loggedInAs, identityProviders, error, obbConsent, identifier != null);
   }
 
   /** Up to two initials of the client name, for the monogram shown when it has no logo. */

@@ -211,13 +211,19 @@ public final class CibaHandler {
                 .map(scope -> ConsentLabels.scope(scope.getName(), scope.getDescription()))
                 .toList();
     String id = com.lattice.oidc.security.UserSessions.randomId();
+    String detailsJson =
+        backchannelResponse.getAuthorizationDetails() == null
+            ? "[]"
+            : backchannelResponse.getAuthorizationDetails().toJson();
     CibaApproval approval =
-        new CibaApproval(
+        CibaApproval.of(
             id,
             backchannelResponse.getClientName() != null ? backchannelResponse.getClientName() : String.valueOf(backchannelResponse.getClientId()),
             Optional.ofNullable(backchannelResponse.getBindingMessage()),
             permissions,
-            System.currentTimeMillis() / 1000L + issue.getExpiresIn());
+            System.currentTimeMillis() / 1000L + issue.getExpiresIn(),
+            com.lattice.oidc.common.Jsons.readList(detailsJson),
+            detailsJson);
     cache.set(approvalKey(id), new Waiting(approval, user.getSubject(), pending), ttl);
     synchronized (this) {
       List<String> ids = new ArrayList<>(cache.<List<String>>get(userKey(user.getSubject())).orElse(List.of()));
@@ -243,6 +249,14 @@ public final class CibaHandler {
    * already decided or someone else's.
    */
   public Optional<CibaApproval> decide(String subject, String id, boolean approve) {
+    return decide(subject, id, approve, Optional.empty());
+  }
+
+  /**
+   * As {@link #decide(String, String, boolean)}, where {@code verifiedAcr} is the ACR of how the
+   * user confirmed the decision (a passkey), asserted if the request asked for it.
+   */
+  public Optional<CibaApproval> decide(String subject, String id, boolean approve, Optional<String> verifiedAcr) {
     Optional<Waiting> waiting = id == null ? Optional.empty() : cache.<Waiting>get(approvalKey(id));
     if (waiting.isEmpty()
         || !waiting.get().subject().equals(subject)
@@ -258,7 +272,11 @@ public final class CibaHandler {
       ids.remove(id);
       cache.set(userKey(subject), List.copyOf(ids), 3600);
     }
-    complete(waiting.get().pending(), approve ? AuthenticationDevice.Outcome.ALLOW : AuthenticationDevice.Outcome.DENY);
+    if (approve) {
+      authorize(waiting.get().pending(), verifiedAcr.orElse(null));
+    } else {
+      complete(waiting.get().pending(), AuthenticationDevice.Outcome.DENY);
+    }
     return Optional.of(waiting.get().approval());
   }
 
@@ -297,14 +315,14 @@ public final class CibaHandler {
    */
   private void complete(Pending pending, AuthenticationDevice.Outcome outcome) {
     switch (outcome) {
-      case ALLOW -> authorize(pending);
+      case ALLOW -> authorize(pending, null);
       case DENY -> fail(pending, Result.ACCESS_DENIED, "The end-user denied the request.");
       case TIMEOUT -> fail(pending, Result.TRANSACTION_FAILED, "The authentication device timed out.");
       default -> fail(pending, Result.TRANSACTION_FAILED, "Unrecognized result from the authentication device.");
     }
   }
 
-  private void authorize(Pending pending) {
+  private void authorize(Pending pending, String verifiedAcr) {
     Optional<User> user = users.bySubject(pending.subject());
     if (user.isEmpty()) {
       fail(pending, Result.TRANSACTION_FAILED, "The user no longer exists.");
@@ -318,7 +336,7 @@ public final class CibaHandler {
             .setSubject(pending.subject())
             .setResult(Result.AUTHORIZED)
             .setAuthTime(System.currentTimeMillis() / 1000L)
-            .setAcr(acr(pending.acrs()));
+            .setAcr(acr(pending.acrs(), verifiedAcr));
     Map<String, Object> claims = new ClaimsCollector(user.get()).collect(pending.claimNames(), null);
     if (claims != null) {
       request.setClaims(claims);
@@ -381,11 +399,14 @@ public final class CibaHandler {
     }
   }
 
-  private String acr(String[] requested) {
+  private String acr(String[] requested, String verifiedAcr) {
     if (requested == null) {
       return null;
     }
-    return Arrays.stream(requested).filter(config.satisfiedAcrs()::contains).findFirst().orElse(null);
+    return Arrays.stream(requested)
+        .filter(acr -> acr.equals(verifiedAcr) || config.satisfiedAcrs().contains(acr))
+        .findFirst()
+        .orElse(null);
   }
 
   private int authTimeout(int expiresIn) {

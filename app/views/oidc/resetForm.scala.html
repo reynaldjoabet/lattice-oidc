@@ -1,0 +1,39 @@
+@*
+ * Choose a new password from a reset link. The rules are listed up front; problems are shown
+ * after submitting. Screen 32 in docs/screens.
+ *@
+@(token: String, accountName: String, problems: java.util.List[String])(implicit request: Http.Request)
+@import scala.jdk.CollectionConverters._
+@layout("Choose a new password") {
+  <div class="intro">
+    <h1>Choose a new password</h1>
+    <p class="lead">For <strong>@accountName</strong></p>
+  </div>
+  @if(!problems.isEmpty()) {
+    <div class="alert alert-error" role="alert" id="password-problems">@icon("alert")<span>@for(problem <- problems.asScala) { @problem }</span></div>
+  }
+  <form method="post" action="@com.lattice.oidc.controllers.routes.RecoveryController.reset()" class="stack">
+    @helper.CSRF.formField
+    <input type="hidden" name="token" value="@token">
+    <div class="field">
+      <label for="password">New password</label>
+      <div class="password">
+        <input type="password" id="password" name="password" autocomplete="new-password" minlength="@com.lattice.oidc.security.PasswordPolicy.MINIMUM_LENGTH" required autofocus
+               aria-describedby="password-rules@if(!problems.isEmpty()){ password-problems}">
+      </div>
+    </div>
+    <ul class="rules" id="password-rules">
+      <li>At least @com.lattice.oidc.security.PasswordPolicy.MINIMUM_LENGTH characters</li>
+      <li>Not a commonly used password</li>
+      <li>Different from your current password</li>
+    </ul>
+    <div class="field">
+      <label for="confirmation">Confirm new password</label>
+      <div class="password">
+        <input type="password" id="confirmation" name="confirmation" autocomplete="new-password" required>
+      </div>
+    </div>
+    <label class="check"><input type="checkbox" name="signOutEverywhere" value="true" checked> Sign out everywhere else, including apps</label>
+    <button type="submit" class="primary">Save new password</button>
+  </form>
+}

@@ -1,4 +1,5 @@
 import Dependencies.{
+  angusMail,
   bouncycastle,
   flyway,
   hikaricp,
@@ -6,7 +7,8 @@ import Dependencies.{
   password4j,
   postgres,
   qrcodegen,
-  slf4j
+  slf4j,
+  webauthn
 }
 
 ThisBuild / organization := "com.lattice"
@@ -78,6 +80,8 @@ ThisBuild / libraryDependencies ++= Seq(
   postgres,
   nimbusOauth2Oidc,
   qrcodegen,
+  webauthn,
+  angusMail,
   "net.minidev"              % "json-smart"             % "2.6.0",
   "com.cronutils"            % "cron-utils"             % "9.2.1",
   "org.mindrot"              % "jbcrypt"                % "0.4",

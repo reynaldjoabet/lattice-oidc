@@ -38,3 +38,32 @@ document.addEventListener("DOMContentLoaded", function () {
     wrap.appendChild(toggle);
   });
 });
+
+// 3. Confirm destructive actions: forms with data-confirm="question" ask first.
+document.addEventListener("submit", function (event) {
+  var form = event.target;
+  var question = form.getAttribute && form.getAttribute("data-confirm");
+  if (question && !window.confirm(question)) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }
+}, true);
+
+// 4. Copy buttons: data-copy="<id of the input to copy>".
+document.addEventListener("DOMContentLoaded", function () {
+  document.querySelectorAll("[data-copy]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      var input = document.getElementById(button.getAttribute("data-copy"));
+      if (!input) return;
+      var done = function () {
+        button.textContent = "Copied";
+        setTimeout(function () { button.textContent = "Copy"; }, 2000);
+      };
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(input.value).then(done, function () { input.select(); });
+      } else {
+        input.select();
+      }
+    });
+  });
+});

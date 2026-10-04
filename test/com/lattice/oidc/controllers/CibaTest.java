@@ -330,4 +330,37 @@ public class CibaTest {
     start("sync");
     assertEquals(404, route(app, get("/ciba")).status());
   }
+
+  @Test
+  public void paymentsShowTheAmountAndPasskeyUsersMustApproveWithTheirPasskey() throws Exception {
+    start("builtin");
+    authleteSays(
+        response ->
+            response.setAuthorizationDetails(
+                com.authlete.common.dto.AuthzDetails.fromJson(
+                    "[{\"type\":\"payment_initiation\","
+                        + "\"instructedAmount\":{\"amount\":\"249.00\",\"currency\":\"EUR\"},"
+                        + "\"creditorName\":\"Merchant A\","
+                        + "\"creditorAccount\":{\"iban\":\"DE02100100109307118603\"}}]")));
+    assertEquals(200, authenticate().status());
+    app.injector()
+        .instanceOf(com.lattice.oidc.stores.PasskeyStore.class)
+        .save(
+            new com.lattice.oidc.models.Passkey(
+                "credential-1", "1001", "handle", "cose", 0L, "Phone", java.time.Instant.now(),
+                java.util.Optional.empty(), true, java.util.Set.of("hybrid")));
+
+    Map<String, String> john = signIn("john");
+    String html = Helpers.contentAsString(route(app, get("/ciba").session(john)));
+    assertTrue(html.contains("Approve payment?"));
+    assertTrue(html.contains("249.00"));
+    assertTrue(html.contains("Merchant A"));
+    assertTrue(html.contains("DE02100100109307118603"));
+    assertTrue(html.contains("data-passkey=\"approval\""));
+    assertTrue("no plain approve button", !html.contains("name=\"approve\""));
+
+    String id = waitingRequestId(john, "Merchant A");
+    assertEquals("a form post can't approve for a passkey user", 400, decide(john, id, "approve").status());
+    assertEquals(0, fake.count("backchannelAuthenticationComplete"));
+  }
 }

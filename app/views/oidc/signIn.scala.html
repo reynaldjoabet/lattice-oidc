@@ -1,6 +1,8 @@
 @*
- * Authorization, step 1: sign in (password or an upstream identity provider). Step 2 is the
- * consent page (authorization.scala.html). Screens 01 and 02 in docs/screens.
+ * Authorization, step 1: email or login ID first (screen 27). The field also offers the passkeys
+ * the browser has for this site (WebAuthn conditional UI, screen 16); passkey buttons stay hidden
+ * until passkeys.js finds WebAuthn support. The next step is the password (signInPassword) or the
+ * user's organisation (homeRealm); after sign-in comes consent (authorization.scala.html).
  *@
 @import com.lattice.oidc.models.AuthorizationPage
 @import scala.jdk.CollectionConverters._
@@ -13,32 +15,27 @@
   </div>
 
   @for(error <- page.error().toScala) {
-    <div class="alert alert-error" role="alert" id="login-error">
-      @icon(if (error.startsWith("Too many")) "lock" else "alert")
-      <span>@error</span>
-    </div>
+    <div class="alert alert-error" role="alert" id="login-error">@icon("alert")<span>@error</span></div>
   }
 
   <form method="post" action="@com.lattice.oidc.controllers.routes.AuthorizationController.decision()">
     @helper.CSRF.formField
     <input type="hidden" name="ticket" value="@page.ticket()">
     <div class="field">
-      <label for="loginId">Login ID</label>
-      <input type="text" id="loginId" name="loginId" value="@page.loginId()" autocomplete="username"
-             autocapitalize="off" spellcheck="false" required
-             @if(page.loginIdReadOnly()){readonly} else {autofocus}
+      <label for="identifier">Email or login ID</label>
+      <input type="text" id="identifier" name="identifier" value="@page.loginId()" autocomplete="username webauthn"
+             autocapitalize="off" spellcheck="false" required autofocus
+             data-passkey-autofill="authz:@page.ticket()"
              @if(page.error().isPresent()){aria-describedby="login-error" aria-invalid="true"}>
+      <span class="hint">Work email? We'll send you to your organisation's sign-in.</span>
     </div>
-    <div class="field">
-      <label for="password">Password</label>
-      <div class="password">
-        <input type="password" id="password" name="password" autocomplete="current-password" required
-               @if(page.loginIdReadOnly()){autofocus}
-               @if(page.error().isPresent()){aria-invalid="true"}>
-      </div>
-    </div>
-    <button type="submit" name="login" value="true" class="primary">Continue</button>
+    <button type="submit" name="identify" value="true" class="primary">Continue</button>
   </form>
+
+  <div class="stack" data-passkey-only hidden>
+    <div class="divider">or</div>
+    <button type="button" data-passkey="signin" data-next="authz:@page.ticket()">@icon("passkey")Sign in with a passkey</button>
+  </div>
 
   @if(!page.identityProviders().isEmpty()) {
     <div class="divider">or continue with</div>
@@ -56,6 +53,9 @@
   <form method="post" action="@com.lattice.oidc.controllers.routes.AuthorizationController.decision()">
     @helper.CSRF.formField
     <input type="hidden" name="ticket" value="@page.ticket()">
-    <p class="muted">Wrong app? <button type="submit" name="denied" value="true" class="link">Cancel and return to @page.clientName()</button></p>
+    <div class="footer-links muted">
+      <a href="@com.lattice.oidc.controllers.routes.RecoveryController.form("authz:" + page.ticket())">Forgot your password?</a>
+      <button type="submit" name="denied" value="true" class="link">Cancel</button>
+    </div>
   </form>
 }

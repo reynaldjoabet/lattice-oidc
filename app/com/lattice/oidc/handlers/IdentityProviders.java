@@ -28,6 +28,7 @@ public final class IdentityProviders {
   private static final Logger LOG = LoggerFactory.getLogger(IdentityProviders.class);
 
   private final Map<String, IdentityProvider> providers = new LinkedHashMap<>();
+  private final Map<String, IdentityProvider> byDomain = new LinkedHashMap<>();
 
   @Inject
   public IdentityProviders(LatticeConfig config) {
@@ -54,7 +55,13 @@ public final class IdentityProviders {
         LOG.warn("Ignoring incomplete identity provider entry: {}", entry.id());
         continue;
       }
-      providers.put(entry.id(), new IdentityProvider(entry));
+      IdentityProvider provider = new IdentityProvider(entry);
+      providers.put(entry.id(), provider);
+      if (entry.domains() != null) {
+        for (String domain : entry.domains()) {
+          byDomain.put(domain.trim().toLowerCase(java.util.Locale.ROOT), provider);
+        }
+      }
       LOG.info("Loaded identity provider {} ({})", entry.id(), entry.server().issuer());
     }
   }
@@ -63,7 +70,16 @@ public final class IdentityProviders {
     return Optional.ofNullable(providers.get(id));
   }
 
+  /** The provider whose users have this email address's domain, if one lists it. */
+  public Optional<IdentityProvider> forEmail(String email) {
+    if (email == null || email.indexOf('@') < 0) {
+      return Optional.empty();
+    }
+    String domain = email.substring(email.lastIndexOf('@') + 1).trim().toLowerCase(java.util.Locale.ROOT);
+    return Optional.ofNullable(byDomain.get(domain));
+  }
+
   public List<Link> links() {
-    return providers.values().stream().map(f -> new Link(f.id(), f.name())).toList();
+    return providers.values().stream().map(provider -> new Link(provider.id(), provider.name())).toList();
   }
 }

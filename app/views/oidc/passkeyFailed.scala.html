@@ -1,0 +1,20 @@
+@*
+ * The passkey prompt was cancelled, timed out or the passkey wasn't accepted.
+ * Screen 24 in docs/screens.
+ *@
+@(continueUrl: String, next: String)(implicit request: Http.Request)
+@layout("Passkey didn't work") {
+  <div class="status">
+    <span class="status-icon warning">@icon("passkey", "")</span>
+    <h1>That didn't work</h1>
+    <p class="lead">The passkey prompt was cancelled or timed out, or this passkey isn't registered here.</p>
+  </div>
+  <ul class="checklist">
+    <li>Make sure you choose a passkey saved for this site</li>
+    <li>If your passkey is on your phone, keep Bluetooth on near this device</li>
+    <li>You can still use your password</li>
+  </ul>
+  <div class="stack">
+    <a class="button primary" href="@continueUrl">Try again</a>
+  </div>
+}

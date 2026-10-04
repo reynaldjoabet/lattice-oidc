@@ -47,7 +47,24 @@ public final class LoginService {
     this.config = config;
   }
 
-  public Result authenticate(String loginId, String password) {
+  /** Clears failed sign-in attempts for the account (after its password is reset). */
+  public void unlock(User user) {
+    if (user.loginId() != null) {
+      cache.remove("login-failures:" + user.loginId().toLowerCase(Locale.ROOT));
+    }
+    user.email().ifPresent(email -> cache.remove("login-failures:" + email.toLowerCase(Locale.ROOT)));
+  }
+
+  /** The account for a login ID, or for an email address (sign-in accepts either). */
+  public Optional<User> find(String identifier) {
+    if (identifier == null || identifier.isBlank()) {
+      return Optional.empty();
+    }
+    Optional<User> byLoginId = users.byLoginId(identifier);
+    return byLoginId.isPresent() || identifier.indexOf('@') < 0 ? byLoginId : users.byEmail(identifier);
+  }
+
+    public Result authenticate(String loginId, String password) {
     if (loginId == null || loginId.isBlank() || password == null || password.isEmpty()) {
       return new Result(Outcome.INVALID_CREDENTIALS, Optional.empty());
     }
@@ -57,7 +74,7 @@ public final class LoginService {
       return new Result(Outcome.LOCKED, Optional.empty());
     }
 
-    Optional<User> user = users.byLoginId(loginId.trim());
+    Optional<User> user = find(loginId.trim());
     String hash = user.map(User::passwordHash).orElse(null);
     boolean ok = Password.check(password, hash != null ? hash : DUMMY_HASH).withArgon2();
     if (ok && hash != null) {

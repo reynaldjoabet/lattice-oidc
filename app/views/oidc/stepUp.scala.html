@@ -1,0 +1,21 @@
+@*
+ * The app requires a phishing-resistant sign-in (acr "phr") and this session used a password:
+ * verify with a passkey, then the request continues. Screen 22 in docs/screens.
+ *@
+@import com.lattice.oidc.models.AuthorizationPage
+@import scala.jdk.OptionConverters._
+@(page: AuthorizationPage)(implicit request: Http.Request)
+@layout("Verify it's you") {
+  <div class="status">
+    <span class="status-icon info">@icon("shield", "")</span>
+    <h1>Verify it's you</h1>
+    <p class="lead"><strong>@page.clientName()</strong> needs a stronger sign-in for this. Use your passkey to continue@for(user <- page.loggedInAs().toScala){ as <strong>@user</strong>}.</p>
+  </div>
+  <form method="post" action="@com.lattice.oidc.controllers.routes.AuthorizationController.decision()" id="step-up" class="stack">
+    @helper.CSRF.formField
+    <input type="hidden" name="ticket" value="@page.ticket()">
+    <input type="hidden" name="authorized" value="true">
+    <button type="button" class="primary" data-passkey="stepup" data-submit="step-up" data-next="authz:@page.ticket()">@icon("passkey")Verify with passkey</button>
+    <button type="submit" name="denied" value="true" class="link" formnovalidate>Cancel and return to @page.clientName()</button>
+  </form>
+}

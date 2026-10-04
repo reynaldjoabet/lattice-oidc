@@ -132,7 +132,7 @@ public final class DeviceController extends BaseController {
                       : "Invalid login ID or password.";
               return page(request, 401, userCode, Optional.empty(), Optional.of(message));
             }
-            sessions.login(auth.user().get(), System.currentTimeMillis() / 1000L, null, sessionOut);
+            sessions.login(auth.user().get(), System.currentTimeMillis() / 1000L, null, sessionOut, request, "Password");
             shown = Optional.of(auth.user().get().displayName());
           }
 
@@ -141,7 +141,7 @@ public final class DeviceController extends BaseController {
           Result result =
               switch (r.getAction()) {
                 // The user code is valid. Ask the user to authorize the client.
-                case VALID -> approvalPage(request, userCode, r);
+                case VALID -> approvalPage(request, userCode, r, sessionOut);
                 // The user code has expired. Urge the user to re-initiate device flow.
                 case EXPIRED -> page(request, 400, "", shown, Optional.of("The code has expired. Restart on your device."));
                 // The user code does not exist. Urge the user to re-input a valid user code.
@@ -155,9 +155,15 @@ public final class DeviceController extends BaseController {
         });
   }
 
-  private Result approvalPage(Http.Request request, String userCode, DeviceVerificationResponse info) {
+  /**
+   * Shows the approval page. The pending approval is bound to the browser: to the id a sign-in in
+   * this same request assigned ({@code sessionOut}), else the browser's own.
+   */
+  private Result approvalPage(
+      Http.Request request, String userCode, DeviceVerificationResponse info, Map<String, String> sessionOut) {
     DeviceApproval approval = device.approval(userCode, info);
-    String browserId = sessions.browserId(request);
+    String browserId =
+        Optional.ofNullable(sessionOut.get(UserSessions.BROWSER_ID)).orElseGet(() -> sessions.browserId(request));
     interactions.put(KIND, userCode, browserId, approval);
     return sessions.withBrowserId(
         Responses.of(200, views.html.oidc.deviceAuthorization.render(approval, request).body(), Responses.HTML, null),

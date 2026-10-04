@@ -122,7 +122,9 @@ public final class ErrorHandler extends DefaultHttpErrorHandler {
         || path.startsWith("/api/federation/")
         || path.startsWith("/account")
         || path.startsWith("/ciba")
-        || path.startsWith("/admin");
+        || path.startsWith("/admin")
+        || path.startsWith("/passkeys/created")
+        || path.startsWith("/passkeys/failed");
   }
 
   private static final java.util.Set<String> BROWSER_PAGES =

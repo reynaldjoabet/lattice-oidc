@@ -18,7 +18,9 @@
     <title>@title · @ui.brandName()</title>
     <link rel="icon" type="image/svg+xml" href="@routes.Assets.versioned("images/favicon.svg")">
     <link rel="stylesheet" href="@routes.Assets.versioned("stylesheets/oidc.css")">
+    <meta name="csrf-token" content="@play.filters.csrf.CSRF.getToken(request.asScala).map(_.value).getOrElse("")">
     <script src="@routes.Assets.versioned("javascripts/oidc.js")" defer></script>
+    <script src="@routes.Assets.versioned("javascripts/passkeys.js")" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -32,6 +34,7 @@
       </div>
       @content
     </main>
+    @passkeyWaiting()
     @if(ui.hasFooterLinks()) {
       <footer class="site-footer">
         @for(url <- ui.privacyUrl().toScala) { <a href="@url">Privacy</a> }

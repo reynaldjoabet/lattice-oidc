@@ -1,0 +1,14 @@
+@*
+ * "Use your passkey": shown by passkeys.js while the browser's passkey prompt is open. Hidden by
+ * default. Screen 17 in docs/screens.
+ *@
+@()
+<div class="passkey-waiting" id="passkey-waiting" hidden>
+  <section class="waiting-card" role="status" aria-live="polite">
+    <span class="waiting-icon">@icon("passkey", "")</span>
+    <h2>Use your passkey</h2>
+    <p class="lead">Follow the prompt from your device: Touch ID, Face ID, Windows Hello or your security key.</p>
+    <p class="muted">Waiting for your device…</p>
+    <button type="button" data-passkey-cancel>Cancel</button>
+  </section>
+</div>

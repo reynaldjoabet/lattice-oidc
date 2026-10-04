@@ -19,12 +19,46 @@ POST    /account/apps/:clientId/remove com.lattice.oidc.controllers.AccountContr
 GET     /ciba                       com.lattice.oidc.controllers.CibaApprovalController.page(request: Request)
 POST    /ciba/decision              com.lattice.oidc.controllers.CibaApprovalController.decide(request: Request)
 GET     /admin                      com.lattice.oidc.controllers.AdminController.index(request: Request)
+GET     /admin/clients              com.lattice.oidc.controllers.ConsoleController.clients(request: Request, query: String ?= "", registration: String ?= "all")
+GET     /admin/clients/:id          com.lattice.oidc.controllers.ConsoleController.client(request: Request, id: Long)
+POST    /admin/clients/:id          com.lattice.oidc.controllers.ConsoleController.update(request: Request, id: Long)
+POST    /admin/clients/:id/secret   com.lattice.oidc.controllers.ConsoleController.rotateSecret(request: Request, id: Long)
+POST    /admin/clients/:id/delete   com.lattice.oidc.controllers.ConsoleController.delete(request: Request, id: Long)
+GET     /admin/security             com.lattice.oidc.controllers.ConsoleController.security(request: Request)
+GET     /ciba/approved              com.lattice.oidc.controllers.CibaApprovalController.approved(request: Request)
+
+# Account security: sessions, sign-in alerts, password
+GET     /account/sessions           com.lattice.oidc.controllers.AccountSecurityController.sessions(request: Request)
+GET     /account/sessions/others    com.lattice.oidc.controllers.AccountSecurityController.othersPage(request: Request)
+POST    /account/sessions/others    com.lattice.oidc.controllers.AccountSecurityController.endOthers(request: Request)
+POST    /account/sessions/:id/end   com.lattice.oidc.controllers.AccountSecurityController.endSession(request: Request, id: String)
+POST    /account/alerts/:id         com.lattice.oidc.controllers.AccountSecurityController.answerAlert(request: Request, id: String)
+GET     /account/password           com.lattice.oidc.controllers.AccountSecurityController.passwordForm(request: Request)
+POST    /account/password           com.lattice.oidc.controllers.AccountSecurityController.changePassword(request: Request)
+
+# Forgotten password
+GET     /account/recover            com.lattice.oidc.controllers.RecoveryController.form(request: Request, next: String ?= "account")
+POST    /account/recover            com.lattice.oidc.controllers.RecoveryController.send(request: Request)
+GET     /account/reset              com.lattice.oidc.controllers.RecoveryController.resetForm(request: Request, token: String ?= "")
+POST    /account/reset              com.lattice.oidc.controllers.RecoveryController.reset(request: Request)
+
+# Passkeys (WebAuthn); the JSON endpoints send the CSRF token in the Csrf-Token header
+POST    /passkeys/registration/options com.lattice.oidc.controllers.PasskeyController.registrationOptions(request: Request)
+POST    /passkeys/registration      com.lattice.oidc.controllers.PasskeyController.register(request: Request)
+GET     /passkeys/created           com.lattice.oidc.controllers.PasskeyController.created(request: Request, id: String, next: String ?= "account")
+POST    /passkeys/name              com.lattice.oidc.controllers.PasskeyController.name(request: Request)
+POST    /passkeys/assertion/options com.lattice.oidc.controllers.PasskeyController.assertionOptions(request: Request)
+POST    /passkeys/assertion         com.lattice.oidc.controllers.PasskeyController.assertion(request: Request)
+GET     /passkeys/failed            com.lattice.oidc.controllers.PasskeyController.failed(request: Request, next: String ?= "account")
+GET     /account/passkeys/:id/remove com.lattice.oidc.controllers.PasskeyController.removePage(request: Request, id: String)
+POST    /account/passkeys/:id/remove com.lattice.oidc.controllers.PasskeyController.remove(request: Request, id: String)
 
 # Authorization (RFC 6749 / OIDC Core)
 GET     /api/authorization                          com.lattice.oidc.controllers.AuthorizationController.get(request: Request)
 + nocsrf
 POST    /api/authorization                          com.lattice.oidc.controllers.AuthorizationController.post(request: Request)
 POST    /api/authorization/decision                 com.lattice.oidc.controllers.AuthorizationController.decision(request: Request)
+GET     /api/authorization/continue                 com.lattice.oidc.controllers.AuthorizationController.continueAuthorization(request: Request, ticket: String)
 
 # OpenID Federation 1.0
 GET     /.well-known/openid-federation              com.lattice.oidc.controllers.FederationController.configuration()

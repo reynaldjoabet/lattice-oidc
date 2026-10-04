@@ -16,6 +16,7 @@ import com.lattice.oidc.models.ObbConsentView;
 import com.lattice.oidc.security.AuditService;
 import com.lattice.oidc.security.Interactions;
 import com.lattice.oidc.security.LoginService;
+import com.lattice.oidc.security.Passkeys;
 import com.lattice.oidc.security.UserSessions.LoginState;
 import com.lattice.oidc.security.UserSessions;
 import com.lattice.oidc.stores.ConsentStore;
@@ -56,6 +57,7 @@ public final class AuthorizationController extends BaseController {
   private final IdentityProviders identityProviders;
   private final ConsentStore consents;
   private final LatticeConfig config;
+  private final Passkeys passkeys;
 
   @Inject
   public AuthorizationController(
@@ -65,7 +67,8 @@ public final class AuthorizationController extends BaseController {
       AuthorizationHandler service,
       IdentityProviders identityProviders,
       ConsentStore consents,
-      LatticeConfig config) {
+      LatticeConfig config,
+      Passkeys passkeys) {
     this.sessions = sessions;
     this.interactions = interactions;
     this.login = login;
@@ -73,6 +76,7 @@ public final class AuthorizationController extends BaseController {
     this.identityProviders = identityProviders;
     this.consents = consents;
     this.config = config;
+    this.passkeys = passkeys;
   }
 
   /**
@@ -228,7 +232,7 @@ public final class AuthorizationController extends BaseController {
         AuthorizationInteraction.from(info, null, state.user().getSubject());
     // Issue
     return service.issue(
-        interaction, new AuthorizationHandler.Grant(state.user(), state.authTime(), state.sessionId()));
+        interaction, new AuthorizationHandler.Grant(state.user(), state.authTime(), state.sessionId(), state.acr()));
   }
 
   /**
@@ -278,20 +282,64 @@ public final class AuthorizationController extends BaseController {
       return rerender(request, anonymous, null, 200);
     }
 
-    // Step 1 (sign-in page): authenticate, then show the consent page for the signed-in user.
+    // Email-first sign-in: a work email whose domain belongs to an identity provider goes to that
+    // provider; anything else continues to the password step for that identifier.
+    if (form.containsKey("identify")) {
+      String identifier = Optional.ofNullable(Requests.first(form, "identifier")).map(String::trim).orElse("");
+      if (identifier.isEmpty()) {
+        return rerender(request, interaction, "Enter your email or login ID.", 400);
+      }
+      var provider = identityProviders.forEmail(identifier);
+      if (provider.isPresent()) {
+        return Responses.of(
+            200,
+            views.html.oidc.homeRealm.render(interaction.page(), identifier, provider.get().id(), provider.get().name(), request).body(),
+            Responses.HTML,
+            null);
+      }
+      AuthorizationInteraction identified =
+          interaction.withPage(interaction.page().withIdentifier(identifier).withError(null));
+      interactions.put(KIND, ticket, browserId, identified);
+      return rerender(request, identified, null, 200);
+    }
+    if (form.containsKey("changeIdentifier")) {
+      AuthorizationInteraction reset =
+          interaction.withPage(interaction.page().withIdentifier(null).withError(null)).withShownSubject(null);
+      interactions.put(KIND, ticket, browserId, reset);
+      return rerender(request, reset, null, 200);
+    }
+
+    // Password step: authenticate, then show the consent page for the signed-in user (or, first,
+    // the offer to create a passkey).
     if (form.containsKey("login")) {
       String loginId = Requests.first(form, "loginId");
       LoginService.Result result = login.authenticate(loginId, Requests.first(form, "password"));
       auditLogin(request, loginId, result);
       if (result.outcome() != LoginService.Outcome.SUCCESS) {
-        return rerender(request, interaction.withShownSubject(null), failureMessage(result), 401);
+        // Stay on the password step for the same identifier.
+        AuthorizationInteraction retry =
+            interaction.withPage(interaction.page().withIdentifier(loginId)).withShownSubject(null);
+        interactions.put(KIND, ticket, browserId, retry);
+        return rerender(request, retry, failureMessage(result), 401);
       }
       Map<String, String> sessionOut = new HashMap<>();
-      sessions.login(result.user().get(), System.currentTimeMillis() / 1000L, null, sessionOut);
+      sessions.login(result.user().get(), System.currentTimeMillis() / 1000L, null, sessionOut, request, "Password");
       AuthorizationInteraction signedIn =
           interaction.withPage(interaction.page().withLoggedInAs(Optional.of(result.user().get().displayName())).withError(null))
               .withShownSubject(result.user().get().getSubject());
       interactions.put(KIND, ticket, browserId, signedIn);
+      String subject = result.user().get().getSubject();
+      if (passkeys.offerDue(subject)) {
+        passkeys.markOffered(subject);
+        return sessions.apply(
+            Responses.of(
+                200,
+                views.html.oidc.passkeyOffer.render(signedIn.page(), result.user().get(), request).body(),
+                Responses.HTML,
+                null),
+            request,
+            sessionOut);
+      }
       return sessions.apply(rerender(request, signedIn, null, 200), request, sessionOut);
     }
 
@@ -315,7 +363,7 @@ public final class AuthorizationController extends BaseController {
         return rerender(request, interaction.withShownSubject(null), failureMessage(result), 401);
       }
       long authTime = System.currentTimeMillis() / 1000L;
-      String sessionId = sessions.login(result.user().get(), authTime, null, sessionOut);
+      String sessionId = sessions.login(result.user().get(), authTime, null, sessionOut, request, "Password");
       grant = new AuthorizationHandler.Grant(result.user().get(), authTime, sessionId);
     } else {
       Optional<LoginState> current = sessions.current(request);
@@ -329,7 +377,17 @@ public final class AuthorizationController extends BaseController {
         return rerender(request, anonymous, "Please sign in.", 401);
       }
       LoginState loginState = current.get();
-      grant = new AuthorizationHandler.Grant(loginState.user(), loginState.authTime(), loginState.sessionId());
+      // The app requires a passkey-level sign-in that this session doesn't have: step up first.
+      if (needsStepUp(interaction, loginState.acr()) && passkeys.hasPasskeys(loginState.user().getSubject())) {
+        return Responses.of(
+            200,
+            views.html.oidc.stepUp.render(interaction.page(), request).body(),
+            Responses.HTML,
+            null);
+      }
+      grant =
+          new AuthorizationHandler.Grant(
+              loginState.user(), loginState.authTime(), loginState.sessionId(), loginState.acr());
     }
 
     // Authorize the authorization request. The ticket is single-use, so the pending state is
@@ -343,6 +401,37 @@ public final class AuthorizationController extends BaseController {
         "client_id",
         interaction.clientIdentifier());
     return sessions.apply(service.issue(interaction, grant), request, sessionOut);
+  }
+
+  /**
+   * Shows the current step of a pending authorization request again: used after a passkey
+   * sign-in or "Not now" on the passkey offer. Only renders; it never issues.
+   */
+  public Result continueAuthorization(Http.Request request, String ticket) {
+    String browserId = sessions.existingBrowserId(request).orElse(null);
+    Optional<AuthorizationInteraction> found = interactions.get(KIND, ticket, browserId, AuthorizationInteraction.class);
+    if (found.isEmpty()) {
+      return Pages.message(
+          request,
+          400,
+          "Request expired",
+          "This authorization request is no longer valid. Please start again from the application.");
+    }
+    AuthorizationInteraction interaction = found.get();
+    Optional<LoginState> current = sessions.current(request);
+    boolean signedInAsShown =
+        current.isPresent()
+            && interaction.shownSubject() != null
+            && interaction.shownSubject().equals(current.get().user().getSubject());
+    return rerender(request, signedInAsShown ? interaction : interaction.withShownSubject(null), null, 200);
+  }
+
+  /** Whether the request essentially requires the passkey ACR and the session has a weaker one. */
+  private boolean needsStepUp(AuthorizationInteraction interaction, String sessionAcr) {
+    return interaction.acrEssential()
+        && interaction.acrs() != null
+        && Arrays.asList(interaction.acrs()).contains(passkeys.acr())
+        && !passkeys.acr().equals(sessionAcr);
   }
 
   /**

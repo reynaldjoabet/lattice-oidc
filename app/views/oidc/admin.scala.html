@@ -3,118 +3,86 @@
  * and recent audit events, all for this node. Screen 15 in docs/screens.
  *@
 @import com.lattice.oidc.models.AdminPage
-@import com.lattice.oidc.models.UiSettings
 @import scala.jdk.CollectionConverters._
 @import scala.jdk.OptionConverters._
 @(page: AdminPage)(implicit request: Http.Request)
-@ui = @{ UiSettings.of(request) }
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="robots" content="noindex, nofollow">
-    <meta name="color-scheme" content="light dark">
-    <title>Operator console · @ui.brandName()</title>
-    <link rel="icon" type="image/svg+xml" href="@routes.Assets.versioned("images/favicon.svg")">
-    <link rel="stylesheet" href="@routes.Assets.versioned("stylesheets/oidc.css")">
-  </head>
-  <body class="console">
-    <a class="skip-link" href="#main">Skip to content</a>
-    <div class="console-layout">
-      <nav class="console-nav" aria-label="Console">
-        <a class="brand" href="@com.lattice.oidc.controllers.routes.AdminController.index()">
-          <img src="@routes.Assets.versioned("images/logo.svg")" alt="">
-          <span>@ui.brandName()</span>
-          <span class="tag">Admin</span>
-        </a>
-        <ul>
-          <li><a href="#overview" aria-current="page">Overview</a></li>
-          <li><a href="#caches">Caches</a></li>
-          <li><a href="#audit">Audit events</a></li>
-          <li><a href="@com.lattice.oidc.controllers.routes.AccountController.index()">Your account</a></li>
-        </ul>
-      </nav>
-      <main id="main" class="console-main">
-        <div class="console-head" id="overview">
-          <div>
-            <h1>Overview</h1>
-            <p class="muted">@for(issuer <- page.issuer().toScala) {Issuer @issuer · }Signed in as @page.adminName() · values for this node</p>
-          </div>
-        </div>
-
-        <div class="stats">
-          <section class="panel stat">
-            <h2>Authlete API</h2>
-            @if(page.authleteUp()) {
-              <span class="big"><span class="dot" aria-hidden="true"></span>Connected</span>
-              <span class="muted">Readiness check passing</span>
-            } else {
-              <span class="big"><span class="dot down" aria-hidden="true"></span>Down</span>
-              <span class="muted">@page.authleteReason().orElse("unknown")</span>
-            }
-          </section>
-          <section class="panel stat">
-            <h2>Active sessions</h2>
-            <span class="big">@{"%,d".format(page.activeSessions())}</span>
-            @for(maximum <- page.sessionsMaximum().toScala) { <span class="muted">of @{"%,d".format(maximum)} maximum</span> }
-          </section>
-          <section class="panel stat">
-            <h2>Identity providers</h2>
-            <span class="big">@page.identityProviders().size()</span>
-            <span class="muted">@if(page.identityProviders().isEmpty()){None configured} else {@page.identityProviders().asScala.mkString(" · ")}</span>
-          </section>
-          <section class="panel stat">
-            <h2>Accounts with failed logins</h2>
-            <span class="big">@page.accountsWithFailedLogins()</span>
-            <span class="muted">within the lockout window</span>
-          </section>
-        </div>
-
-        <section class="panel" id="caches">
-          <h2>Caches</h2>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th scope="col">Cache</th><th scope="col">Entries</th><th scope="col">Maximum</th><th scope="col">Hit rate</th><th scope="col">Evictions</th></tr></thead>
-              <tbody>
-                @for(row <- page.caches().asScala) {
-                  <tr>
-                    <td class="mono">@row.name()</td>
-                    <td class="mono">@{"%,d".format(row.entries())}</td>
-                    <td class="mono">@row.maximum().toScala.map(maximum => "%,d".format(maximum)).getOrElse("—")</td>
-                    <td class="mono">@row.hitRatePercent()</td>
-                    <td class="mono">@{"%,d".format(row.evictions())}</td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section class="panel" id="audit">
-          <h2>Recent audit events</h2>
-          @if(page.events().isEmpty()) {
-            <p class="muted">No events since this node started.</p>
-          } else {
-            <div class="table-wrap">
-              <table>
-                <thead><tr><th scope="col">Time (UTC)</th><th scope="col">Event</th><th scope="col">Subject</th><th scope="col">Client</th><th scope="col">IP</th></tr></thead>
-                <tbody>
-                  @for(event <- page.events().asScala) {
-                    <tr>
-                      <td class="mono">@event.time()</td>
-                      <td><span class="tag-event @event.tone()">@event.name()</span></td>
-                      <td>@event.subject()</td>
-                      <td>@event.client()</td>
-                      <td class="mono">@event.ip()</td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-            </div>
-          }
-        </section>
-      </main>
+@consoleLayout("Overview", "overview") {
+  <div class="console-head" id="overview">
+    <div>
+      <h1>Overview</h1>
+      <p class="muted">@for(issuer <- page.issuer().toScala) {Issuer @issuer · }Signed in as @page.adminName() · values for this node</p>
     </div>
-  </body>
-</html>
+  </div>
+
+  <div class="stats">
+    <section class="panel stat">
+      <h2>Authlete API</h2>
+      @if(page.authleteUp()) {
+        <span class="big"><span class="dot" aria-hidden="true"></span>Connected</span>
+        <span class="muted">Readiness check passing</span>
+      } else {
+        <span class="big"><span class="dot down" aria-hidden="true"></span>Down</span>
+        <span class="muted">@page.authleteReason().orElse("unknown")</span>
+      }
+    </section>
+    <section class="panel stat">
+      <h2>Active sessions</h2>
+      <span class="big">@{"%,d".format(page.activeSessions())}</span>
+      @for(maximum <- page.sessionsMaximum().toScala) { <span class="muted">of @{"%,d".format(maximum)} maximum</span> }
+    </section>
+    <section class="panel stat">
+      <h2>Identity providers</h2>
+      <span class="big">@page.identityProviders().size()</span>
+      <span class="muted">@if(page.identityProviders().isEmpty()){None configured} else {@page.identityProviders().asScala.mkString(" · ")}</span>
+    </section>
+    <section class="panel stat">
+      <h2>Accounts with failed logins</h2>
+      <span class="big">@page.accountsWithFailedLogins()</span>
+      <span class="muted">within the lockout window</span>
+    </section>
+  </div>
+
+  <section class="panel" id="caches">
+    <h2>Caches</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th scope="col">Cache</th><th scope="col">Entries</th><th scope="col">Maximum</th><th scope="col">Hit rate</th><th scope="col">Evictions</th></tr></thead>
+        <tbody>
+          @for(row <- page.caches().asScala) {
+            <tr>
+              <td class="mono">@row.name()</td>
+              <td class="mono">@{"%,d".format(row.entries())}</td>
+              <td class="mono">@row.maximum().toScala.map(maximum => "%,d".format(maximum)).getOrElse("—")</td>
+              <td class="mono">@row.hitRatePercent()</td>
+              <td class="mono">@{"%,d".format(row.evictions())}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel" id="audit">
+    <h2>Recent audit events</h2>
+    @if(page.events().isEmpty()) {
+      <p class="muted">No events since this node started.</p>
+    } else {
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th scope="col">Time (UTC)</th><th scope="col">Event</th><th scope="col">Subject</th><th scope="col">Client</th><th scope="col">IP</th></tr></thead>
+          <tbody>
+            @for(event <- page.events().asScala) {
+              <tr>
+                <td class="mono">@event.time()</td>
+                <td><span class="tag-event @event.tone()">@event.name()</span></td>
+                <td>@event.subject()</td>
+                <td>@event.client()</td>
+                <td class="mono">@event.ip()</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
+}

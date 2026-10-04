@@ -1,0 +1,21 @@
+@*
+ * Home realm discovery: the email's domain belongs to an identity provider, so the user signs in
+ * there. Screen 28 in docs/screens.
+ *@
+@import com.lattice.oidc.models.AuthorizationPage
+@(page: AuthorizationPage, email: String, providerId: String, providerName: String)(implicit request: Http.Request)
+@layout("Continue with " + providerName) {
+  <form method="post" action="@com.lattice.oidc.controllers.routes.AuthorizationController.decision()">
+    @helper.CSRF.formField
+    <input type="hidden" name="ticket" value="@page.ticket()">
+    <div class="account">
+      <span class="who"><strong>@email</strong></span>
+      <button type="submit" name="changeIdentifier" value="true" class="link" formnovalidate>Change</button>
+    </div>
+  </form>
+  <div class="intro">
+    <h1>Continue with @providerName</h1>
+    <p class="lead">Accounts with this email domain sign in through <strong>@providerName</strong>. You'll come back here afterwards.</p>
+  </div>
+  <a class="button primary" href="@com.lattice.oidc.controllers.routes.IdentityBrokerController.initiation(providerId, page.ticket())">Continue to @providerName</a>
+}

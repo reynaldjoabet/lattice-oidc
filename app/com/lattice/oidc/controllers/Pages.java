@@ -27,12 +27,14 @@ public final class Pages {
         null);
   }
 
-  /** The sign-in page, or the consent page once the end-user is signed in. */
+  /** The sign-in step (email first, then password) or, once signed in, the consent page. */
   public static Result authorization(Http.Request request, AuthorizationPage page, int status) {
     String body =
         page.loggedInAs().isPresent()
             ? views.html.oidc.authorization.render(page, request).body()
-            : views.html.oidc.signIn.render(page, request).body();
+            : page.identified()
+                ? views.html.oidc.signInPassword.render(page, request).body()
+                : views.html.oidc.signIn.render(page, request).body();
     return Responses.of(status, body, Responses.HTML, null);
   }
 }

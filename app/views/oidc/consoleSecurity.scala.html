@@ -1,0 +1,69 @@
+@*
+ * Operator console: sign-in security over the last 24 hours on this node. Screen 38 in
+ * docs/screens.
+ *@
+@import com.lattice.oidc.security.SecurityStats
+@import scala.jdk.CollectionConverters._
+@import scala.jdk.OptionConverters._
+@(summary: SecurityStats.Summary, locked: Int, passkeyAdoption: Int)(implicit request: Http.Request)
+@consoleLayout("Security", "security") {
+  <div class="console-head">
+    <div>
+      <h1>Security</h1>
+      <p class="muted">Last 24 hours, this node</p>
+    </div>
+  </div>
+
+  <div class="stats">
+    <section class="panel stat">
+      <h2>Failed sign-ins</h2>
+      <span class="big">@{"%,d".format(summary.failed())}</span>
+      <div class="bars" role="img" aria-label="Failed sign-ins per hour">
+        @for((height, index) <- summary.bars().asScala.zipWithIndex) {
+          <span class="bar h@{(height / 10) * 10}@if(summary.spikeHour().isPresent() && height == 100){ spike}"></span>
+        }
+      </div>
+      @for(time <- summary.spikeTime().toScala) { <span class="spike-text">Spike at @time</span> }
+    </section>
+    <section class="panel stat">
+      <h2>Locked accounts</h2>
+      <span class="big">@locked</span>
+      <span class="muted">Unlock automatically after the lockout window</span>
+    </section>
+    <section class="panel stat">
+      <h2>Passkey adoption</h2>
+      <span class="big">@passkeyAdoption%</span>
+      <span class="meter" aria-hidden="true"><span class="w@{(passkeyAdoption / 5) * 5}"></span></span>
+      <span class="muted">of accounts have a passkey</span>
+    </section>
+    <section class="panel stat">
+      <h2>"Not me" reports</h2>
+      <span class="big">@summary.reports()</span>
+      <span class="muted">from new sign-in alerts</span>
+    </section>
+  </div>
+
+  <section class="panel">
+    <h2>Most failed sign-ins by IP</h2>
+    @if(summary.sources().isEmpty()) {
+      <p class="muted">No failed sign-ins in the last 24 hours.</p>
+    } else {
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th scope="col">IP</th><th scope="col">Failures</th><th scope="col">Login IDs tried</th><th scope="col">Last seen</th></tr></thead>
+          <tbody>
+            @for(source <- summary.sources().asScala) {
+              <tr>
+                <td class="mono">@source.ip()</td>
+                <td>@source.failures()</td>
+                <td>@if(source.loginIds() > 1){@source.loginIds() different} else {@source.loginIds()}</td>
+                <td>@source.lastSeenTime()</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+    <p class="small">Many login IDs from one IP suggests password spraying; many failures on one login ID suggests a targeted guess. Both are already slowed by per-account lockout.</p>
+  </section>
+}

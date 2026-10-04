@@ -11,9 +11,11 @@ import com.lattice.oidc.models.AccountPage;
 import com.lattice.oidc.models.User;
 import com.lattice.oidc.security.AuditService;
 import com.lattice.oidc.security.LoginService;
+import com.lattice.oidc.security.SignInAlerts;
 import com.lattice.oidc.security.UserSessions;
 import com.lattice.oidc.security.UserSessions.LoginState;
 import com.lattice.oidc.stores.IdentityLinkStore;
+import com.lattice.oidc.stores.PasskeyStore;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -31,7 +33,8 @@ import play.mvc.Results;
  * The end-user's account page and the sign-in page for pages outside an authorization request.
  *
  * <ul>
- *   <li>{@code GET /account}: profile, apps with access, sign-in methods, waiting CIBA requests.
+ *   <li>{@code GET /account}: profile, sign-in alerts, apps with access, passkeys, sign-in methods,
+ *       active sessions and waiting CIBA requests.
  *   <li>{@code POST /account/login}: sign in, then go to the account page, the CIBA approval page
  *       or the operator console ({@code next}, one of a fixed set: no open redirects).
  *   <li>{@code POST /account/apps/:clientId/remove}: remove an app's access (Authlete client
@@ -52,6 +55,8 @@ public final class AccountController extends BaseController {
   private final IdentityProviders providers;
   private final CibaHandler ciba;
   private final LatticeConfig config;
+  private final PasskeyStore passkeys;
+  private final SignInAlerts alerts;
 
   @Inject
   public AccountController(
@@ -60,13 +65,17 @@ public final class AccountController extends BaseController {
       IdentityLinkStore links,
       IdentityProviders providers,
       CibaHandler ciba,
-      LatticeConfig config) {
+      LatticeConfig config,
+      PasskeyStore passkeys,
+      SignInAlerts alerts) {
     this.sessions = sessions;
     this.login = login;
     this.links = links;
     this.providers = providers;
     this.ciba = ciba;
     this.config = config;
+    this.passkeys = passkeys;
+    this.alerts = alerts;
   }
 
   public CompletionStage<Result> index(Http.Request request) {
@@ -105,7 +114,10 @@ public final class AccountController extends BaseController {
                   appsUnavailable,
                   signInMethods(user),
                   config.ciba().mode() == LatticeConfig.CibaMode.BUILTIN ? ciba.pendingFor(user.getSubject()).size() : 0,
-                  AdminController.isAdmin(user, config));
+                  AdminController.isAdmin(user, config),
+                  passkeys.forSubject(user.getSubject()),
+                  sessions.sessionsOf(user.getSubject()).size(),
+                  alerts.pending(user.getSubject(), current.get().sessionId()));
           return Responses.of(200, views.html.oidc.account.render(page, request).body(), Responses.HTML, null);
         });
   }
@@ -122,7 +134,7 @@ public final class AccountController extends BaseController {
             return loginPage(request, next, Optional.of(AuthorizationController.failureMessage(result)), 401);
           }
           Map<String, String> sessionOut = new HashMap<>();
-          sessions.login(result.user().get(), System.currentTimeMillis() / 1000L, null, sessionOut);
+          sessions.login(result.user().get(), System.currentTimeMillis() / 1000L, null, sessionOut, request, "Password");
           return sessions.apply(Results.seeOther(DESTINATIONS.get(next)), request, sessionOut);
         });
   }

@@ -104,6 +104,11 @@ public final class InMemoryUserStore implements UserStore {
   }
 
   @Override
+  public long count() {
+    return bySubject.size();
+  }
+
+  @Override
   public void save(User user) {
     bySubject.put(user.getSubject(), user);
   }

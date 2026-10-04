@@ -1,0 +1,44 @@
+@*
+ * Shell of the operator console: dark sidebar, then the page. `section` marks the current nav item
+ * (overview, clients or security).
+ *@
+@import com.lattice.oidc.models.UiSettings
+@(title: String, section: String)(content: Html)(implicit request: Http.Request)
+@ui = @{ UiSettings.of(request) }
+@item(key: String, label: String, href: String) = {
+  <li><a href="@href" @if(section == key){aria-current="page"}>@label</a></li>
+}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="color-scheme" content="light dark">
+    <title>@title · Operator console · @ui.brandName()</title>
+    <link rel="icon" type="image/svg+xml" href="@routes.Assets.versioned("images/favicon.svg")">
+    <link rel="stylesheet" href="@routes.Assets.versioned("stylesheets/oidc.css")">
+    <script src="@routes.Assets.versioned("javascripts/oidc.js")" defer></script>
+  </head>
+  <body class="console">
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div class="console-layout">
+      <nav class="console-nav" aria-label="Console">
+        <a class="brand" href="@com.lattice.oidc.controllers.routes.AdminController.index()">
+          <img src="@routes.Assets.versioned("images/logo.svg")" alt="">
+          <span>@ui.brandName()</span>
+          <span class="tag">Admin</span>
+        </a>
+        <ul>
+          @item("overview", "Overview", com.lattice.oidc.controllers.routes.AdminController.index().url)
+          @item("clients", "Clients", com.lattice.oidc.controllers.routes.ConsoleController.clients("", "all").url)
+          @item("security", "Security", com.lattice.oidc.controllers.routes.ConsoleController.security().url)
+          @item("account", "Your account", com.lattice.oidc.controllers.routes.AccountController.index().url)
+        </ul>
+      </nav>
+      <main id="main" class="console-main">
+        @content
+      </main>
+    </div>
+  </body>
+</html>

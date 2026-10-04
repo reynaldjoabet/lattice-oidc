@@ -67,6 +67,20 @@ public final class LatticeConfig {
   private final Duration backchannelLogoutTimeout;
   private final String pairwiseSecret;
   private final List<String> adminLoginIds;
+  private final Passkeys passkeys;
+  private final Mail mail;
+  private final Recovery recovery;
+
+  /** WebAuthn relying party settings. */
+  public record Passkeys(String rpId, List<String> origins, Duration offerInterval, String acr) {}
+
+  /** Outgoing email; without an SMTP host, messages are logged instead. */
+  public record Mail(
+      String from, Optional<String> smtpHost, int smtpPort, Optional<String> smtpUsername,
+      Optional<String> smtpPassword, boolean startTls) {}
+
+  /** Password reset links: lifetime and per-account rate limit. */
+  public record Recovery(Duration linkLifetime, int maxRequests, Duration window) {}
 
   @Inject
   public LatticeConfig(Config root) {
@@ -118,6 +132,25 @@ public final class LatticeConfig {
     obbDirectoryJwksUri = optionalString(lattice, "obb.directory-jwks-uri");
     backchannelLogoutTimeout = lattice.getDuration("logout.backchannel-timeout");
     adminLoginIds = stringList(lattice, "admin.login-ids");
+    passkeys =
+        new Passkeys(
+            lattice.getString("passkeys.rp-id"),
+            stringList(lattice, "passkeys.origins"),
+            lattice.getDuration("passkeys.offer-interval"),
+            lattice.getString("passkeys.acr"));
+    mail =
+        new Mail(
+            lattice.getString("mail.from"),
+            optionalString(lattice, "mail.smtp.host"),
+            lattice.getInt("mail.smtp.port"),
+            optionalString(lattice, "mail.smtp.username"),
+            optionalString(lattice, "mail.smtp.password"),
+            lattice.getBoolean("mail.smtp.starttls"));
+    recovery =
+        new Recovery(
+            lattice.getDuration("recovery.link-lifetime"),
+            lattice.getInt("recovery.max-requests"),
+            lattice.getDuration("recovery.window"));
     pairwiseSecret =
         optionalString(lattice, "pairwise-secret")
             .orElseGet(
@@ -226,6 +259,18 @@ public final class LatticeConfig {
 
   public Duration backchannelLogoutTimeout() {
     return backchannelLogoutTimeout;
+  }
+
+  public Passkeys passkeys() {
+    return passkeys;
+  }
+
+  public Mail mail() {
+    return mail;
+  }
+
+  public Recovery recovery() {
+    return recovery;
   }
 
   /** Login IDs allowed to open the operator console (empty: nobody). */

@@ -85,7 +85,7 @@ public final class CredentialOfferController extends BaseController {
               return page(request, 401, withError(form, Optional.empty(), "Invalid login ID or password."));
             }
             user = auth.user().get();
-            sessions.login(user, System.currentTimeMillis() / 1000L, null, sessionOut);
+            sessions.login(user, System.currentTimeMillis() / 1000L, null, sessionOut, request, "Password");
           }
           Optional<String> shown = Optional.of(user.displayName());
 

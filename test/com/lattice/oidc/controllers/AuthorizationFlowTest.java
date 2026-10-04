@@ -49,7 +49,8 @@ public class AuthorizationFlowTest {
               r.setResponseContent("https://client.example/cb?error=access_denied");
               return r;
             });
-    app = app(fake);
+    // No "create a passkey" offer between sign-in and consent here (PasskeyFlowTest covers it).
+    app = app(fake, Map.of("lattice.passkeys.offer-interval", "0s"));
     Helpers.start(app);
   }
 
@@ -198,9 +199,17 @@ public class AuthorizationFlowTest {
   @Test
   public void signInThenConsentIssuesForTheSignedInUser() {
     Result page = consentPage();
-    String signInHtml = contentAsString(page);
-    assertTrue("step 1 asks for credentials", signInHtml.contains("name=\"password\""));
-    assertTrue("step 1 does not ask for consent yet", !signInHtml.contains("name=\"authorized\""));
+    String identifierHtml = contentAsString(page);
+    assertTrue("step 1 asks for the email or login ID", identifierHtml.contains("name=\"identifier\""));
+    assertTrue("step 1 does not ask for the password yet", !identifierHtml.contains("name=\"password\""));
+    assertTrue("step 1 does not ask for consent yet", !identifierHtml.contains("name=\"authorized\""));
+
+    Result passwordStep =
+        route(app, decision(page, Map.of("ticket", "ticket-1", "identifier", "john", "identify", "true")));
+    assertEquals(200, passwordStep.status());
+    String passwordHtml = contentAsString(passwordStep);
+    assertTrue("step 2 asks for the password", passwordHtml.contains("name=\"password\""));
+    assertTrue("step 2 shows who is signing in", passwordHtml.contains("<strong>john</strong>"));
 
     Result consent = signIn(page, "john");
     assertEquals(200, consent.status());
@@ -266,7 +275,7 @@ public class AuthorizationFlowTest {
                 .session(session));
     assertEquals(200, switched.status());
     String html = contentAsString(switched);
-    assertTrue(html.contains("name=\"password\""));
+    assertTrue(html.contains("name=\"identifier\""));
     assertTrue(!html.contains("Signed in as"));
 
     // Approving without credentials now requires a login.

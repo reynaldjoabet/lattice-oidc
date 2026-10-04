@@ -1,0 +1,23 @@
+@*
+ * After a password sign-in: offer to create a passkey (at most once per lattice.passkeys.offer-interval).
+ * Screen 18 in docs/screens.
+ *@
+@import com.lattice.oidc.models.AuthorizationPage
+@import com.lattice.oidc.models.User
+@(page: AuthorizationPage, user: User)(implicit request: Http.Request)
+@layout("Sign in faster next time") {
+  <div class="status">
+    <span class="status-icon info">@icon("passkey", "")</span>
+    <h1>Sign in faster next time</h1>
+    <p class="lead">Create a passkey for <strong>@user.displayName()</strong>. You'll sign in with your fingerprint, face or screen lock instead of a password, and it can't be phished.</p>
+  </div>
+  <ul class="checklist">
+    <li>Works on this device, and on your other devices if your passkeys sync</li>
+    <li>Nothing to remember or type</li>
+    <li>Your password keeps working</li>
+  </ul>
+  <div class="stack">
+    <button type="button" class="primary" data-passkey="register" data-next="authz:@page.ticket()" data-passkey-only hidden>@icon("passkey")Create a passkey</button>
+    <a class="button" href="@com.lattice.oidc.controllers.routes.AuthorizationController.continueAuthorization(page.ticket())">Not now</a>
+  </div>
+}

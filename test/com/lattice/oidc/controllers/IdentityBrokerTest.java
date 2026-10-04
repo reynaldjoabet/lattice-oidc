@@ -53,7 +53,7 @@ public class IdentityBrokerTest {
         new GuiceApplicationBuilder()
             .configure(
                 "lattice.identity-providers.file",
-                upstream.configFile("upstream", CALLBACK).toString())
+                upstream.configFile("upstream", CALLBACK, List.of("partner.example")).toString())
             .overrides(
                 bind(AuthleteApi.class).toInstance(fake.api()),
                 bind(AuditService.Sink.class).toInstance(audit::add))
@@ -270,5 +270,37 @@ public class IdentityBrokerTest {
     Result r =
         route(app, withCsrf(post("/api/federation/link", Map.of("linkId", linkId, "link", "true", "password", "john"))));
     assertEquals(400, r.status());
+  }
+
+  @Test
+  public void workEmailsGoToTheirOrganisationsProvider() {
+    Result page = consentPage();
+    Result realm =
+        route(
+            app,
+            withCsrf(
+                    post(
+                        "/api/authorization/decision",
+                        Map.of("ticket", "ticket-1", "identifier", "Ana@Partner.Example", "identify", "true")))
+                .session(page.session().data()));
+    assertEquals(200, realm.status());
+    String html = contentAsString(realm);
+    assertTrue(html.contains("Continue with Upstream"));
+    assertTrue(html.contains("/api/federation/initiation/upstream?ticket=ticket-1"));
+    assertTrue("no password is asked for", !html.contains("name=\"password\""));
+  }
+
+  @Test
+  public void otherEmailsContinueToThePassword() {
+    Result page = consentPage();
+    Result password =
+        route(
+            app,
+            withCsrf(
+                    post(
+                        "/api/authorization/decision",
+                        Map.of("ticket", "ticket-1", "identifier", "someone@elsewhere.example", "identify", "true")))
+                .session(page.session().data()));
+    assertTrue(contentAsString(password).contains("name=\"password\""));
   }
 }

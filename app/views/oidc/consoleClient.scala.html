@@ -1,0 +1,96 @@
+@*
+ * Operator console: one client. Display details, redirect URIs, scopes, security settings, secret
+ * rotation and deletion. Screen 35 in docs/screens.
+ *@
+@import com.lattice.oidc.models.ConsoleClient
+@import scala.jdk.CollectionConverters._
+@import scala.jdk.OptionConverters._
+@(client: ConsoleClient, scopes: java.util.List[String], methods: java.util.List[String], problems: java.util.List[String], saved: Boolean)(implicit request: Http.Request)
+@consoleLayout(client.name(), "clients") {
+  <a class="back" href="@com.lattice.oidc.controllers.routes.ConsoleController.clients("", "all")">← Clients</a>
+  <div class="console-head">
+    <div class="client-title">
+      <span class="monogram" aria-hidden="true">@client.initials()</span>
+      <div>
+        <h1>@client.name()</h1>
+        <p class="mono muted">client_id @client.clientId()</p>
+      </div>
+    </div>
+    <div class="actions">
+      <a class="button" href="@com.lattice.oidc.controllers.routes.ConsoleController.client(client.id())">Discard</a>
+      <button type="submit" form="client-form" class="primary">Save changes</button>
+    </div>
+  </div>
+
+  @if(saved) { <div class="alert alert-success" role="status">@icon("check")<span>Changes saved.</span></div> }
+  @if(!problems.isEmpty()) {
+    <div class="alert alert-error" role="alert">@icon("alert")<ul class="plain">@for(problem <- problems.asScala) { <li>@problem</li> }</ul></div>
+  }
+
+  <form method="post" action="@com.lattice.oidc.controllers.routes.ConsoleController.update(client.id())" id="client-form" class="panels">
+    @helper.CSRF.formField
+    <section class="panel">
+      <h2>Shown to users</h2>
+      <div class="field"><label for="name">Name</label><input type="text" id="name" name="name" value="@client.name()" required></div>
+      <div class="field"><label for="website">Website</label><input type="url" id="website" name="website" value="@client.website()" placeholder="https://"></div>
+      <div class="field"><label for="privacyPolicy">Privacy policy</label><input type="url" id="privacyPolicy" name="privacyPolicy" value="@client.privacyPolicy()" placeholder="https://"></div>
+      <div class="field"><label for="logo">Logo URL</label><input type="url" id="logo" name="logo" value="@client.logo()" placeholder="https://"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Redirect URIs</h2>
+      <div class="field">
+        <label for="redirectUris">One per line</label>
+        <textarea id="redirectUris" name="redirectUris" rows="5" wrap="off" spellcheck="false">@client.redirectUrisText()</textarea>
+        <span class="hint">Exact match only. HTTPS required (http only for localhost); native apps may use a private-use scheme.</span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Access</h2>
+      <fieldset class="checks">
+        <legend>Scopes</legend>
+        @if(scopes.isEmpty()) { <p class="small">The service's scopes can't be loaded right now.</p> }
+        @for(scope <- scopes.asScala) {
+          <label class="check"><input type="checkbox" name="scope" value="@scope" @if(client.allows(scope)){checked}> <span class="mono">@scope</span></label>
+        }
+      </fieldset>
+      <p class="small">All selected means the client may request any scope the service supports, including new ones.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Security</h2>
+      <label class="check"><input type="checkbox" name="pkceRequired" value="true" @if(client.pkceRequired()){checked}> Require PKCE</label>
+      <label class="check"><input type="checkbox" name="parRequired" value="true" @if(client.parRequired()){checked}> Require pushed authorization requests (PAR)</label>
+      <label class="check"><input type="checkbox" name="dpopRequired" value="true" @if(client.dpopRequired()){checked}> Sender-constrained tokens (DPoP)</label>
+      <div class="field">
+        <label for="tokenAuthMethod">Client authentication</label>
+        <select id="tokenAuthMethod" name="tokenAuthMethod">
+          @for(method <- methods.asScala) { <option value="@method" @if(method == client.tokenAuthMethod()){selected}>@method</option> }
+        </select>
+      </div>
+    </section>
+  </form>
+
+  <div class="panels">
+    @if(client.confidential()) {
+      <section class="panel">
+        <h2>Client secret</h2>
+        <div class="kv"><span>••••••••••••</span>@for(modified <- client.modified().toScala) { <span>Changed @modified</span> }</div>
+        <p class="small">Secrets can't be shown again. Rotating creates a new secret and the current one stops working at once, so update the app straight away.</p>
+        <form method="post" action="@com.lattice.oidc.controllers.routes.ConsoleController.rotateSecret(client.id())" data-confirm="Rotate the secret of @client.name()? The current secret stops working immediately.">
+          @helper.CSRF.formField
+          <button type="submit">Rotate secret</button>
+        </form>
+      </section>
+    }
+    <section class="panel danger-panel">
+      <h2>Delete client</h2>
+      <p class="small">Revokes every token issued to @client.name() and signs users out of it. This can't be undone.</p>
+      <form method="post" action="@com.lattice.oidc.controllers.routes.ConsoleController.delete(client.id())" data-confirm="Delete @client.name()? This can't be undone.">
+        @helper.CSRF.formField
+        <button type="submit" class="destructive">Delete @client.name()</button>
+      </form>
+    </section>
+  </div>
+}

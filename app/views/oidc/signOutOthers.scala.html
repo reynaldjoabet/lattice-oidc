@@ -1,0 +1,30 @@
+@*
+ * Sign out everywhere else: the apps listed get a back-channel logout. Screen 26 in docs/screens.
+ *@
+@import com.lattice.oidc.models.Initials
+@import scala.jdk.CollectionConverters._
+@(count: Int, apps: java.util.List[String])(implicit request: Http.Request)
+@layout("Sign out other sessions") {
+  <div class="intro">
+    <h1>Sign out of @count other @if(count == 1){session} else {sessions}?</h1>
+    <p class="lead">You'll stay signed in here. Everywhere else, you'll need to sign in again.</p>
+  </div>
+  @if(!apps.isEmpty()) {
+    <section>
+      <h2 class="section">These apps will be told to sign you out</h2>
+      <ul class="rows">
+        @for(app <- apps.asScala) {
+          <li><span class="monogram sm" aria-hidden="true">@Initials.of(app)</span><span class="grow">@app</span></li>
+        }
+      </ul>
+    </section>
+  }
+  <form method="post" action="@com.lattice.oidc.controllers.routes.AccountSecurityController.endOthers()" class="stack">
+    @helper.CSRF.formField
+    <label class="check"><input type="checkbox" name="changePassword" value="true"> Also change my password: I think someone else has it</label>
+    <div class="buttons">
+      <a class="button" href="@com.lattice.oidc.controllers.routes.AccountSecurityController.sessions()">Cancel</a>
+      <button type="submit" class="destructive">Sign out others</button>
+    </div>
+  </form>
+}

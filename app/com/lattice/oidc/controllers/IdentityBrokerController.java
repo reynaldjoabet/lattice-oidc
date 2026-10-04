@@ -259,7 +259,7 @@ public final class IdentityBrokerController extends BaseController {
       User user,
       String providerId) {
     Map<String, String> sessionOut = new HashMap<>();
-    sessions.login(user, System.currentTimeMillis() / 1000L, null, sessionOut);
+    sessions.login(user, System.currentTimeMillis() / 1000L, null, sessionOut, request, providers.get(providerId).map(provider -> provider.name()).orElse(providerId));
     audit.record(
         request,
         AuditService.Event.BROKERED_LOGIN,

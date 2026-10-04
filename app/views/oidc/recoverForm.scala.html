@@ -1,0 +1,20 @@
+@*
+ * Forgotten password: ask for a reset link. Screen 30 in docs/screens.
+ *@
+@(next: String)(implicit request: Http.Request)
+@layout("Reset your password") {
+  <div class="intro">
+    <h1>Reset your password</h1>
+    <p class="lead">Enter the email or login ID of your account. We'll email you a link to choose a new password.</p>
+  </div>
+  <form method="post" action="@com.lattice.oidc.controllers.routes.RecoveryController.send()" class="stack">
+    @helper.CSRF.formField
+    <input type="hidden" name="next" value="@next">
+    <div class="field">
+      <label for="identifier">Email or login ID</label>
+      <input type="text" id="identifier" name="identifier" autocomplete="username" autocapitalize="off" spellcheck="false" required autofocus>
+    </div>
+    <button type="submit" class="primary">Send reset link</button>
+  </form>
+  <a class="button" href="@com.lattice.oidc.controllers.PasskeyController.url(next)">Back to sign in</a>
+}

@@ -1,0 +1,13 @@
+@*
+ * Password changed. Screen 33 in docs/screens.
+ *@
+@(signInUrl: String, signedOutEverywhere: Boolean)(implicit request: Http.Request)
+@layout("Password changed") {
+  <div class="status">
+    <span class="status-icon success">@icon("check", "")</span>
+    <h1>Password changed</h1>
+    <p class="lead">@if(signedOutEverywhere) {You've been signed out on your other devices and apps. }Sign in again with your new password.</p>
+  </div>
+  <a class="button primary" href="@signInUrl">Sign in</a>
+  <p class="muted center">Tip: <a href="@com.lattice.oidc.controllers.routes.AccountController.index()">add a passkey</a> so you don't need a password next time.</p>
+}

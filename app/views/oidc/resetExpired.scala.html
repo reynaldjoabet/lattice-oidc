@@ -1,0 +1,12 @@
+@*
+ * A reset link that has expired, was already used, or was replaced by a newer one.
+ *@
+@()(implicit request: Http.Request)
+@layout("Link expired") {
+  <div class="status">
+    <span class="status-icon warning">@icon("clock", "")</span>
+    <h1>This link has expired</h1>
+    <p class="lead">Reset links work once, for a limited time, and only the newest one works. Ask for a new link.</p>
+  </div>
+  <a class="button primary" href="@com.lattice.oidc.controllers.routes.RecoveryController.form("account")">Send a new link</a>
+}

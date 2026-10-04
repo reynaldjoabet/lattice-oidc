@@ -39,7 +39,15 @@ public final class AuditService {
     CLIENT_DELETED,
     APP_ACCESS_REMOVED,
     CIBA_APPROVED,
-    CIBA_DENIED
+    CIBA_DENIED,
+    PASSKEY_ADDED,
+    PASSKEY_REMOVED,
+    STEP_UP,
+    SESSION_ENDED,
+    SIGN_IN_REPORTED,
+    PASSWORD_RESET_REQUESTED,
+    PASSWORD_CHANGED,
+    CLIENT_SECRET_ROTATED
   }
 
   /** How many recent events the operator console shows (kept in memory, newest first). */
@@ -65,10 +73,12 @@ public final class AuditService {
   }
 
   private final Sink sink;
+  private final SecurityStats stats;
 
   @Inject
-  public AuditService(Sink sink) {
+  public AuditService(Sink sink, SecurityStats stats) {
     this.sink = sink;
+    this.stats = stats;
   }
 
   /**
@@ -91,6 +101,7 @@ public final class AuditService {
       }
     }
     sink.write(record);
+    stats.observe(event, request.remoteAddress(), record.get("login_id"));
     synchronized (recent) {
       recent.addFirst(java.util.Collections.unmodifiableMap(record));
       while (recent.size() > RECENT_LIMIT) {

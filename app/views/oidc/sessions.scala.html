@@ -1,0 +1,40 @@
+@*
+ * Where the account is signed in: browser and device, last activity, IP, sign-in method and the
+ * apps used there. No locations (they would be guesses from IP addresses). Screen 25 in docs/screens.
+ *@
+@import com.lattice.oidc.controllers.AccountSecurityController.SessionView
+@import scala.jdk.CollectionConverters._
+@(views: java.util.List[SessionView])(implicit request: Http.Request)
+@back = {
+  <a class="link" href="@com.lattice.oidc.controllers.routes.AccountController.index()">Back to account</a>
+}
+@layout("Where you're signed in", aside = back) {
+  <div class="intro">
+    <h1>Where you're signed in</h1>
+    <p class="lead">Sign out of any session you don't recognise. Apps you used there are signed out too.</p>
+  </div>
+  <ul class="rows">
+    @for(view <- views.asScala) {
+      <li>
+        <span class="tile" aria-hidden="true">@icon(if (view.session().device().contains("iPhone") || view.session().device().contains("Android")) "phone" else "laptop", "")</span>
+        <span class="grow">
+          <strong>@view.session().device()</strong>
+          <span class="meta">@if(view.current()){Active now} else {@view.session().lastActive()}@if(!view.current()){ · IP @view.session().ip()} · signed in with @view.session().method().toLowerCase match { case "passkey" => {a passkey} case "password" => {a password} case other => {@other} }</span>
+          @if(!view.apps().isEmpty()) { <span class="meta">Apps: @view.apps().asScala.mkString(", ")</span> }
+        </span>
+        @if(view.current()) {
+          <span class="badge">This browser</span>
+        } else {
+          <form method="post" action="@com.lattice.oidc.controllers.routes.AccountSecurityController.endSession(view.session().sessionId())">
+            @helper.CSRF.formField
+            <button type="submit" class="danger" aria-label="Sign out @view.session().device()">Sign out</button>
+          </form>
+        }
+      </li>
+    }
+  </ul>
+  @if(views.size() > 1) {
+    <a class="button danger-outline" href="@com.lattice.oidc.controllers.routes.AccountSecurityController.othersPage()">Sign out everywhere else</a>
+  }
+  <p class="small">Locations aren't shown: they'd be guesses from IP addresses. Check the browser, device and apps instead.</p>
+}

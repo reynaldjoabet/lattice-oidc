@@ -1,0 +1,17 @@
+@*
+ * Reset link requested. The same page whether or not an account matched, so it reveals nothing.
+ * Screen 31 in docs/screens.
+ *@
+@(next: String, lifetimeMinutes: Long)(implicit request: Http.Request)
+@layout("Check your email") {
+  <div class="status">
+    <span class="status-icon info">@icon("mail", "")</span>
+    <h1>Check your email</h1>
+    <p class="lead">If an account matches what you entered, we've sent a link to reset its password. The link works once and expires in @lifetimeMinutes minutes.</p>
+  </div>
+  <ul class="bullets">
+    <li>Nothing yet? Check spam, or try again in a few minutes.</li>
+    <li>Didn't ask for this? Ignore the email: your password stays the same.</li>
+  </ul>
+  <a class="button" href="@com.lattice.oidc.controllers.PasskeyController.url(next)">Back to sign in</a>
+}

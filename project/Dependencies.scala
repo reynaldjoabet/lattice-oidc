@@ -64,6 +64,12 @@ object Dependencies {
     // --- UI ---
     val qrcodegen = "1.8.0"
 
+    // --- Passkeys ---
+    val webauthn = "2.10.0"
+
+    // --- Mail ---
+    val angusMail = "2.0.5"
+
     // --- Observability ---
     val datadog = "2.60.0"
     val kamon   = "2.7.7"
@@ -246,6 +252,12 @@ object Dependencies {
 
   // UI: QR codes for credential offers (MIT, no dependencies)
   lazy val qrcodegen = "io.nayuki" % "qrcodegen" % Version.qrcodegen
+
+  // Passkeys: WebAuthn relying party (Yubico, BSD-2)
+  lazy val webauthn = "com.yubico" % "webauthn-server-core" % Version.webauthn
+
+  // Mail: SMTP for password-reset links (Jakarta Mail implementation, EPL-2.0 / GPL-2.0 with CPE)
+  lazy val angusMail = "org.eclipse.angus" % "angus-mail" % Version.angusMail
 
   // Cache
   lazy val caffeine =

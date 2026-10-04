@@ -18,4 +18,9 @@ public interface UserStore {
 
   /** Creates or replaces an account (used for users provisioned through ID federation). */
   void save(User user);
+
+  /** Number of accounts (for the operator console). */
+  default long count() {
+    return 0;
+  }
 }

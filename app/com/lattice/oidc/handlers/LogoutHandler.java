@@ -178,6 +178,25 @@ public final class LogoutHandler {
     }
   }
 
+  /**
+   * Ends every session of the account except {@code keepSessionId} (null ends them all), each with
+   * back-channel logout to its apps.
+   *
+   * @return the client identifiers that were told to sign out
+   */
+  public java.util.Set<String> endSessionsOf(com.lattice.oidc.models.User user, String keepSessionId) {
+    java.util.Set<String> clients = new java.util.TreeSet<>();
+    for (UserSessions.SessionInfo session : sessions.sessionsOf(user.getSubject())) {
+      if (session.sessionId().equals(keepSessionId)) {
+        continue;
+      }
+      clients.addAll(session.clients());
+      endSession(new LoginState(user, session.sessionId(), 0L, null));
+      sessions.end(session.sessionId());
+    }
+    return clients;
+  }
+
   /** Exact match against post_logout_redirect_uris (custom client metadata), else redirect_uris. */
   private boolean allowedRedirect(String clientId, String uri) {
     Client client;

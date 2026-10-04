@@ -1,6 +1,6 @@
 @*
- * The end-user's account: profile, apps with access (removable), sign-in methods and waiting
- * CIBA requests. Screen 11 in docs/screens.
+ * The end-user's account: sign-in alerts, profile, apps with access (removable), passkeys, other
+ * sign-in methods, active sessions and waiting CIBA requests. Screens 11, 20 and 29 in docs/screens.
  *@
 @import com.lattice.oidc.models.AccountPage
 @import scala.jdk.CollectionConverters._
@@ -17,6 +17,21 @@
       @for(email <- page.email().toScala) { <p class="muted">@email</p> }
     </div>
   </div>
+
+  @for(alert <- page.alerts().asScala) {
+    <section class="alert-panel" aria-labelledby="alert-@alert.id()">
+      <div class="alert-panel-head">@icon("shield")<h2 id="alert-@alert.id()">New sign-in to your account</h2></div>
+      <p>@alert.device() · @alert.when() · IP @alert.ip() · with @alert.method().toLowerCase match { case "password" => {your password} case "passkey" => {a passkey} case other => {@other} }</p>
+      <form method="post" action="@com.lattice.oidc.controllers.routes.AccountSecurityController.answerAlert(alert.id())">
+        @helper.CSRF.formField
+        <div class="buttons wrap">
+          <button type="submit" name="answer" value="yes">Yes, it was me</button>
+          <button type="submit" name="answer" value="no" class="destructive">No, secure my account</button>
+        </div>
+      </form>
+      <p class="small">"No" signs that session out, ends its apps' access and asks you to change your password.</p>
+    </section>
+  }
 
   @if(page.waitingRequests() > 0) {
     <div class="alert alert-warning" role="status">
@@ -56,11 +71,44 @@
   </section>
 
   <section>
-    <h2 class="section">Sign-in methods</h2>
+    <div class="section-head">
+      <h2 class="section">Passkeys</h2>
+      <button type="button" class="link" data-passkey="register" data-next="account" data-passkey-only hidden>+ Add a passkey</button>
+    </div>
+    <ul class="rows">
+      @if(page.passkeys().isEmpty()) {
+        <li class="empty">No passkeys yet. A passkey lets you sign in with your fingerprint, face or screen lock instead of a password.</li>
+      }
+      @for(passkey <- page.passkeys().asScala) {
+        <li>
+          <span class="tile" aria-hidden="true">@icon(passkey.kind() match { case "Security key" => "key" case _ => "laptop" }, "")</span>
+          <span class="grow">
+            <strong>@passkey.name()</strong>
+            <span class="meta">@passkey.kind() · @passkey.lastUsed()</span>
+          </span>
+          <a class="manage" href="@com.lattice.oidc.controllers.routes.PasskeyController.removePage(passkey.id())" aria-label="Manage @passkey.name()">Manage</a>
+        </li>
+      }
+    </ul>
+    @if(page.passkeys().size() == 1) {
+      <div class="alert alert-info">@icon("shield")<span>Apps that ask for phishing-resistant sign-in will ask for a passkey. Keep at least two, in case you lose a device.</span></div>
+    }
+  </section>
+
+  <section>
+    <h2 class="section">Other sign-in methods</h2>
     <ul class="rows">
       @for(method <- page.signInMethods().asScala) {
         <li><span class="grow"><strong>@method.name()</strong></span><span class="meta">@method.detail()</span></li>
       }
+    </ul>
+  </section>
+
+  <section>
+    <h2 class="section">Security</h2>
+    <ul class="rows nav-rows">
+      <li><a href="@com.lattice.oidc.controllers.routes.AccountSecurityController.sessions()"><span class="grow">Where you're signed in</span><span class="meta">@page.sessionCount() @if(page.sessionCount() == 1){session} else {sessions}</span></a></li>
+      <li><a href="@com.lattice.oidc.controllers.routes.AccountSecurityController.passwordForm()"><span class="grow">Change password</span></a></li>
     </ul>
   </section>
 

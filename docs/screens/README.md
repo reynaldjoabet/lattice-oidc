@@ -2,7 +2,7 @@
 
 Designs for every end-user and operator screen of Lattice. The screenshots below are rendered from the design canvas; the editable source lives in the canvas ([Lattice OIDC screens](https://claude.ai/artifact/CRds8ufKFuZjJGn3n1aqBB), private until shared).
 
-Screens 01–15 are implemented; the last column of their tables names the template and endpoint behind each one. Screens 16–38 are designs for the next features and are not built yet.
+Every screen except 37 (Shared Signals) is implemented; the last column of each table names the template and endpoint behind it. Screen 37 is a design for a later feature.
 
 ## Design language
 
@@ -28,8 +28,8 @@ Rules that every screen follows:
 
 | Screen | Purpose | Flow | Implemented in |
 | ------ | ------- | ---- | ------ |
-| 01 Sign in | Password sign-in plus "continue with" upstream providers | Authorization code (`/api/authorization`), identity brokering | `signIn.scala.html` (step 1 of 2) |
-| 02 Sign in: locked | Shown after `lattice.login.max-failures` wrong passwords | Same | `signIn.scala.html`, error state |
+| 01 Sign in | Password sign-in plus "continue with" upstream providers | Authorization code (`/api/authorization`), identity brokering | `signIn.scala.html` (email or login ID), then `signInPassword.scala.html` |
+| 02 Sign in: locked | Shown after `lattice.login.max-failures` wrong passwords | Same | `signInPassword.scala.html`, error state |
 | 03 Consent | What the app gets, in plain language; switch account | Authorization decision (`/api/authorization/decision`) | `authorization.scala.html` (step 2 of 2) |
 | 04 Link accounts | A brokered sign-in matches an existing account's email; confirm with the password | Identity brokering callback, `POST /api/federation/link` | `accountLink.scala.html`, `IdentityLinkStore` |
 
@@ -100,15 +100,15 @@ Rules that every screen follows:
 
 <img src="15-operator-console.png" width="720" alt="15 Operator console">
 
-## Passkeys (designed)
+## Passkeys
 
-| Screen | Purpose |
-| ------ | ------- |
-| 16 Sign in with a passkey | The Login ID field offers saved passkeys (WebAuthn conditional UI); password and providers stay one click away |
-| 17 Passkey prompt | Waiting for Touch ID, Face ID, Windows Hello or a security key, with a password fallback |
-| 18 Offer a passkey | After a password sign-in, at most once a week: benefits, create or skip |
-| 19 Passkey created | Success, with an editable name |
-| 20 Account: passkeys | Each passkey with type (synced or device-only), last use and Manage |
+| Screen | Purpose | Implemented in |
+| ------ | ------- | ------ |
+| 16 Sign in with a passkey | The Login ID field offers saved passkeys (WebAuthn conditional UI); password and providers stay one click away | `signIn.scala.html`, `passkeys.js`, `POST /passkeys/assertion/options` and `/passkeys/assertion` |
+| 17 Passkey prompt | Waiting for Touch ID, Face ID, Windows Hello or a security key, with a password fallback | `passkeyWaiting.scala.html` (in the layout, shown by `passkeys.js`) |
+| 18 Offer a passkey | After a password sign-in, at most once per `lattice.passkeys.offer-interval`: benefits, create or skip | `passkeyOffer.scala.html`, `POST /passkeys/registration/options` and `/passkeys/registration` |
+| 19 Passkey created | Success, with an editable name | `passkeyCreated.scala.html`, `POST /passkeys/name` |
+| 20 Account: passkeys | Each passkey with type (synced or device-only), last use and Manage | `account.scala.html`, `PasskeyStore` |
 
 <table>
   <tr>
@@ -125,14 +125,14 @@ Rules that every screen follows:
   </tr>
 </table>
 
-## Step-up and secure approvals (designed)
+## Step-up and secure approvals
 
-| Screen | Purpose |
-| ------ | ------- |
-| 21 Remove a passkey | Confirm with another passkey or the password first |
-| 22 Step-up verification | An app requires phishing-resistant sign-in; confirm with a passkey without signing in again |
-| 23 Approve a payment | CIBA with RFC 9396 payment details in plain words, approved with a passkey |
-| 24 Passkey didn't work | Nothing changed; try again or use a password |
+| Screen | Purpose | Implemented in |
+| ------ | ------- | ------ |
+| 21 Remove a passkey | Confirm with another passkey or the password first | `passkeyRemove.scala.html`, `/account/passkeys/:id/remove` |
+| 22 Step-up verification | An app requires phishing-resistant sign-in (essential `acr` `phr`); confirm with a passkey without signing in again | `stepUp.scala.html`, `AuthorizationController` |
+| 23 Approve a payment | CIBA with RFC 9396 payment details in plain words, approved with a passkey that signs those details | `cibaApproval.scala.html`, `Passkeys.startApproval` |
+| 24 Passkey didn't work | Nothing changed; try again or use a password | `passkeyFailed.scala.html`, `GET /passkeys/failed` |
 
 <table>
   <tr>
@@ -143,15 +143,15 @@ Rules that every screen follows:
   </tr>
 </table>
 
-## Sessions and identifier-first sign-in (designed)
+## Sessions and identifier-first sign-in
 
-| Screen | Purpose |
-| ------ | ------- |
-| 25 Where you're signed in | Sessions with browser, device, last activity, IP and apps; sign out one or all others |
-| 26 Sign out everywhere | Lists the apps told to sign out (back-channel logout); optional password change |
-| 27 Identifier-first sign-in | Email or login ID first |
-| 28 Continue to your organisation | Work email domains go straight to their identity provider |
-| 29 New sign-in alert | "Was this you?" on the account page; "No" ends that session |
+| Screen | Purpose | Implemented in |
+| ------ | ------- | ------ |
+| 25 Where you're signed in | Sessions with browser, device, last activity, IP and apps; sign out one or all others | `sessions.scala.html`, `GET /account/sessions`, `POST /account/sessions/:id/end` |
+| 26 Sign out everywhere | Lists the apps told to sign out (back-channel logout); optional password change | `signOutOthers.scala.html`, `/account/sessions/others`, `LogoutHandler.endSessionsOf` |
+| 27 Identifier-first sign-in | Email or login ID first | `signIn.scala.html` (`identify`), then `signInPassword.scala.html` |
+| 28 Continue to your organisation | Work email domains (`domains` in the identity providers file) go straight to their identity provider | `homeRealm.scala.html`, `IdentityProviders.forEmail` |
+| 29 New sign-in alert | "Was this you?" on the account page; "No" ends that session | `account.scala.html`, `SignInAlerts`, `POST /account/alerts/:id` |
 
 <table>
   <tr>
@@ -168,14 +168,14 @@ Rules that every screen follows:
   </tr>
 </table>
 
-## Account recovery (designed)
+## Account recovery
 
-| Screen | Purpose |
-| ------ | ------- |
-| 30 Reset your password | Email or login ID |
-| 31 Check your email | Same message whether or not the account exists |
-| 32 Choose a new password | Length and common-password checks; signs out everywhere else by default |
-| 33 Password changed | Confirmation, with a passkey suggestion |
+| Screen | Purpose | Implemented in |
+| ------ | ------- | ------ |
+| 30 Reset your password | Email or login ID | `recoverForm.scala.html`, `GET /account/recover` |
+| 31 Check your email | Same message whether or not the account exists; links are single-use, hashed, rate-limited (`lattice.recovery`) | `recoverSent.scala.html`, `RecoveryService`, `Mailer` (SMTP, or the log without `lattice.mail.smtp.host`) |
+| 32 Choose a new password | Length and common-password checks; signs out everywhere else by default | `resetForm.scala.html`, `PasswordPolicy`, `/account/reset` |
+| 33 Password changed | Confirmation, with a passkey suggestion | `resetDone.scala.html` (signed-in changes: `changePassword.scala.html`, `/account/password`) |
 
 <table>
   <tr>
@@ -186,15 +186,15 @@ Rules that every screen follows:
   </tr>
 </table>
 
-## Operator console: clients, signals and security (designed)
+## Operator console: clients, signals and security
 
-| Screen | Purpose |
-| ------ | ------- |
-| 34 Clients | Registered applications, filterable by how they were registered |
-| 35 Client detail | Display details, redirect URIs, scopes, security settings, secret rotation, delete |
-| 36 Secret rotated | The new secret is shown once; the old one works for a grace period |
-| 37 Shared Signals | Apps receiving CAEP/RISC security events, and what triggers each event |
-| 38 Security | Failed sign-ins, locked accounts, passkey adoption, top failing IPs |
+| Screen | Purpose | Implemented in |
+| ------ | ------- | ------ |
+| 34 Clients | Registered applications, filterable by how they were registered | `consoleClients.scala.html`, `GET /admin/clients` |
+| 35 Client detail | Display details, redirect URIs, scopes, security settings, secret rotation, delete | `consoleClient.scala.html`, `/admin/clients/:id` (Authlete client update and delete APIs) |
+| 36 Secret rotated | The new secret is shown once; Authlete replaces the old one immediately, so the page says to update the app now (the design's grace period isn't offered) | `consoleSecret.scala.html`, `POST /admin/clients/:id/secret` |
+| 37 Shared Signals | Apps receiving CAEP/RISC security events, and what triggers each event | Designed only |
+| 38 Security | Failed sign-ins, locked accounts, passkey adoption, top failing IPs | `consoleSecurity.scala.html`, `SecurityStats` (fed by the audit trail) |
 
 <img src="34-console-clients.png" width="720" alt="34 Console: clients">
 

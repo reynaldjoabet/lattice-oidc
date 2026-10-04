@@ -43,8 +43,14 @@ public final class AuthorizationHandler {
    * @param sessionId The session ID of the end-user's authentication session. This value is needed for the
    *     {@code sid} claim (back-channel logout) and when "OpenID Connect Native SSO for Mobile Apps
    *     1.0" (a.k.a. "Native SSO") needs to be supported.
+   * @param acr The ACR the session was authenticated with (a passkey sign-in or step-up), or null
+   *     for a password sign-in.
    */
-  public record Grant(User user, long authTime, String sessionId) {}
+  public record Grant(User user, long authTime, String sessionId, String acr) {
+    public Grant(User user, long authTime, String sessionId) {
+      this(user, authTime, sessionId, null);
+    }
+  }
 
   private final Provider<AuthleteApi> api;
   private final PairwiseSubjects pairwise;
@@ -67,16 +73,18 @@ public final class AuthorizationHandler {
    * The ACR (Authentication Context Class Reference) of the end-user authentication: the first
    * requested ACR that this server's login satisfies.
    *
-   * <p>If no ACR is requested, no check is needed. If one of the requested ACRs must be satisfied
-   * (essential) and none of them is, the request fails with {@code ACR_NOT_SATISFIED}. If ACR was not
-   * requested as essential, it is not necessary to raise an error.
+   * <p>A requested ACR is satisfied by the session's own ACR (a passkey sign-in or step-up) or, for
+   * any sign-in, by one listed in {@code lattice.login.satisfied-acrs}. If no ACR is requested, no
+   * check is needed. If one of the requested ACRs must be satisfied (essential) and none of them
+   * is, the request fails with {@code ACR_NOT_SATISFIED}. If ACR was not requested as essential, it
+   * is not necessary to raise an error.
    */
-  public String acr(String ticket, String[] requestedAcrs, boolean essential) {
+  public String acr(String ticket, String[] requestedAcrs, boolean essential, String sessionAcr) {
     if (requestedAcrs == null || requestedAcrs.length == 0) {
       return null;
     }
     for (String acr : requestedAcrs) {
-      if (config.satisfiedAcrs().contains(acr)) {
+      if (acr.equals(sessionAcr) || config.satisfiedAcrs().contains(acr)) {
         return acr;
       }
     }
@@ -92,7 +100,7 @@ public final class AuthorizationHandler {
     if (interaction.requestedSubject() != null && !interaction.requestedSubject().equals(user.getSubject())) {
       return fail(interaction.ticket(), AuthorizationFailRequest.Reason.DIFFERENT_SUBJECT);
     }
-    String acr = acr(interaction.ticket(), interaction.acrs(), interaction.acrEssential());
+    String acr = acr(interaction.ticket(), interaction.acrs(), interaction.acrEssential(), grant.acr());
 
     // Collect claim values. Values of verified claims ("verified_claims", OpenID Connect for
     // Identity Assurance 1.0) are added when the "id_token" property of the "claims" request

@@ -1,0 +1,52 @@
+@*
+ * Operator console: registered clients, searchable by name or client ID and filterable by how they
+ * were registered. Screen 34 in docs/screens.
+ *@
+@import com.lattice.oidc.models.ConsoleClient
+@import scala.jdk.CollectionConverters._
+@(clients: java.util.List[ConsoleClient], query: String, registration: String, truncated: Boolean)(implicit request: Http.Request)
+@consoleLayout("Clients", "clients") {
+  <div class="console-head">
+    <div>
+      <h1>Clients</h1>
+      <p class="muted">Applications registered with this service</p>
+    </div>
+  </div>
+
+  <form method="get" action="@com.lattice.oidc.controllers.routes.ConsoleController.clients()" class="filters" role="search">
+    <label class="visually-hidden" for="query">Search clients</label>
+    <input type="search" id="query" name="query" value="@query" placeholder="Search by name or client ID">
+    <label class="visually-hidden" for="registration">Registered via</label>
+    <select id="registration" name="registration">
+      <option value="all" @if(registration == "all"){selected}>All registrations</option>
+      <option value="console" @if(registration == "console"){selected}>Console</option>
+      <option value="dynamic" @if(registration == "dynamic"){selected}>Dynamic (RFC 7591)</option>
+    </select>
+    <button type="submit">Filter</button>
+  </form>
+
+  <section class="panel">
+    @if(clients.isEmpty()) {
+      <p class="muted">No clients match.</p>
+    } else {
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th scope="col">Client</th><th scope="col">Client ID</th><th scope="col">Type</th><th scope="col">Grants</th><th scope="col">Registered via</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+          <tbody>
+            @for(client <- clients.asScala) {
+              <tr>
+                <td><span class="client-cell"><span class="monogram sm" aria-hidden="true">@client.initials()</span><strong>@client.name()</strong></span></td>
+                <td class="mono">@client.clientId()</td>
+                <td>@client.kind()</td>
+                <td><span class="chips">@for(grant <- client.grants().asScala) { <span class="tag-event">@grant</span> }</span></td>
+                <td>@client.registeredVia()</td>
+                <td><a href="@com.lattice.oidc.controllers.routes.ConsoleController.client(client.id())" aria-label="Open @client.name()">Open</a></td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+    @if(truncated) { <p class="small">Showing the first 200 clients; search to narrow down.</p> }
+  </section>
+}

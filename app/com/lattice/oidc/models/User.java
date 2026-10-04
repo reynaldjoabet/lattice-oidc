@@ -74,6 +74,16 @@ public final class User implements com.authlete.common.types.User {
     return verifiedClaims;
   }
 
+  /** The same account with a new password hash. */
+  public User withPasswordHash(String newPasswordHash) {
+    return new User(subject, loginId, newPasswordHash, claims, attributes, verifiedClaims);
+  }
+
+  /** The email claim, if the account has one. */
+  public java.util.Optional<String> email() {
+    return claims.get("email") instanceof String value ? java.util.Optional.of(value) : java.util.Optional.empty();
+  }
+
   /** Display name for UI purposes. */
   public String displayName() {
     Object name = claims.get("name");
