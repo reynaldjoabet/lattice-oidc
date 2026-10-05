@@ -358,7 +358,7 @@ public final class PasskeyController extends BaseController {
           String password = Requests.first(Requests.form(request), "password");
           if (!confirmed && password != null && !password.isEmpty() && user.loginId() != null) {
             LoginService.Result check = login.authenticate(user.loginId(), password, request.remoteAddress());
-            auditLogin(request, user.loginId(), check);
+            auditPasswordConfirmation(request, user.getSubject(), check);
             if (check.outcome() != LoginService.Outcome.SUCCESS) {
               return removeView(request, current.get(), passkey.get(), Optional.of(AuthorizationController.failureMessage(check)), 401);
             }

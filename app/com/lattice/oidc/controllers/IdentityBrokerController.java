@@ -29,6 +29,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import play.mvc.Http;
 import play.mvc.Result;
+import play.mvc.Results;
 
 /**
  * Identity brokering: lets end-users sign in to Lattice with an existing account at an upstream
@@ -78,6 +79,8 @@ public final class IdentityBrokerController extends BaseController {
   private final UserStore users;
   private final IdentityLinkStore links;
   private final LoginService login;
+
+  @Inject private com.lattice.oidc.stores.AppConsentStore appConsents;
 
   @Inject
   public IdentityBrokerController(
@@ -294,6 +297,16 @@ public final class IdentityBrokerController extends BaseController {
     Optional<Result> gated = flow.gate(user, "authz:" + ticket);
     if (gated.isPresent()) {
       return sessions.apply(gated.get(), request, sessionOut);
+    }
+    // Approved before: the authorization continues without the consent page (the continue step
+    // decides, as for every other sign-in).
+    if (!interaction.consentPrompted()
+        && interaction.approvalCanBeRemembered()
+        && appConsents.covers(user.getSubject(), interaction.clientId(), interaction.scopeSet(), interaction.claimSet())) {
+      return sessions.apply(
+          Results.seeOther(com.lattice.oidc.controllers.routes.AuthorizationController.continueAuthorization(ticket).url()),
+          request,
+          sessionOut);
     }
     return sessions.apply(Pages.authorization(request, page, 200), request, sessionOut);
   }

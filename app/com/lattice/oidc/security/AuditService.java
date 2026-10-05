@@ -25,13 +25,23 @@ public final class AuditService {
 
   /** Security events. */
   public enum Event {
+    /** Signed in; {@code method} says how (password, password + totp, passkey, ...). */
     LOGIN_SUCCEEDED,
+    /** A wrong password or passkey; a wrong second factor is {@link #SECOND_FACTOR_FAILED}. */
     LOGIN_FAILED,
     LOGIN_LOCKED,
+    /** The password was right; the sign-in waits for the second factor ({@code factor}). */
+    SECOND_FACTOR_REQUIRED,
+    /** A wrong second factor; {@code factor} is totp or recovery_code. */
+    SECOND_FACTOR_FAILED,
+    /** A signed-in user confirmed their password before a sensitive change. */
+    PASSWORD_CONFIRMED,
     BROKERED_LOGIN,
     BROKERED_LOGIN_FAILED,
     ACCOUNT_LINKED,
     CONSENT_GRANTED,
+    /** Issued without the consent page: the account had already approved everything requested. */
+    CONSENT_REUSED,
     CONSENT_DENIED,
     DEVICE_AUTHORIZED,
     DEVICE_DENIED,

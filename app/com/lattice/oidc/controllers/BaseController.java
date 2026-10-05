@@ -9,6 +9,7 @@ import com.lattice.oidc.common.Responses;
 import com.lattice.oidc.common.WebException;
 import com.lattice.oidc.security.AuditService;
 import com.lattice.oidc.security.LoginService;
+import com.lattice.oidc.security.SecondFactors;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Supplier;
@@ -33,6 +34,7 @@ public abstract class BaseController extends Controller {
   @Inject private AuthleteExecutionContext executionContext;
   @Inject protected AuditService audit;
   @Inject protected Requests requests;
+  @Inject private SecondFactors secondFactors;
 
   protected AuthleteApi api() {
     return apiProvider.get();
@@ -43,16 +45,34 @@ public abstract class BaseController extends Controller {
   }
 
   /** Audits the outcome of a password login attempt. */
+  /**
+   * Audits the password step of a sign-in. With an authenticator app the sign-in isn't finished
+   * yet: that is {@code SECOND_FACTOR_REQUIRED}, and {@code LOGIN_SUCCEEDED} follows the code.
+   */
   protected void auditLogin(Http.RequestHeader request, String loginId, LoginService.Result result) {
     switch (result.outcome()) {
-      case SUCCESS ->
-          audit.record(
-              request,
-              AuditService.Event.LOGIN_SUCCEEDED,
-              "subject",
-              result.user().get().getSubject());
-      case LOCKED -> audit.record(request, AuditService.Event.LOGIN_LOCKED, "login_id", loginId);
-      default -> audit.record(request, AuditService.Event.LOGIN_FAILED, "login_id", loginId);
+      case SUCCESS -> {
+        String subject = result.user().get().getSubject();
+        if (secondFactors.enrolled(subject)) {
+          audit.record(request, AuditService.Event.SECOND_FACTOR_REQUIRED, "subject", subject, "method", "password", "factor", "totp");
+        } else {
+          audit.record(request, AuditService.Event.LOGIN_SUCCEEDED, "subject", subject, "method", "password");
+        }
+      }
+      case LOCKED -> audit.record(request, AuditService.Event.LOGIN_LOCKED, "login_id", loginId, "method", "password");
+      case UNAVAILABLE ->
+          audit.record(request, AuditService.Event.LOGIN_FAILED, "login_id", loginId, "method", "password", "reason", "directory_unavailable");
+      default -> audit.record(request, AuditService.Event.LOGIN_FAILED, "login_id", loginId, "method", "password");
+    }
+  }
+
+  /** Audits a signed-in user re-entering their password before a sensitive change. */
+  protected void auditPasswordConfirmation(Http.RequestHeader request, String subject, LoginService.Result result) {
+    switch (result.outcome()) {
+      case SUCCESS -> audit.record(request, AuditService.Event.PASSWORD_CONFIRMED, "subject", subject);
+      case LOCKED -> audit.record(request, AuditService.Event.LOGIN_LOCKED, "subject", subject, "method", "password");
+      default ->
+          audit.record(request, AuditService.Event.LOGIN_FAILED, "subject", subject, "method", "password", "step", "confirmation");
     }
   }
 

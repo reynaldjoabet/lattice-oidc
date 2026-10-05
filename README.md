@@ -278,6 +278,12 @@ PostgreSQL and Redis are both checked at startup, so a wrong address stops the s
 3. Recovery codes can't be re-hashed, because only their hashes are kept. Codes made under the old key keep working until the account makes new ones.
 4. The console's **Two-step verification** panel counts what is still under a previous key. When both counts are zero, remove the old key.
 
+**Remembered consent.** Approving an app on the consent page records which scopes and claims were approved, for that account and app, in the same storage as everything else. The approval then applies in every browser and on every server.
+- **Not asked again:** a later request that asks for nothing more is issued straight away, after signing in if needed, and logged as `CONSENT_REUSED`. A request that asks for more shows the page again.
+- **Always asked:** when the app sends `prompt=consent`, for Open Banking consents, and for identity-verification (`verified_claims`) or transaction claims, which are approved each time.
+- **Silent sign-in** (`prompt=none`) is issued only for what was approved; anything else fails with `consent_required`.
+- **Forgotten:** when the user removes the app on their account page, or an operator deletes the app.
+
 **Required actions** (`lattice.required-actions`). Steps a user must complete before using apps or their account: verify their email (a link is emailed), accept a new version of the terms, choose a new password, or set up an authenticator app or a passkey. Each is pending while its condition holds, so it clears itself once met. They're enforced everywhere a signed-in user goes:
 - **Consent pages** wait for them.
 - **Account, approval, console, device and credential-offer pages** redirect to them.
@@ -296,6 +302,15 @@ Enable them for everyone with `verify-email` and `terms-version`, or for one acc
 - **Console:** the **LDAP directory** panel shows whether the directory answers, the connection pool, sign-ins checked against it, and the last error.
 
 ### Audit trail, webhooks and metrics
+
+**Sign-in events say which step happened.**
+- `LOGIN_SUCCEEDED` records `method`: `password`, `password + totp`, `password + recovery_code` or `passkey`.
+- With an authenticator app, the right password is `SECOND_FACTOR_REQUIRED` (`factor: totp`). It isn't a sign-in until the code is accepted.
+- A wrong code is `SECOND_FACTOR_FAILED`, with `factor` set to `totp` or `recovery_code`. `LOGIN_FAILED` is kept for wrong passwords and passkeys.
+- A signed-in user re-entering their password before a sensitive change is `PASSWORD_CONFIRMED`.
+- `SECOND_FACTOR_ADDED` and `SECOND_FACTOR_REMOVED` name the factor.
+
+The console's event tables show these fields in a **Details** column.
 
 **Stored audit events** (`lattice.audit`). Every security event (sign-ins, consents, sign-outs, password and second-factor changes, client changes, ...) is also stored. With PostgreSQL storage they're kept for `retention` (90 days); in memory, the latest 10,000 are kept. The operator console's **Audit log** page lists them, newest first, filterable by event and account.
 
@@ -615,6 +630,61 @@ A superior publishes a Subordinate Statement about each entity it vouches for. I
 - `constraints` limits what can happen further down the tree, such as path length or allowed entity types.
 
 ### Trust chains
+
+Each entity publishes its own Entity Configuration at `/.well-known/openid-federation`. Its superior publishes a Subordinate Statement about it at its fetch endpoint. A trust chain links the two: each Subordinate Statement names its subject (`sub`) and that subject's keys, so it binds the statement below it. The chain starts with the leaf's Entity Configuration and ends with the Trust Anchor's:
+
+```text
+.----------------.  .---------------------------.         .---------------------------.
+| Role           |  | .well-known/              |         | Trust Chain               |
+|                |  | openid-federation         |         |                           |
+.----------------.  .---------------------------.         .---------------------------.
+| .------------. |  | .-----------------------. |         | .-----------------------. |
+| |            | |  | | Entity Configuration  | |         | | Entity Configuration  | |
+| |Trust Anchor+-+--+->                       +-+---------+->                       | |
+| |            | |  | | Federation Entity Keys| |         | | Federation Entity Keys| |
+| '-----.------' |  | | Metadata              | |         | | Metadata              | |
+|       |        |  | | Trust Mark Issuers    | |         | | Trust Mark Issuers    | |
+|       |        |  | |                       | |         | |                       | |
+|       |        |  | '-----------------------' |         | '-----------------------' |
+|       |        |  |                           |         |                           |
+|       |        |  |                           |Fetch    | .-----------------------. |
+|       |        |  |                           |Endpoint | | Subordinate Statement | |
+|       +--------+--+---------------------------+---------+->                       | |
+|                |  |                           |         | | Federation Entity Keys| |
+|                |  |                           |         | | Metadata Policy       | |
+|                |  |                           |         | | Metadata              | |
+|                |  |                           |         | | Constraints           | |
+|                |  |                           |         | |                       | |
+|                |  |                           |         | '-----------.-----------' |
+| .------------. |  | .-----------------------. |         |             |             |
+| |            | |  | | Entity Configuration  | |         |             |sub and key  |
+| |Intermediate+-+--+->                       | |         |             | binding     |
+| |            | |  | | Federation Entity Keys| |         | .-----------v-----------. |
+| '------.-----' |  | | Metadata              | |         | | Subordinate Statement | |
+|        |       |  | | Trust Marks           | |         | |                       | |
+|        |       |  | |                       | |         | | Federation Entity Keys| |
+|        |       |  | '-----------------------' |Fetch    | | Metadata Policy       | |
+|        |       |  |                           |Endpoint | | Metadata              | |
+|        +-------+--+---------------------------+---------+->                       | |
+|                |  |                           |         | '-----------.-----------' |
+|                |  |                           |         |             |sub and key  |
+|                |  |                           |         |             | binding     |
+| .------------. |  | .-----------------------. |         | .-----------v-----------. |
+| |            | |  | | Entity Configuration  | |         | | Entity Configuration  | |
+| | Leaf       +-+--+->                       +-+---------+->                       | |
+| |            | |  | | Federation Entity Keys| |         | | Federation Entity Keys| |
+| '------------' |  | | Metadata              | |         | | Metadata              | |
+|                |  | | Trust Marks           | |         | | Trust Marks           | |
+|                |  | |                       | |         | |                       | |
+|                |  | '-----------------------' |         | '-----------------------' |
+'----------------'  '---------------------------'         '---------------------------'
+```
+
+Read the right-hand column bottom-up, as a verifier does:
+- **Leaf's Entity Configuration:** self-signed, carrying the leaf's own keys, metadata and Trust Marks.
+- **Intermediate's Subordinate Statement about the leaf:** vouches for the leaf's keys and applies the intermediate's metadata policy.
+- **Trust Anchor's Subordinate Statement about the intermediate:** the same, one level up, plus constraints such as how deep the chain may go.
+- **Trust Anchor's Entity Configuration:** its keys must match the ones the verifier already trusts.
 
 #### Building the chain
 
@@ -1142,3 +1212,21 @@ The heading shows the provider's server.name from the identity providers file. T
 ```
 
 One database for all instances. As with Lattice, every Keycloak node connects to the same database (PostgreSQL, MySQL and others). Realms, clients, users, credentials and, since Keycloak 26, user sessions are stored there
+
+```scala
+def apply[A](x: A | Null): Option[A] = if (x == null) None else Some(x)
+
+final def orNull[A1 >: A | Null]: A1 = this.getOrElse(null)
+```
+
+Because the parameter is `A | Null`, passing a `String | Null` infers `A = String`:
+
+```scala
+//> using options -Yexplicit-nulls   (3.9.0)
+val s: String | Null = System.getProperty("user.home")
+
+val o: Option[String] = Option(s)   // ok
+o.map(_.length)                     // ok, no .nn
+
+val back = o.orNull                 // String | Null, no implicit evidence needed
+```

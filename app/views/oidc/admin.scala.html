@@ -131,7 +131,7 @@
     } else {
       <div class="table-wrap">
         <table>
-          <thead><tr><th scope="col">Time (UTC)</th><th scope="col">Event</th><th scope="col">Subject</th><th scope="col">Client</th><th scope="col">IP</th></tr></thead>
+          <thead><tr><th scope="col">Time (UTC)</th><th scope="col">Event</th><th scope="col">Subject</th><th scope="col">Client</th><th scope="col">IP</th><th scope="col">Details</th></tr></thead>
           <tbody>
             @for(event <- page.events().asScala) {
               <tr>
@@ -140,6 +140,7 @@
                 <td>@event.subject()</td>
                 <td>@event.client()</td>
                 <td class="mono">@event.ip()</td>
+                <td>@event.details()</td>
               </tr>
             }
           </tbody>

@@ -13,12 +13,14 @@ import com.lattice.oidc.handlers.IdentityProviders;
 import com.lattice.oidc.models.AuthorizationInteraction;
 import com.lattice.oidc.models.AuthorizationPage;
 import com.lattice.oidc.models.ObbConsentView;
+import com.lattice.oidc.models.User;
 import com.lattice.oidc.security.AuditService;
 import com.lattice.oidc.security.Interactions;
 import com.lattice.oidc.security.LoginService;
 import com.lattice.oidc.security.Passkeys;
 import com.lattice.oidc.security.UserSessions.LoginState;
 import com.lattice.oidc.security.UserSessions;
+import com.lattice.oidc.stores.AppConsentStore;
 import com.lattice.oidc.stores.ConsentStore;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -60,6 +62,8 @@ public final class AuthorizationController extends BaseController {
   private final Passkeys passkeys;
   private final SignInFlow flow;
   private final com.lattice.oidc.stores.UserStore users;
+
+  @Inject private AppConsentStore appConsents;
 
   @Inject
   public AuthorizationController(
@@ -153,13 +157,14 @@ public final class AuthorizationController extends BaseController {
     Optional<String> shown = current.map(loginState -> loginState.user().displayName());
     AuthorizationPage page =
         AuthorizationPage.from(info, shown, identityProviders.links()).withObbConsent(obbConsent(info));
+    AuthorizationInteraction pending =
+        AuthorizationInteraction.from(info, page, current.map(loginState -> loginState.user().getSubject()).orElse(null));
+    // Signed in and the app asks for nothing new: no page at all.
+    if (current.isPresent() && alreadyApproved(pending, current.get().user(), current.get().acr())) {
+      return issueApproved(request, pending, null, grant(current.get()), Map.of());
+    }
     String browserId = sessions.browserId(request);
-    interactions.put(
-        KIND,
-        info.getTicket(),
-        browserId,
-        AuthorizationInteraction.from(
-            info, page, current.map(loginState -> loginState.user().getSubject()).orElse(null)));
+    interactions.put(KIND, info.getTicket(), browserId, pending);
     return sessions.withBrowserId(Pages.authorization(request, page, 200), request, browserId);
   }
 
@@ -236,10 +241,16 @@ public final class AuthorizationController extends BaseController {
     if (flow.gate(state.user(), "account").isPresent()) {
       return service.fail(info.getTicket(), Reason.INTERACTION_REQUIRED);
     }
-    // Check 3. Subject and Check 4. ACR are performed by AuthorizationHandler.issue(): the
-    // requested subject must match the current user, and an essential ACR must be satisfied.
     AuthorizationInteraction interaction =
         AuthorizationInteraction.from(info, null, state.user().getSubject());
+    // Check 3. Consent: without a page, only what the user already approved for this app
+    // (OpenID Connect Core 3.1.2.6, consent_required).
+    if (!interaction.approvalCanBeRemembered()
+        || !appConsents.covers(state.user().getSubject(), interaction.clientId(), interaction.scopeSet(), interaction.claimSet())) {
+      return service.fail(info.getTicket(), Reason.CONSENT_REQUIRED);
+    }
+    // Check 4. Subject and Check 5. ACR are performed by AuthorizationHandler.issue(): the
+    // requested subject must match the current user, and an essential ACR must be satisfied.
     // Issue
     return service.issue(
         interaction, new AuthorizationHandler.Grant(state.user(), state.authTime(), state.sessionId(), state.acr()));
@@ -338,8 +349,9 @@ public final class AuthorizationController extends BaseController {
             request, result.user().get(), "Password", form.containsKey("rememberMe"), "authz:" + ticket, Optional.empty());
       }
       Map<String, String> sessionOut = new HashMap<>();
-      sessions.login(
-              result.user().get(), System.currentTimeMillis() / 1000L, null, sessionOut, request, "Password", form.containsKey("rememberMe"));
+      long authTime = System.currentTimeMillis() / 1000L;
+      String sessionId =
+          sessions.login(result.user().get(), authTime, null, sessionOut, request, "Password", form.containsKey("rememberMe"));
       AuthorizationInteraction signedIn =
           interaction.withPage(interaction.page().withLoggedInAs(Optional.of(result.user().get().displayName())).withError(null))
               .withShownSubject(result.user().get().getSubject());
@@ -359,6 +371,9 @@ public final class AuthorizationController extends BaseController {
                 null),
             request,
             sessionOut);
+      }
+      if (alreadyApproved(signedIn, result.user().get(), null)) {
+        return issueApproved(request, signedIn, browserId, new AuthorizationHandler.Grant(result.user().get(), authTime, sessionId), sessionOut);
       }
       return sessions.apply(rerender(request, signedIn, null, 200), request, sessionOut);
     }
@@ -432,6 +447,9 @@ public final class AuthorizationController extends BaseController {
         grant.user().getSubject(),
         "client_id",
         interaction.clientIdentifier());
+    if (interaction.approvalCanBeRemembered()) {
+      appConsents.approve(grant.user().getSubject(), interaction.clientId(), interaction.scopeSet(), interaction.claimSet());
+    }
     return sessions.apply(service.issue(interaction, grant), request, sessionOut);
   }
 
@@ -455,7 +473,47 @@ public final class AuthorizationController extends BaseController {
         current.isPresent()
             && interaction.shownSubject() != null
             && interaction.shownSubject().equals(current.get().user().getSubject());
+    if (signedInAsShown && alreadyApproved(interaction, current.get().user(), current.get().acr())) {
+      return issueApproved(request, interaction, browserId, grant(current.get()), Map.of());
+    }
     return rerender(request, signedInAsShown ? interaction : interaction.withShownSubject(null), null, 200);
+  }
+
+  /**
+   * Whether the consent page can be skipped: the user already approved everything this request asks
+   * for, the app didn't send {@code prompt=consent}, and nothing else must be shown first (required
+   * actions, a passkey step-up).
+   */
+  private boolean alreadyApproved(AuthorizationInteraction interaction, User user, String sessionAcr) {
+    return !interaction.consentPrompted()
+        && interaction.approvalCanBeRemembered()
+        && !needsStepUp(interaction, sessionAcr)
+        && flow.gate(user, "authz:" + interaction.ticket()).isEmpty()
+        && appConsents.covers(user.getSubject(), interaction.clientId(), interaction.scopeSet(), interaction.claimSet());
+  }
+
+  /** Issues on an earlier approval, without the consent page. */
+  private Result issueApproved(
+      Http.Request request,
+      AuthorizationInteraction interaction,
+      String browserId,
+      AuthorizationHandler.Grant grant,
+      Map<String, String> sessionOut) {
+    if (browserId != null) {
+      interactions.take(KIND, interaction.ticket(), browserId, AuthorizationInteraction.class);
+    }
+    audit.record(
+        request,
+        AuditService.Event.CONSENT_REUSED,
+        "subject",
+        grant.user().getSubject(),
+        "client_id",
+        interaction.clientIdentifier());
+    return sessions.apply(service.issue(interaction, grant), request, sessionOut);
+  }
+
+  private static AuthorizationHandler.Grant grant(LoginState state) {
+    return new AuthorizationHandler.Grant(state.user(), state.authTime(), state.sessionId(), state.acr());
   }
 
   /** Whether the request essentially requires the passkey ACR and the session has a weaker one. */

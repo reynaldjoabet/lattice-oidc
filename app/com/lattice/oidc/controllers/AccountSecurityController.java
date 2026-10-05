@@ -162,7 +162,7 @@ public final class AccountSecurityController extends BaseController {
           }
           Map<String, String[]> form = Requests.form(request);
           LoginService.Result check = login.authenticate(user.loginId(), Requests.first(form, "current"), request.remoteAddress());
-          auditLogin(request, user.loginId(), check);
+          auditPasswordConfirmation(request, user.getSubject(), check);
           if (check.outcome() != LoginService.Outcome.SUCCESS) {
             return passwordPage(request, user, List.of(AuthorizationController.failureMessage(check)), 401);
           }

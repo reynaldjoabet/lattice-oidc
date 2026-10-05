@@ -63,6 +63,7 @@ public final class SecurityStats {
 
   void observe(AuditService.Event event, String ip, Object loginId) {
     if (event != AuditService.Event.LOGIN_FAILED
+        && event != AuditService.Event.SECOND_FACTOR_FAILED
         && event != AuditService.Event.LOGIN_LOCKED
         && event != AuditService.Event.SIGN_IN_REPORTED) {
       return;

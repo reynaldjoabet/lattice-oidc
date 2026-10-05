@@ -253,11 +253,16 @@ public class IdentityBrokerTest {
     authorize(linked);
     assertEquals("1001", ((AuthorizationIssueRequest) fake.lastRequest("authorizationIssue")).getSubject());
 
-    // Next time the same upstream identity signs straight in to the linked account.
+    // Next time the same upstream identity signs straight in to the linked account, and the app,
+    // approved last time, gets its code without the consent page.
     Result again = consentPage();
     Result direct = callback(again, initiate(again));
-    assertTrue(contentAsString(direct).contains("Signed in as"));
-    assertTrue(contentAsString(direct).contains("John Flibble Smith"));
+    assertEquals(303, direct.status());
+    assertEquals("/api/authorization/continue?ticket=ticket-1", direct.redirectLocation().orElse(null));
+    Result continued = route(app, get(direct.redirectLocation().get()).session(direct.session().data()));
+    assertEquals(302, continued.status());
+    assertEquals(2, fake.count("authorizationIssue"));
+    assertEquals("1001", ((AuthorizationIssueRequest) fake.lastRequest("authorizationIssue")).getSubject());
   }
 
   @Test

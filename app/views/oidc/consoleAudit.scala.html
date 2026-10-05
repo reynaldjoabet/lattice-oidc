@@ -30,7 +30,7 @@
     } else {
       <div class="table-wrap">
         <table>
-          <thead><tr><th scope="col">Time (UTC)</th><th scope="col">Event</th><th scope="col">Subject</th><th scope="col">Client</th><th scope="col">IP</th></tr></thead>
+          <thead><tr><th scope="col">Time (UTC)</th><th scope="col">Event</th><th scope="col">Subject</th><th scope="col">Client</th><th scope="col">IP</th><th scope="col">Details</th></tr></thead>
           <tbody>
             @for(entry <- events.asScala) {
               <tr>
@@ -39,6 +39,7 @@
                 <td>@entry.subject()</td>
                 <td>@entry.client()</td>
                 <td class="mono">@entry.ip()</td>
+                <td>@entry.details()</td>
               </tr>
             }
           </tbody>

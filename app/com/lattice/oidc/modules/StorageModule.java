@@ -11,11 +11,13 @@ import com.lattice.oidc.cache.PostgresInvalidationBus;
 import com.lattice.oidc.cache.ReadCache;
 import com.lattice.oidc.cache.RedisReadCache;
 import com.lattice.oidc.metrics.SessionGauge;
+import com.lattice.oidc.stores.AppConsentStore;
 import com.lattice.oidc.stores.AuditEventStore;
 import com.lattice.oidc.stores.ConsentStore;
 import com.lattice.oidc.stores.CounterStore;
 import com.lattice.oidc.stores.EphemeralStore;
 import com.lattice.oidc.stores.IdentityLinkStore;
+import com.lattice.oidc.stores.InMemoryAppConsentStore;
 import com.lattice.oidc.stores.InMemoryAuditEventStore;
 import com.lattice.oidc.stores.InMemoryConsentStore;
 import com.lattice.oidc.stores.InMemoryCounterStore;
@@ -29,6 +31,7 @@ import com.lattice.oidc.stores.PasskeyStore;
 import com.lattice.oidc.stores.SecondFactorStore;
 import com.lattice.oidc.stores.SessionStore;
 import com.lattice.oidc.stores.UserStore;
+import com.lattice.oidc.stores.postgres.PostgresAppConsentStore;
 import com.lattice.oidc.stores.postgres.PostgresAuditEventStore;
 import com.lattice.oidc.stores.postgres.PostgresConsentStore;
 import com.lattice.oidc.stores.postgres.PostgresCounterStore;
@@ -51,8 +54,8 @@ import play.Environment;
  * Chooses where state is kept, from three independent settings:
  *
  * <ul>
- *   <li>{@code lattice.storage} ("memory" or "postgres"): accounts, passkeys, links, consents and
- *       sessions.
+ *   <li>{@code lattice.storage} ("memory" or "postgres"): accounts, passkeys, links, consents
+ *       (Open Banking and app approvals) and sessions.
  *   <li>{@code lattice.short-lived-state} ("storage" or "redis"): single-use state and counters.
  *   <li>{@code lattice.cache.type} ("none", "local" or "redis"): a read cache in front of the user and
  *       session stores.
@@ -105,12 +108,14 @@ public final class StorageModule extends AbstractModule {
       bind(ConsentStore.class).to(PostgresConsentStore.class);
       bind(AuditEventStore.class).to(PostgresAuditEventStore.class);
       bind(SecondFactorStore.class).to(PostgresSecondFactorStore.class);
+      bind(AppConsentStore.class).to(PostgresAppConsentStore.class);
     } else {
       bind(PasskeyStore.class).to(InMemoryPasskeyStore.class);
       bind(IdentityLinkStore.class).to(InMemoryIdentityLinkStore.class);
       bind(ConsentStore.class).to(InMemoryConsentStore.class);
       bind(AuditEventStore.class).to(InMemoryAuditEventStore.class);
       bind(SecondFactorStore.class).to(InMemorySecondFactorStore.class);
+      bind(AppConsentStore.class).to(InMemoryAppConsentStore.class);
     }
 
     // Users and sessions, with or without the read cache in front.

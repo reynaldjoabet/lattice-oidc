@@ -113,6 +113,29 @@ public class TwoStepTest {
   }
 
   @Test
+  public void theAuditTrailSaysWhichStepFailed() {
+    String secret = enrollJohn();
+    app.injector().instanceOf(SecondFactors.class).newRecoveryCodes("1001");
+    Result challenge = passwordSignIn();
+    submitCode(challenge, Map.of("code", "000000"));
+    submitCode(challenge, Map.of("recoveryCode", "WRONG-CODES"));
+    submitCode(challenge, Map.of("code", TotpCodes.at(secret, Totp.step(Instant.now()))));
+
+    assertEquals("the password alone isn't a sign-in", 0, events("LOGIN_SUCCEEDED").stream().filter(e -> "password".equals(e.get("method"))).count());
+    assertEquals("totp", events("SECOND_FACTOR_REQUIRED").get(0).get("factor"));
+    assertEquals(List.of("recovery_code", "totp"), events("SECOND_FACTOR_FAILED").stream().map(e -> e.get("factor")).toList());
+    assertEquals("not a wrong password", 0, events("LOGIN_FAILED").size());
+    assertEquals("password + totp", events("LOGIN_SUCCEEDED").get(0).get("method"));
+  }
+
+  /** Stored audit events of one kind, newest first. */
+  private List<Map<String, Object>> events(String event) {
+    return app.injector()
+        .instanceOf(com.lattice.oidc.stores.AuditEventStore.class)
+        .search(new com.lattice.oidc.stores.AuditEventStore.Query(java.util.Optional.of(event), java.util.Optional.empty(), java.util.Optional.empty(), 100));
+  }
+
+  @Test
   public void tooManyWrongCodesEndTheSignIn() {
     enrollJohn();
     Result challenge = passwordSignIn();
@@ -136,6 +159,7 @@ public class TwoStepTest {
     assertEquals(200, confirmed.status());
     assertTrue(contentAsString(confirmed).contains("Save your recovery codes"));
     assertTrue(contentAsString(route(app, get("/account").session(session))).contains("On: password sign-ins also ask for a code"));
+    assertEquals("the audit trail names the factor", "totp", events("SECOND_FACTOR_ADDED").get(0).get("factor"));
   }
 
   @Test

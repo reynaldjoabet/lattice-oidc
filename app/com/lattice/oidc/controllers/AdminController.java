@@ -36,7 +36,10 @@ public final class AdminController extends BaseController {
   private static final Set<String> GOOD_EVENTS =
       Set.of("LOGIN_SUCCEEDED", "CONSENT_GRANTED", "DEVICE_AUTHORIZED", "CIBA_APPROVED", "ACCOUNT_LINKED");
   private static final Set<String> BAD_EVENTS =
-      Set.of("LOGIN_FAILED", "LOGIN_LOCKED", "BROKERED_LOGIN_FAILED");
+      Set.of("LOGIN_FAILED", "LOGIN_LOCKED", "BROKERED_LOGIN_FAILED", "SECOND_FACTOR_FAILED");
+  /** Fields shown in their own columns, or not at all. */
+  private static final Set<String> COLUMNS =
+      Set.of("id", "ts", "event", "request_id", "ip", "subject", "login_id", "client_id", "client");
 
   private final UserSessions sessions;
   private final LatticeConfig config;
@@ -158,7 +161,18 @@ public final class AdminController extends BaseController {
         text(record.containsKey("subject") ? record.get("subject") : record.get("login_id")),
         text(client),
         text(record.get("ip")),
+        details(record),
         tone);
+  }
+
+  /** The record's other fields, in their recorded order, as "name: value · name: value". */
+  private static String details(Map<String, Object> record) {
+    String details =
+        record.entrySet().stream()
+            .filter(field -> !COLUMNS.contains(field.getKey()) && field.getValue() != null)
+            .map(field -> field.getKey().replace('_', ' ') + ": " + field.getValue())
+            .collect(java.util.stream.Collectors.joining(" · "));
+    return details.isEmpty() ? "—" : details;
   }
 
   private static String text(Object value) {

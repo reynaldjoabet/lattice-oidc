@@ -62,6 +62,8 @@ public final class ConsoleController extends BaseController {
   private final PasskeyStore passkeys;
   private final UserStore users;
 
+  @Inject private com.lattice.oidc.stores.AppConsentStore appConsents;
+
   @Inject
   public ConsoleController(
       UserSessions sessions,
@@ -197,6 +199,7 @@ public final class ConsoleController extends BaseController {
         state -> {
           if (found(id).isPresent()) {
             api().deleteClient(id);
+            appConsents.deleteClient(id);
             audit.record(request, AuditService.Event.CLIENT_DELETED, "client_id", id, "subject", state.user().getSubject());
           }
           return Results.seeOther(com.lattice.oidc.controllers.routes.ConsoleController.clients("", "all"));

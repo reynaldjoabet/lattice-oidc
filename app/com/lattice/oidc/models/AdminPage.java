@@ -37,6 +37,9 @@ public record AdminPage(
   /** Stored entries of one kind (for example pending sign-ins), across every server. */
   public record StorageRow(String name, long entries) {}
 
-  /** A recent audit event; {@code tone} is good, bad or neutral (for the label colour). */
-  public record Event(String time, String name, String subject, String client, String ip, String tone) {}
+  /**
+   * A recent audit event; {@code tone} is good, bad or neutral (for the label colour), and {@code
+   * details} the event's other fields ("method: password + totp").
+   */
+  public record Event(String time, String name, String subject, String client, String ip, String details, String tone) {}
 }

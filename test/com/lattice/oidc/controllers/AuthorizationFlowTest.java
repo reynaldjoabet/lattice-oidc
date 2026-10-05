@@ -261,8 +261,15 @@ public class AuthorizationFlowTest {
                 Map.of("ticket", "ticket-1", "loginId", "john", "password", "john", "authorized", "true")));
     Map<String, String> session = first.session().data();
 
-    // Second authorization in the same browser: john's session is offered.
-    fake.answer("authorization", args -> interaction("ticket-2", null));
+    // Second authorization in the same browser: john's session is offered. The app asks for consent
+    // again (prompt=consent); otherwise john's earlier approval would issue without a page.
+    fake.answer(
+        "authorization",
+        args -> {
+          AuthorizationResponse again = interaction("ticket-2", null);
+          again.setPrompts(new com.authlete.common.types.Prompt[] {com.authlete.common.types.Prompt.CONSENT});
+          return again;
+        });
     Result second =
         route(app, withCsrf(get("/api/authorization?client_id=42")).session(session));
     assertTrue(contentAsString(second).contains("Signed in as"));

@@ -65,6 +65,8 @@ public final class AccountController extends BaseController {
   private final SignInAlerts alerts;
   private final com.lattice.oidc.security.SecondFactors secondFactors;
 
+  @Inject private com.lattice.oidc.stores.AppConsentStore appConsents;
+
   @Inject
   public AccountController(
       UserSessions sessions,
@@ -165,6 +167,8 @@ public final class AccountController extends BaseController {
           }
           String subject = current.get().user().getSubject();
           api().deleteClientAuthorization(clientId, subject);
+          // The next sign-in to the app asks for consent again.
+          appConsents.delete(subject, clientId);
           audit.record(request, AuditService.Event.APP_ACCESS_REMOVED, "subject", subject, "client_id", clientId);
           return Results.seeOther(DESTINATIONS.get("account"));
         });
