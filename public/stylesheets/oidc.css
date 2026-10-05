@@ -380,7 +380,7 @@ button.destructive:hover { color: #ffffff; background: var(--danger-text); borde
 a.link { color: var(--accent); font-weight: 600; font-size: 14px; }
 
 /* ---------- Console: clients, secrets, security ---------- */
-.filters { display: flex; flex-wrap: wrap; gap: 12px; }
+.filters { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 12px; }
 .filters input[type=search] { flex: 1 1 280px; }
 .filters select { flex: 0 1 220px; }
 .client-cell { display: inline-flex; align-items: center; gap: 10px; }

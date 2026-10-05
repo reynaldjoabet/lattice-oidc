@@ -303,4 +303,21 @@ public class IdentityBrokerTest {
                 .session(page.session().data()));
     assertTrue(contentAsString(password).contains("name=\"password\""));
   }
+
+  @Test
+  public void requiredActionsComeBeforeConsentAfterABrokeredSignIn() {
+    Result first = consentPage();
+    callback(first, initiate(first));
+    // Flag the provisioned account, then sign in through the provider again.
+    var users = app.injector().instanceOf(com.lattice.oidc.stores.UserStore.class);
+    var alice = users.bySubject("alice@upstream").orElseThrow();
+    Map<String, Object> attributes = new java.util.HashMap<>(alice.attributes());
+    attributes.put("requiredActions", List.of("CONFIGURE_PASSKEY"));
+    users.save(new com.lattice.oidc.models.User(alice.getSubject(), alice.loginId(), alice.passwordHash(), alice.claims(), attributes, alice.verifiedClaims()));
+
+    Result page = consentPage();
+    Result back = callback(page, initiate(page));
+    assertEquals(303, back.status());
+    assertEquals("/account/actions?next=authz%3Aticket-1", back.redirectLocation().orElse(null));
+  }
 }

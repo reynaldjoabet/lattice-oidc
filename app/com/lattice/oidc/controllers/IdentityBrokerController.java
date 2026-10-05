@@ -282,6 +282,11 @@ public final class IdentityBrokerController extends BaseController {
         providerId);
     var page = interaction.page().withLoggedInAs(Optional.of(user.displayName())).withError(null);
     interactions.put(AUTHZ, ticket, browserId, interaction.withPage(page).withShownSubject(user.getSubject()));
+    // Required actions come before the consent page, as for every other sign-in.
+    Optional<Result> gated = flow.gate(user, "authz:" + ticket);
+    if (gated.isPresent()) {
+      return sessions.apply(gated.get(), request, sessionOut);
+    }
     return sessions.apply(Pages.authorization(request, page, 200), request, sessionOut);
   }
 
@@ -306,8 +311,21 @@ public final class IdentityBrokerController extends BaseController {
   }
 
   /** Creates/updates the local account mirroring the external user ({@code sub@provider-id}). */
+  /**
+   * Creates the brokered account, or refreshes its claims from the provider. Attributes Lattice added
+   * itself (accepted terms, required actions, ...) and verified claims are kept.
+   */
   private User provision(String providerId, String externalSubject, Map<String, Object> claims) {
-    User user = new User(externalSubject + "@" + providerId, null, null, claims, Map.of(), List.of());
+    String subject = externalSubject + "@" + providerId;
+    Optional<User> existing = users.bySubject(subject);
+    User user =
+        new User(
+            subject,
+            null,
+            null,
+            claims,
+            existing.map(User::attributes).orElse(Map.of()),
+            existing.map(User::verifiedClaims).orElse(List.of()));
     users.save(user);
     return user;
   }
