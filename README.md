@@ -272,6 +272,12 @@ PostgreSQL and Redis are both checked at startup, so a wrong address stops the s
 - **Exempt:** passkey sign-in, since a passkey is already two factors.
 - **The password grant** refuses accounts with an app, because it can't ask for a code.
 
+**Rotating the two-step key** (`encryption-key`, or the application secret when it's empty). Every stored secret and recovery-code hash carries the id of its key.
+1. Set the new `encryption-key`, and list the old one in `previous-encryption-keys` (`SECOND_FACTOR_PREVIOUS_ENCRYPTION_KEYS`, comma-separated).
+2. Secrets under the old key are still read. Each is re-encrypted under the new key when it's next used, and at startup a background pass re-encrypts the rest.
+3. Recovery codes can't be re-hashed, because only their hashes are kept. Codes made under the old key keep working until the account makes new ones.
+4. The console's **Two-step verification** panel counts what is still under a previous key. When both counts are zero, remove the old key.
+
 **Required actions** (`lattice.required-actions`). Steps a user must complete before using apps or their account: verify their email (a link is emailed), accept a new version of the terms, choose a new password, or set up an authenticator app or a passkey. Each is pending while its condition holds, so it clears itself once met. They're enforced everywhere a signed-in user goes:
 - **Consent pages** wait for them.
 - **Account, approval, console, device and credential-offer pages** redirect to them.
@@ -286,6 +292,8 @@ Enable them for everyone with `verify-email` and `terms-version`, or for one acc
 - **Passwords:** password change and reset are left to the directory.
 - **Outages:** a directory outage shows "temporarily unavailable" and doesn't count towards the lockout.
 - **Startup check:** the connection is checked at startup.
+- **TLS:** use `ldaps://` or `start-tls`; without either, a warning is logged, because passwords would be sent in clear. The directory's certificate must chain to a CA the JVM trusts, or to one in `trust-store`, a PEM file or a PKCS#12/JKS store with `trust-store-password`. It must also name the host in `url`.
+- **Console:** the **LDAP directory** panel shows whether the directory answers, the connection pool, sign-ins checked against it, and the last error.
 
 ### Audit trail, webhooks and metrics
 
@@ -293,7 +301,8 @@ Enable them for everyone with `verify-email` and `terms-version`, or for one acc
 
 **Webhooks** (`lattice.webhooks`). Events can be sent to endpoints such as a SIEM, signed the Standard Webhooks way: `webhook-id`, `webhook-timestamp`, and `webhook-signature: v1,<HMAC-SHA256 of id.timestamp.body>`.
 - **Configuration:** each endpoint has a secret and an optional list of events. One endpoint can also come from `WEBHOOK_URL`, `WEBHOOK_SECRET` and `WEBHOOK_EVENTS`.
-- **Retries:** a failed delivery is retried after 5 seconds, 30 seconds and 2 minutes.
+- **Retries:** a failed delivery is retried after 5 seconds, 30 seconds and 2 minutes. Retries are kept in memory, so a restart drops any that are waiting.
+- **Console:** the **Webhooks** panel shows, per endpoint on that server, deliveries, waiting retries, deliveries given up and the last error.
 
 **Metrics** (`lattice.metrics`, off by default). `GET /metrics` serves Prometheus metrics:
 - HTTP requests by route and status

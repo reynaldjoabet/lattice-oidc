@@ -89,6 +89,7 @@ public final class StorageModule extends AbstractModule {
       bind(RedisConnection.class).asEagerSingleton();
     }
     bind(SessionGauge.class).asEagerSingleton();
+    bind(com.lattice.oidc.security.SecondFactorKeyRotation.class).asEagerSingleton();
     if (config.getBoolean("lattice.ldap.enabled")) {
       // Connect at startup, so a wrong directory address or bind password fails the deployment.
       bind(com.lattice.oidc.security.LdapDirectory.class).asEagerSingleton();

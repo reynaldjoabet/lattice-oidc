@@ -7,6 +7,7 @@ import static com.lattice.oidc.OidcTestSupport.route;
 import static com.lattice.oidc.OidcTestSupport.withCsrf;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static play.test.Helpers.contentAsString;
 
@@ -130,6 +131,8 @@ public class AccountAndAdminTest {
     assertTrue(html.contains("Connected"));
     assertTrue("the storage panel lists sessions", html.contains(">sessions<"));
     assertTrue(html.contains("<h2>Storage</h2>"));
+    assertTrue(html.contains("<h2>Two-step verification</h2>"));
+    assertFalse("no directory configured", html.contains("<h2>LDAP directory</h2>"));
     assertTrue("recent audit events are listed", html.contains("LOGIN_SUCCEEDED"));
     assertEquals("no-store", console.header("Cache-Control").orElse(null));
   }

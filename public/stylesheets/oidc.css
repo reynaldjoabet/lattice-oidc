@@ -328,6 +328,7 @@ body.console { display: block; padding: 0; background-image: none; }
 .stat .big { font-size: 26px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
 .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--success-text); }
 .dot.down { background: var(--danger); }
+.status-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); }

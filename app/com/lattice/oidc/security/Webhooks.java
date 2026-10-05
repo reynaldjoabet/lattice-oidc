@@ -10,11 +10,15 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -49,7 +53,32 @@ public final class Webhooks {
     }
   }
 
+  /**
+   * For the operator console, on this server since startup: deliveries that succeeded, retries
+   * waiting, deliveries given up after the last retry, and the last success and error.
+   */
+  public record EndpointStatus(
+      String url,
+      String events,
+      long delivered,
+      long retrying,
+      long failed,
+      Optional<Instant> lastDeliveredAt,
+      Optional<Instant> lastErrorAt,
+      Optional<String> lastError) {}
+
+  /** Delivery figures of one endpoint. */
+  private static final class Tracker {
+    final AtomicLong delivered = new AtomicLong();
+    final AtomicLong retrying = new AtomicLong();
+    final AtomicLong failed = new AtomicLong();
+    volatile Instant lastDeliveredAt;
+    volatile Instant lastErrorAt;
+    volatile String lastError;
+  }
+
   private final List<Endpoint> endpoints;
+  private final Map<Endpoint, Tracker> trackers = new IdentityHashMap<>();
   private final WSClient ws;
   private final ActorSystem actorSystem;
   private final AuthleteExecutionContext executionContext;
@@ -60,6 +89,7 @@ public final class Webhooks {
     this.ws = ws;
     this.actorSystem = actorSystem;
     this.executionContext = executionContext;
+    endpoints.forEach(endpoint -> trackers.put(endpoint, new Tracker()));
     endpoints.forEach(endpoint -> LOG.info("Webhook endpoint: {} (events: {})", endpoint.url(), endpoint.events().isEmpty() ? "all" : endpoint.events()));
   }
 
@@ -121,16 +151,26 @@ public final class Webhooks {
         .post(json)
         .whenComplete(
             (response, error) -> {
+              Tracker tracker = trackers.get(endpoint);
+              if (attempt > 0) {
+                tracker.retrying.decrementAndGet();
+              }
               if (error == null && response.getStatus() / 100 == 2) {
+                tracker.delivered.incrementAndGet();
+                tracker.lastDeliveredAt = Instant.now();
                 return;
               }
               String reason = error != null ? error.getMessage() : "HTTP " + response.getStatus();
+              tracker.lastErrorAt = Instant.now();
+              tracker.lastError = reason;
               if (attempt < RETRY_DELAYS.size()) {
+                tracker.retrying.incrementAndGet();
                 actorSystem
                     .scheduler()
                     .scheduleOnce(
                         RETRY_DELAYS.get(attempt), () -> send(endpoint, id, timestamp, json, attempt + 1), executionContext);
               } else {
+                tracker.failed.incrementAndGet();
                 LOG.warn("Webhook {} to {} failed after {} attempts: {}", id, endpoint.url(), attempt + 1, reason);
               }
             });
@@ -146,6 +186,25 @@ public final class Webhooks {
     } catch (GeneralSecurityException e) {
       throw new IllegalStateException(e);
     }
+  }
+
+  /** Each endpoint's delivery figures, in configuration order. */
+  public List<EndpointStatus> status() {
+    return endpoints.stream()
+        .map(
+            endpoint -> {
+              Tracker tracker = trackers.get(endpoint);
+              return new EndpointStatus(
+                  endpoint.url(),
+                  endpoint.events().isEmpty() ? "All events" : String.join(", ", new TreeSet<>(endpoint.events())),
+                  tracker.delivered.get(),
+                  tracker.retrying.get(),
+                  tracker.failed.get(),
+                  Optional.ofNullable(tracker.lastDeliveredAt),
+                  Optional.ofNullable(tracker.lastErrorAt),
+                  Optional.ofNullable(tracker.lastError));
+            })
+        .toList();
   }
 
   /** For tests and the console: the configured endpoints' URLs. */

@@ -1,5 +1,6 @@
 package com.lattice.oidc.stores;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -27,6 +28,42 @@ public final class InMemorySecondFactorStore implements SecondFactorStore {
   @Override
   public void deleteTotp(String subject) {
     totps.remove(subject);
+  }
+
+  @Override
+  public boolean replaceTotpSecret(String subject, String expected, String replacement) {
+    boolean[] replaced = {false};
+    totps.computeIfPresent(
+        subject,
+        (key, totp) -> {
+          if (totp.encryptedSecret().equals(expected)) {
+            replaced[0] = true;
+            return new Totp(totp.subject(), replacement, totp.createdAt(), totp.lastUsedStep());
+          }
+          return totp;
+        });
+    return replaced[0];
+  }
+
+  @Override
+  public List<Totp> totps(String afterSubject, int limit) {
+    return totps.values().stream()
+        .filter(totp -> afterSubject == null || totp.subject().compareTo(afterSubject) > 0)
+        .sorted(Comparator.comparing(Totp::subject))
+        .limit(limit)
+        .toList();
+  }
+
+  @Override
+  public long totpsNotUnderKey(String keyId) {
+    return totps.values().stream().filter(totp -> !totp.encryptedSecret().startsWith(keyId + ":")).count();
+  }
+
+  @Override
+  public long accountsWithRecoveryCodesNotUnderKey(String keyId) {
+    return recoveryCodes.values().stream()
+        .filter(codes -> codes.stream().anyMatch(hash -> !hash.startsWith(keyId + ":")))
+        .count();
   }
 
   @Override

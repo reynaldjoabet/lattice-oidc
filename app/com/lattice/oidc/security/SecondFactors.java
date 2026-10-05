@@ -12,6 +12,8 @@ import java.util.Locale;
 import java.util.OptionalLong;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Authenticator apps (TOTP) and recovery codes. Once an account has an authenticator app, password
@@ -21,9 +23,16 @@ import javax.inject.Singleton;
 @Singleton
 public final class SecondFactors {
 
+  /**
+   * For the operator console: accounts with an authenticator app, the current key id, and what is
+   * still under a previous key (a previous key can be removed once both are zero).
+   */
+  public record Status(long accountsWithApp, String keyId, int previousKeys, long secretsUnderPreviousKeys, long recoveryCodesUnderPreviousKeys) {}
+
   /** A new authenticator app being set up: its secret, the otpauth URI, and that URI as a QR code. */
   public record Enrollment(String secret, String uri, String qrSvg) {}
 
+  private static final Logger LOG = LoggerFactory.getLogger(SecondFactors.class);
   static final int RECOVERY_CODES = 10;
   private static final String CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   private static final SecureRandom RANDOM = new SecureRandom();
@@ -77,8 +86,13 @@ public final class SecondFactors {
         .totp(subject)
         .map(
             totp -> {
-              OptionalLong step = Totp.verify(cipher.decrypt(totp.encryptedSecret()), code, Instant.now());
-              return step.isPresent() && store.useTotpStep(subject, step.getAsLong());
+              String secret = cipher.decrypt(totp.encryptedSecret());
+              OptionalLong step = Totp.verify(secret, code, Instant.now());
+              if (step.isEmpty() || !store.useTotpStep(subject, step.getAsLong())) {
+                return false;
+              }
+              reencrypt(totp, secret);
+              return true;
             })
         .orElse(false);
   }
@@ -88,7 +102,13 @@ public final class SecondFactors {
     if (code == null || code.isBlank()) {
       return false;
     }
-    return store.useRecoveryCode(subject, cipher.hash(normalize(code)));
+    // Codes made under a previous key (or before key ids) are stored in another form.
+    for (String hash : cipher.storedHashes(normalize(code))) {
+      if (store.useRecoveryCode(subject, hash)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /** New recovery codes, replacing any old ones. Shown once; only their hashes are stored. */
@@ -112,6 +132,50 @@ public final class SecondFactors {
 
   public int remainingRecoveryCodes(String subject) {
     return store.remainingRecoveryCodes(subject);
+  }
+
+  public Status status() {
+    String keyId = cipher.currentKeyId();
+    return new Status(
+        store.accountsWithTotp(),
+        keyId,
+        cipher.previousKeyCount(),
+        store.totpsNotUnderKey(keyId),
+        store.accountsWithRecoveryCodesNotUnderKey(keyId));
+  }
+
+  /**
+   * Re-encrypts every authenticator secret that isn't under the current key; returns how many. Safe
+   * to run on several servers at once. A secret under a key that isn't configured is logged and left.
+   */
+  public int reencryptAll() {
+    int reencrypted = 0;
+    String after = null;
+    while (true) {
+      List<SecondFactorStore.Totp> page = store.totps(after, 500);
+      for (SecondFactorStore.Totp totp : page) {
+        if (cipher.isCurrent(totp.encryptedSecret())) {
+          continue;
+        }
+        try {
+          if (reencrypt(totp, cipher.decrypt(totp.encryptedSecret()))) {
+            reencrypted++;
+          }
+        } catch (IllegalStateException e) {
+          LOG.warn("Authenticator secret of {} not re-encrypted: {}", totp.subject(), e.getMessage());
+        }
+      }
+      if (page.size() < 500) {
+        return reencrypted;
+      }
+      after = page.get(page.size() - 1).subject();
+    }
+  }
+
+  /** Stores {@code secret} under the current key, if {@code totp} is under an older one. */
+  private boolean reencrypt(SecondFactorStore.Totp totp, String secret) {
+    return !cipher.isCurrent(totp.encryptedSecret())
+        && store.replaceTotpSecret(totp.subject(), totp.encryptedSecret(), cipher.encrypt(secret));
   }
 
   /** Removes the authenticator app and the recovery codes. */

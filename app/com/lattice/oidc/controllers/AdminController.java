@@ -7,8 +7,11 @@ import com.lattice.oidc.common.Responses;
 import com.lattice.oidc.handlers.IdentityProviders;
 import com.lattice.oidc.models.AdminPage;
 import com.lattice.oidc.models.User;
+import com.lattice.oidc.security.LdapDirectory;
 import com.lattice.oidc.security.LoginService;
+import com.lattice.oidc.security.SecondFactors;
 import com.lattice.oidc.security.UserSessions;
+import com.lattice.oidc.security.Webhooks;
 import com.lattice.oidc.stores.CounterStore;
 import com.lattice.oidc.stores.EphemeralStore;
 import com.lattice.oidc.security.UserSessions.LoginState;
@@ -22,8 +25,9 @@ import play.mvc.Http;
 import play.mvc.Result;
 
 /**
- * Operator console ({@code GET /admin}): Authlete status, sessions, identity providers, cache
- * statistics and recent audit events. Only users whose login ID is in {@code
+ * Operator console ({@code GET /admin}): Authlete status, sessions, identity providers, storage,
+ * two-step verification and its encryption key, the LDAP directory, webhook delivery and recent
+ * audit events. Only users whose login ID is in {@code
  * lattice.admin.login-ids} may open it, after signing in normally (password, lockout, CSRF);
  * everyone else gets 403, and anonymous visitors the sign-in page.
  */
@@ -42,6 +46,9 @@ public final class AdminController extends BaseController {
   private final IdentityProviders providers;
   private final EphemeralStore ephemeral;
   private final CounterStore counters;
+  private final SecondFactors secondFactors;
+  private final LdapDirectory directory;
+  private final Webhooks webhooks;
 
   @Inject
   public AdminController(
@@ -52,7 +59,10 @@ public final class AdminController extends BaseController {
       ServerMetadata server,
       IdentityProviders providers,
       EphemeralStore ephemeral,
-      CounterStore counters) {
+      CounterStore counters,
+      SecondFactors secondFactors,
+      LdapDirectory directory,
+      Webhooks webhooks) {
     this.sessions = sessions;
     this.config = config;
     this.rawConfig = rawConfig;
@@ -61,6 +71,9 @@ public final class AdminController extends BaseController {
     this.providers = providers;
     this.ephemeral = ephemeral;
     this.counters = counters;
+    this.secondFactors = secondFactors;
+    this.directory = directory;
+    this.webhooks = webhooks;
   }
 
   /** Whether the user may open the operator console. Accounts without a login ID never may. */
@@ -104,6 +117,9 @@ public final class AdminController extends BaseController {
                   counters.countAtLeast(LoginService.ACCOUNT_PREFIX, 1),
                   storageDescription(),
                   rows,
+                  secondFactors.status(),
+                  directory.status(),
+                  webhooks.status(),
                   audit.recent().stream().map(AdminController::event).toList());
           return Responses.of(200, views.html.oidc.admin.render(page, request).body(), Responses.HTML, null)
               .withHeader(CACHE_CONTROL, "no-store");

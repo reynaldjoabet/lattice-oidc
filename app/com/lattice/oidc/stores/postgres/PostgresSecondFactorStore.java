@@ -18,16 +18,16 @@ public final class PostgresSecondFactorStore implements SecondFactorStore {
     this.database = database;
   }
 
+  private static Totp totp(java.sql.ResultSet row) throws java.sql.SQLException {
+    return new Totp(
+        row.getString("subject"), row.getString("secret"), PostgresDatabase.instant(row, "created_at"), row.getLong("last_used_step"));
+  }
+
   @Override
   public Optional<Totp> totp(String subject) {
     return database.queryOne(
         "SELECT subject, secret, created_at, last_used_step FROM totp_credentials WHERE subject = ?",
-        row ->
-            new Totp(
-                row.getString("subject"),
-                row.getString("secret"),
-                PostgresDatabase.instant(row, "created_at"),
-                row.getLong("last_used_step")),
+        PostgresSecondFactorStore::totp,
         subject);
   }
 
@@ -45,6 +45,38 @@ public final class PostgresSecondFactorStore implements SecondFactorStore {
   @Override
   public void deleteTotp(String subject) {
     database.update("DELETE FROM totp_credentials WHERE subject = ?", subject);
+  }
+
+  @Override
+  public boolean replaceTotpSecret(String subject, String expected, String replacement) {
+    // Only the secret column: a code used meanwhile keeps its last_used_step.
+    return database.update(
+            "UPDATE totp_credentials SET secret = ? WHERE subject = ? AND secret = ?", replacement, subject, expected)
+        == 1;
+  }
+
+  @Override
+  public List<Totp> totps(String afterSubject, int limit) {
+    return database.query(
+        "SELECT subject, secret, created_at, last_used_step FROM totp_credentials WHERE subject > ? ORDER BY subject LIMIT ?",
+        PostgresSecondFactorStore::totp,
+        afterSubject == null ? "" : afterSubject,
+        limit);
+  }
+
+  @Override
+  public long totpsNotUnderKey(String keyId) {
+    return database
+        .queryOne("SELECT count(*) FROM totp_credentials WHERE secret NOT LIKE ?", row -> row.getLong(1), keyId + ":%")
+        .orElse(0L);
+  }
+
+  @Override
+  public long accountsWithRecoveryCodesNotUnderKey(String keyId) {
+    return database
+        .queryOne(
+            "SELECT count(DISTINCT subject) FROM recovery_codes WHERE code_hash NOT LIKE ?", row -> row.getLong(1), keyId + ":%")
+        .orElse(0L);
   }
 
   @Override

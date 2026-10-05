@@ -1,7 +1,7 @@
 @*
- * Operator console overview (admins only): Authlete status, sessions, identity providers, storage
- * and recent audit events. Sessions and storage count every server; audit events are this
- * server's. Screen 15 in docs/screens.
+ * Operator console overview (admins only): Authlete status, sessions, identity providers, storage,
+ * two-step verification, the LDAP directory, webhooks and recent audit events. Sessions, storage
+ * and two-step figures count every server; directory, webhook and audit figures are this server's. Screen 15 in docs/screens.
  *@
 @import com.lattice.oidc.models.AdminPage
 @import scala.jdk.CollectionConverters._
@@ -60,6 +60,69 @@
       </table>
     </div>
   </section>
+
+  <section class="panel" id="two-step">
+    <h2>Two-step verification</h2>
+    <p class="muted">@{"%,d".format(page.twoStep().accountsWithApp())} @if(page.twoStep().accountsWithApp() == 1){account has} else {accounts have} an authenticator app. Secrets are encrypted with key <span class="mono">@page.twoStep().keyId()</span>.</p>
+    @if(page.twoStep().previousKeys() > 0) {
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th scope="col">Under a previous key</th><th scope="col">Count</th></tr></thead>
+          <tbody>
+            <tr><td>Authenticator secrets</td><td class="mono">@{"%,d".format(page.twoStep().secretsUnderPreviousKeys())}</td></tr>
+            <tr><td>Accounts with recovery codes</td><td class="mono">@{"%,d".format(page.twoStep().recoveryCodesUnderPreviousKeys())}</td></tr>
+          </tbody>
+        </table>
+      </div>
+      @if(page.twoStep().secretsUnderPreviousKeys() == 0 && page.twoStep().recoveryCodesUnderPreviousKeys() == 0) {
+        <p class="muted">Nothing is left under the @if(page.twoStep().previousKeys() == 1){previous key} else {@page.twoStep().previousKeys() previous keys}: remove previous-encryption-keys from the configuration.</p>
+      } else {
+        <p class="muted">Keep the @if(page.twoStep().previousKeys() == 1){previous key} else {@page.twoStep().previousKeys() previous keys} configured until both are zero. Secrets move to the new key on their own; recovery codes only when their accounts make new ones.</p>
+      }
+    }
+  </section>
+
+  @for(directory <- page.directory().toScala) {
+    <section class="panel" id="directory">
+      <h2>LDAP directory</h2>
+      <p class="status-line"><span class="dot@if(!directory.reachable()){ down}" aria-hidden="true"></span>@if(directory.reachable()){Reachable} else {Unreachable} · <span class="mono">@directory.url()</span></p>
+      <div class="table-wrap">
+        <table>
+          <tbody>
+            <tr><th scope="row">Status</th><td>@directory.detail()</td></tr>
+            <tr><th scope="row">Connections</th><td class="mono">@directory.openConnections() idle, at most @directory.maximumConnections()</td></tr>
+            <tr><th scope="row">Sign-ins on this server</th><td class="mono">@{"%,d".format(directory.signIns())}</td></tr>
+            <tr><th scope="row">Last error</th><td>@if(directory.lastError().isPresent()){<span class="mono">@AdminPage.time(directory.lastErrorAt())</span> · @directory.lastError().get()} else {None}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+
+  @if(!page.webhooks().isEmpty()) {
+    <section class="panel" id="webhooks">
+      <h2>Webhooks</h2>
+      <p class="muted">Deliveries from this server since it started. Waiting retries are lost if it restarts.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th scope="col">Endpoint</th><th scope="col">Events</th><th scope="col">Delivered</th><th scope="col">Retrying</th><th scope="col">Failed</th><th scope="col">Last delivered (UTC)</th><th scope="col">Last error</th></tr></thead>
+          <tbody>
+            @for(endpoint <- page.webhooks().asScala) {
+              <tr>
+                <td class="mono">@endpoint.url()</td>
+                <td>@endpoint.events()</td>
+                <td class="mono">@{"%,d".format(endpoint.delivered())}</td>
+                <td class="mono">@{"%,d".format(endpoint.retrying())}</td>
+                <td class="mono">@if(endpoint.failed() > 0){<span class="tag-event bad">@{"%,d".format(endpoint.failed())}</span>} else {0}</td>
+                <td class="mono">@AdminPage.time(endpoint.lastDeliveredAt())</td>
+                <td>@if(endpoint.lastError().isPresent()){<span class="mono">@AdminPage.time(endpoint.lastErrorAt())</span> · @endpoint.lastError().get()} else {None}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
 
   <section class="panel" id="audit">
     <h2>Recent audit events</h2>
