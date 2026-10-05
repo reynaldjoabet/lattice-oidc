@@ -9,10 +9,10 @@ import Dependencies.{
   nimbusOauth2Oidc,
   password4j,
   postgres,
-  qrcodegen,
   slf4j,
   unboundid,
-  webauthn
+  webauthn,
+  zxing
 }
 
 ThisBuild / organization := "com.lattice"
@@ -87,12 +87,11 @@ ThisBuild / libraryDependencies ++= Seq(
   flywayPostgres,
   postgres,
   nimbusOauth2Oidc,
-  qrcodegen,
+  zxing,
   webauthn,
   angusMail,
   "net.minidev"              % "json-smart"             % "2.6.0",
   "com.cronutils"            % "cron-utils"             % "9.2.1",
-  "org.mindrot"              % "jbcrypt"                % "0.4",
   "org.yaml"                 % "snakeyaml"              % "2.7",
   "jakarta.mail"             % "jakarta.mail-api"       % "2.1.5",
   "org.eclipse.angus"        % "jakarta.mail"           % "2.0.5",

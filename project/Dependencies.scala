@@ -66,7 +66,7 @@ object Dependencies {
     val jedis    = "8.0.1"
 
     // --- UI ---
-    val qrcodegen = "1.8.0"
+    val zxing = "3.5.4"
 
     // --- Passkeys ---
     val webauthn = "2.10.0"
@@ -259,8 +259,8 @@ object Dependencies {
   lazy val logback =
     "ch.qos.logback" % "logback-classic" % Version.logback
 
-  // UI: QR codes for credential offers (MIT, no dependencies)
-  lazy val qrcodegen = "io.nayuki" % "qrcodegen" % Version.qrcodegen
+  // UI: QR codes for credential offers and authenticator-app setup (Apache 2.0, no dependencies)
+  lazy val zxing = "com.google.zxing" % "core" % Version.zxing
 
   // Passkeys: WebAuthn relying party (Yubico, BSD-2)
   lazy val webauthn = "com.yubico" % "webauthn-server-core" % Version.webauthn

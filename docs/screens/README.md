@@ -82,7 +82,7 @@ Rules that every screen follows:
 
 | Screen | Purpose | Flow | Implemented in |
 | ------ | ------- | ---- | ------ |
-| 13 Credential offer | Scan a QR code or open the wallet; shows the transaction code | OpenID4VCI credential offer (`POST /api/offer/issue`) | `credentialOfferResult.scala.html`, QR via `QrCodes` (qrcodegen) |
+| 13 Credential offer | Scan a QR code or open the wallet; shows the transaction code | OpenID4VCI credential offer (`POST /api/offer/issue`) | `credentialOfferResult.scala.html`, QR via `QrCodes` (ZXing) |
 | 14 Open banking consent | The account, each permission and the expiry | Open Banking Brasil consents (`consent:` scope) | `authorization.scala.html` with `ObbConsentView` |
 
 <table>
