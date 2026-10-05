@@ -253,6 +253,12 @@ public class LdapDirectoryTest {
     assertEquals(0, status.signIns());
     login().authenticate("ada", "analytical-engine");
     assertEquals(1, app.injector().instanceOf(LdapDirectory.class).status().orElseThrow().signIns());
+    login().authenticate("ada", "wrong");
+    String metrics = app.injector().instanceOf(com.lattice.oidc.metrics.Metrics.class).scrape();
+    assertTrue(metrics.contains("lattice_ldap_operations_seconds_count{operation=\"bind\",outcome=\"success\"} 1"));
+    assertTrue(metrics.contains("lattice_ldap_operations_seconds_count{operation=\"bind\",outcome=\"invalid_credentials\"} 1"));
+    assertTrue(metrics.contains("lattice_ldap_operations_seconds_count{operation=\"search\",outcome=\"success\"} 2"));
+    assertTrue(metrics.contains("lattice_ldap_connections_maximum 10.0"));
 
     directory.shutDown(true);
     login().authenticate("ada", "analytical-engine");

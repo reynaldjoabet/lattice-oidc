@@ -117,6 +117,11 @@ public class IdentityBrokerTest {
     assertTrue(contentAsString(back).contains("Alice Upstream"));
     assertTrue(loggedIn(back));
     assertTrue(audited(AuditService.Event.BROKERED_LOGIN));
+    assertTrue(
+        app.injector()
+            .instanceOf(com.lattice.oidc.metrics.Metrics.class)
+            .scrape()
+            .contains("lattice_identity_provider_sign_ins_seconds_count{outcome=\"success\",provider=\"upstream\"} 1"));
 
     Result decision =
         route(
@@ -170,6 +175,11 @@ public class IdentityBrokerTest {
     assertEquals(502, r.status());
     assertFalse(loggedIn(r));
     assertTrue(audited(AuditService.Event.BROKERED_LOGIN_FAILED));
+    assertTrue(
+        app.injector()
+            .instanceOf(com.lattice.oidc.metrics.Metrics.class)
+            .scrape()
+            .contains("lattice_identity_provider_sign_ins_seconds_count{outcome=\"error\",provider=\"upstream\"} 1"));
   }
 
   @Test

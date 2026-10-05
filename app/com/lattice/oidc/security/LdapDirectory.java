@@ -1,8 +1,10 @@
 package com.lattice.oidc.security;
 
+import com.lattice.oidc.metrics.Metrics;
 import com.lattice.oidc.models.User;
 import com.lattice.oidc.stores.UserStore;
 import com.typesafe.config.Config;
+import io.micrometer.core.instrument.Gauge;
 import com.unboundid.ldap.sdk.Attribute;
 import com.unboundid.ldap.sdk.Filter;
 import com.unboundid.ldap.sdk.LDAPConnection;
@@ -24,6 +26,7 @@ import java.io.File;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.util.HashMap;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
@@ -95,6 +98,7 @@ public final class LdapDirectory {
   private final AtomicLong signIns = new AtomicLong();
   private final AtomicReference<Failure> lastFailure = new AtomicReference<>();
   private final UserStore users;
+  private final Metrics metrics;
   private final LDAPConnectionPool pool;
   private final String baseDn;
   private final String userFilter;
@@ -102,11 +106,12 @@ public final class LdapDirectory {
   private final boolean trustEmail;
 
   @Inject
-  public LdapDirectory(Config config, UserStore users, ApplicationLifecycle lifecycle) {
+  public LdapDirectory(Config config, UserStore users, ApplicationLifecycle lifecycle, Metrics metrics) {
     Config ldap = config.getConfig("lattice.ldap");
     this.enabled = ldap.getBoolean("enabled");
     this.url = ldap.getString("url");
     this.users = users;
+    this.metrics = metrics;
     this.baseDn = ldap.getString("base-dn");
     this.userFilter = ldap.getString("user-filter");
     this.trustEmail = ldap.getBoolean("trust-email");
@@ -117,6 +122,12 @@ public final class LdapDirectory {
     }
     this.pool = enabled ? connect(ldap) : null;
     if (pool != null) {
+      Gauge.builder("lattice.ldap.connections.available", pool, LDAPConnectionPool::getCurrentAvailableConnections)
+          .description("Idle connections in the LDAP pool")
+          .register(metrics.registry());
+      Gauge.builder("lattice.ldap.connections.maximum", pool, LDAPConnectionPool::getMaximumAvailableConnections)
+          .description("Maximum connections in the LDAP pool")
+          .register(metrics.registry());
       lifecycle.addStopHook(
           () -> {
             pool.close();
@@ -203,27 +214,38 @@ public final class LdapDirectory {
       return Optional.empty();
     }
     SearchResultEntry entry;
+    long started = System.nanoTime();
     try {
       Filter filter = Filter.create(userFilter.replace("{0}", Filter.encodeValue(identifier.trim())));
       entry = pool.searchForEntry(baseDn, SearchScope.SUB, filter, attributes.values().toArray(String[]::new));
     } catch (LDAPException e) {
+      record("search", "error", started);
       throw unavailable("LDAP search failed: " + e.getMessage(), e);
     }
+    record("search", entry == null ? "not_found" : "success", started);
     if (entry == null) {
       return Optional.empty();
     }
+    started = System.nanoTime();
     try {
       pool.bindAndRevertAuthentication(entry.getDN(), password);
     } catch (LDAPException e) {
       if (e.getResultCode() == ResultCode.INVALID_CREDENTIALS) {
+        record("bind", "invalid_credentials", started);
         return Optional.empty();
       }
+      record("bind", "error", started);
       throw unavailable("LDAP bind failed: " + e.getMessage(), e);
     }
+    record("bind", "success", started);
     signIns.incrementAndGet();
     User user = imported(entry);
     users.save(user);
     return Optional.of(user);
+  }
+
+  private void record(String operation, String outcome, long startedNanos) {
+    metrics.ldapOperation(operation, outcome, Duration.ofNanos(System.nanoTime() - startedNanos));
   }
 
   private Unavailable unavailable(String message, LDAPException cause) {

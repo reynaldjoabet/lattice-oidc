@@ -4,6 +4,7 @@ import com.lattice.oidc.common.Requests;
 import com.lattice.oidc.common.Responses;
 import com.lattice.oidc.handlers.IdentityProvider;
 import com.lattice.oidc.handlers.IdentityProviders;
+import com.lattice.oidc.metrics.Metrics;
 import com.lattice.oidc.models.AccountLinkPage;
 import com.lattice.oidc.models.AuthorizationInteraction;
 import com.lattice.oidc.models.User;
@@ -16,6 +17,7 @@ import com.lattice.oidc.stores.UserStore;
 import com.nimbusds.openid.connect.sdk.claims.UserInfo;
 import java.io.IOException;
 import java.net.URI;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -70,6 +72,7 @@ public final class IdentityBrokerController extends BaseController {
 
   private final IdentityProviders providers;
   private final SignInFlow flow;
+  private final Metrics metrics;
   private final Interactions interactions;
   private final UserSessions sessions;
   private final UserStore users;
@@ -84,8 +87,10 @@ public final class IdentityBrokerController extends BaseController {
       UserStore users,
       IdentityLinkStore links,
       LoginService login,
-      SignInFlow flow) {
+      SignInFlow flow,
+      Metrics metrics) {
     this.flow = flow;
+    this.metrics = metrics;
     this.providers = providers;
     this.interactions = interactions;
     this.sessions = sessions;
@@ -159,6 +164,7 @@ public final class IdentityBrokerController extends BaseController {
           }
 
           UserInfo userInfo;
+          long started = System.nanoTime();
           try {
             userInfo =
                 provider
@@ -168,7 +174,9 @@ public final class IdentityBrokerController extends BaseController {
                         state,
                         pending.get().verifier(),
                         pending.get().nonce());
+            metrics.identityProviderSignIn(provider.get().id(), true, Duration.ofNanos(System.nanoTime() - started));
           } catch (IOException e) {
+            metrics.identityProviderSignIn(provider.get().id(), false, Duration.ofNanos(System.nanoTime() - started));
             LOG.warn("Identity provider {} login failed: {}", providerId, e.getMessage());
             audit.record(
                 request, AuditService.Event.BROKERED_LOGIN_FAILED, "identity_provider", providerId);

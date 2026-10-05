@@ -2,6 +2,8 @@ package com.lattice.oidc.security;
 
 import com.lattice.oidc.client.AuthleteExecutionContext;
 import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.metrics.Metrics;
+import io.micrometer.core.instrument.Gauge;
 import com.typesafe.config.Config;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
@@ -83,13 +85,26 @@ public final class Webhooks {
   private final ActorSystem actorSystem;
   private final AuthleteExecutionContext executionContext;
 
+  private final Metrics metrics;
+
   @Inject
-  public Webhooks(Config config, WSClient ws, ActorSystem actorSystem, AuthleteExecutionContext executionContext) {
+  public Webhooks(
+      Config config, WSClient ws, ActorSystem actorSystem, AuthleteExecutionContext executionContext, Metrics metrics) {
     this.endpoints = endpoints(config.getConfig("lattice.webhooks"));
     this.ws = ws;
     this.actorSystem = actorSystem;
     this.executionContext = executionContext;
-    endpoints.forEach(endpoint -> trackers.put(endpoint, new Tracker()));
+    this.metrics = metrics;
+    for (int index = 0; index < endpoints.size(); index++) {
+      Endpoint endpoint = endpoints.get(index);
+      Tracker tracker = new Tracker();
+      trackers.put(endpoint, tracker);
+      Gauge.builder("lattice.webhook.retries.waiting", tracker.retrying, AtomicLong::get)
+          .description("Webhook deliveries waiting for a retry, on this server")
+          .tag("endpoint", Integer.toString(index + 1))
+          .tag("host", host(endpoint))
+          .register(metrics.registry());
+    }
     endpoints.forEach(endpoint -> LOG.info("Webhook endpoint: {} (events: {})", endpoint.url(), endpoint.events().isEmpty() ? "all" : endpoint.events()));
   }
 
@@ -158,6 +173,7 @@ public final class Webhooks {
               if (error == null && response.getStatus() / 100 == 2) {
                 tracker.delivered.incrementAndGet();
                 tracker.lastDeliveredAt = Instant.now();
+                record(endpoint, "delivered");
                 return;
               }
               String reason = error != null ? error.getMessage() : "HTTP " + response.getStatus();
@@ -165,15 +181,31 @@ public final class Webhooks {
               tracker.lastError = reason;
               if (attempt < RETRY_DELAYS.size()) {
                 tracker.retrying.incrementAndGet();
+                record(endpoint, "retry");
                 actorSystem
                     .scheduler()
                     .scheduleOnce(
                         RETRY_DELAYS.get(attempt), () -> send(endpoint, id, timestamp, json, attempt + 1), executionContext);
               } else {
                 tracker.failed.incrementAndGet();
+                record(endpoint, "failed");
                 LOG.warn("Webhook {} to {} failed after {} attempts: {}", id, endpoint.url(), attempt + 1, reason);
               }
             });
+  }
+
+  private void record(Endpoint endpoint, String outcome) {
+    metrics.webhookDelivery(endpoints.indexOf(endpoint) + 1, host(endpoint), outcome);
+  }
+
+  /** The endpoint's host for metric tags; never the path or query, which may hold a secret. */
+  private static String host(Endpoint endpoint) {
+    try {
+      java.net.URI uri = java.net.URI.create(endpoint.url());
+      return uri.getHost() == null ? "unknown" : uri.getHost() + (uri.getPort() < 0 ? "" : ":" + uri.getPort());
+    } catch (IllegalArgumentException e) {
+      return "unknown";
+    }
   }
 
   /** The Standard Webhooks signature: base64 HMAC-SHA256 of {@code id.timestamp.body}. */

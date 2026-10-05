@@ -1,5 +1,6 @@
 package com.lattice.oidc.cache;
 
+import com.lattice.oidc.metrics.Metrics;
 import com.lattice.oidc.stores.postgres.PostgresDatabase;
 import com.typesafe.config.Config;
 import java.sql.Connection;
@@ -31,12 +32,15 @@ public final class PostgresInvalidationBus implements InvalidationBus {
 
   private final PostgresDatabase database;
   private final Config postgres;
+  private final Metrics metrics;
   private final List<BiConsumer<String, String>> listeners = new CopyOnWriteArrayList<>();
   private volatile boolean running = true;
 
   @Inject
-  public PostgresInvalidationBus(PostgresDatabase database, Config config, ApplicationLifecycle lifecycle) {
+  public PostgresInvalidationBus(
+      PostgresDatabase database, Config config, ApplicationLifecycle lifecycle, Metrics metrics) {
     this.database = database;
+    this.metrics = metrics;
     this.postgres = config.getConfig("lattice.postgres");
     Thread listener = Thread.ofVirtual().name("lattice-cache-invalidation").start(this::listen);
     lifecycle.addStopHook(
@@ -69,6 +73,7 @@ public final class PostgresInvalidationBus implements InvalidationBus {
         if (reconnecting) {
           // Announcements made while disconnected were missed: start from an empty cache.
           deliver(null, null);
+          metrics.invalidationListenerReconnect();
           LOG.info("Cache invalidation listener reconnected; cache cleared");
         }
         PGConnection notifications = connection.unwrap(PGConnection.class);

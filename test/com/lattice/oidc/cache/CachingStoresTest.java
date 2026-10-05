@@ -123,7 +123,7 @@ public class CachingStoresTest {
   public void usersAreServedFromTheCacheUntilTheyChange() {
     CountingUserStore backing = new CountingUserStore();
     backing.save(user("1001", "old-hash"));
-    CachingUserStore users = new CachingUserStore(backing, new LocalReadCache(CONFIG, new LocalInvalidationBus()), METRICS);
+    CachingUserStore users = new CachingUserStore(backing, new LocalReadCache(CONFIG, new LocalInvalidationBus(), METRICS), METRICS);
 
     assertEquals("old-hash", users.bySubject("1001").orElseThrow().passwordHash());
     assertEquals("old-hash", users.bySubject("1001").orElseThrow().passwordHash());
@@ -138,8 +138,8 @@ public class CachingStoresTest {
   public void aSignOutOnOneServerIsSeenOnEveryServer() {
     CountingSessionStore shared = new CountingSessionStore();
     LocalInvalidationBus bus = new LocalInvalidationBus();
-    CachingSessionStore serverA = new CachingSessionStore(shared, new LocalReadCache(CONFIG, bus), METRICS);
-    CachingSessionStore serverB = new CachingSessionStore(shared, new LocalReadCache(CONFIG, bus), METRICS);
+    CachingSessionStore serverA = new CachingSessionStore(shared, new LocalReadCache(CONFIG, bus, METRICS), METRICS);
+    CachingSessionStore serverB = new CachingSessionStore(shared, new LocalReadCache(CONFIG, bus, METRICS), METRICS);
     Instant now = Instant.now();
     shared.create(session("s1", now, now.plusSeconds(3600)));
 
@@ -154,7 +154,7 @@ public class CachingStoresTest {
   @Test
   public void anExpiredSessionIsNotServedFromTheCache() throws InterruptedException {
     CountingSessionStore backing = new CountingSessionStore();
-    CachingSessionStore sessions = new CachingSessionStore(backing, new LocalReadCache(CONFIG, new LocalInvalidationBus()), METRICS);
+    CachingSessionStore sessions = new CachingSessionStore(backing, new LocalReadCache(CONFIG, new LocalInvalidationBus(), METRICS), METRICS);
     Instant now = Instant.now();
     backing.create(session("s1", now, now.plusMillis(300)));
     assertTrue(sessions.find("s1").isPresent());
@@ -165,7 +165,7 @@ public class CachingStoresTest {
   @Test
   public void recentActivityIsNotWrittenAgain() {
     CountingSessionStore backing = new CountingSessionStore();
-    CachingSessionStore sessions = new CachingSessionStore(backing, new LocalReadCache(CONFIG, new LocalInvalidationBus()), METRICS);
+    CachingSessionStore sessions = new CachingSessionStore(backing, new LocalReadCache(CONFIG, new LocalInvalidationBus(), METRICS), METRICS);
     Instant now = Instant.now();
     backing.create(session("s1", now, now.plusSeconds(3600)));
     sessions.find("s1");

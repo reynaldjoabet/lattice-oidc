@@ -116,5 +116,12 @@ public class WebhooksTest {
     assertEquals(0, status.get(1).delivered());
     assertEquals("the first retry is waiting", 1, status.get(1).retrying());
     assertEquals("HTTP 500", status.get(1).lastError().orElse(null));
+
+    String metrics = app.injector().instanceOf(com.lattice.oidc.metrics.Metrics.class).scrape();
+    String host = "127.0.0.1:" + receiver.getAddress().getPort();
+    assertTrue(metrics, metrics.contains("lattice_webhook_deliveries_total{endpoint=\"1\",host=\"" + host + "\",outcome=\"delivered\"} 1.0"));
+    assertTrue(metrics.contains("lattice_webhook_deliveries_total{endpoint=\"2\",host=\"" + host + "\",outcome=\"retry\"} 1.0"));
+    assertTrue(metrics.contains("lattice_webhook_retries_waiting{endpoint=\"2\",host=\"" + host + "\"} 1.0"));
+    assertTrue("no paths, which can hold secrets", !metrics.contains("/broken"));
   }
 }

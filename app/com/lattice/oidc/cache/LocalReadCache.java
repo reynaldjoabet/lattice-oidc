@@ -2,7 +2,9 @@ package com.lattice.oidc.cache;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.lattice.oidc.metrics.Metrics;
 import com.typesafe.config.Config;
+import io.micrometer.core.instrument.binder.cache.CaffeineCacheMetrics;
 import java.util.Optional;
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -23,12 +25,15 @@ public final class LocalReadCache implements ReadCache {
   private final InvalidationBus bus;
 
   @Inject
-  public LocalReadCache(Config config, InvalidationBus bus) {
+  public LocalReadCache(Config config, InvalidationBus bus, Metrics metrics) {
     this.entries =
         Caffeine.newBuilder()
             .maximumSize(config.getLong("lattice.cache.maximum-size"))
             .expireAfterWrite(config.getDuration("lattice.cache.ttl"))
+            .recordStats()
             .build();
+    // Size, evictions, hits and misses of the whole cache (cache="read_cache").
+    CaffeineCacheMetrics.monitor(metrics.registry(), entries, "read_cache");
     this.bus = bus;
     bus.subscribe(
         (region, key) -> {

@@ -305,13 +305,15 @@ Enable them for everyone with `verify-email` and `terms-version`, or for one acc
 - **Console:** the **Webhooks** panel shows, per endpoint on that server, deliveries, waiting retries, deliveries given up and the last error.
 
 **Metrics** (`lattice.metrics`, off by default). `GET /metrics` serves Prometheus metrics:
-- HTTP requests by route and status
-- audit events by type
-- Authlete API calls by operation, outcome and latency
-- active sessions
-- read-cache hits and misses
-- the PostgreSQL pool
-- the JVM
+- **Requests:** HTTP requests by route and status; audit events by type.
+- **Authlete:** API calls by operation, outcome and latency; tasks queued and running on its thread pool, and the pool size.
+- **Storage:** active sessions; short-lived entries by namespace (pending sign-ins, device codes, reset links); read-cache hits and misses, size and evictions; the PostgreSQL pool; rows deleted by each cleanup run; reconnects of the cache-invalidation listener.
+- **Redis:** every command by name, outcome and latency; the connection pool.
+- **Outbound:** webhook deliveries per endpoint (delivered, retry, failed) and retries waiting; LDAP searches and binds by outcome, and its pool; sign-ins through each upstream identity provider; emails sent or failed.
+- **Two-step:** accounts with an authenticator app, and what is still under a previous encryption key.
+- **JVM and process:** memory, heap pressure, garbage collection, threads, CPU, open files, uptime, JVM version, and log events by level.
+
+Figures read from storage are refreshed at most every 30 seconds, however often Prometheus scrapes. Webhook endpoints are tagged by position and host, never by path, which may hold a secret.
 
 Tags never contain user data. Set `METRICS_TOKEN` to require `Authorization: Bearer <token>`, and keep the endpoint off the public internet.
 

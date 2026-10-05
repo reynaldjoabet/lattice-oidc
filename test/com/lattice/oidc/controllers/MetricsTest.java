@@ -11,6 +11,7 @@ import static org.junit.Assert.assertTrue;
 import static play.test.Helpers.contentAsString;
 
 import com.lattice.oidc.client.FakeAuthleteApi;
+import com.lattice.oidc.common.Mailer;
 import java.util.Map;
 import org.junit.After;
 import org.junit.Test;
@@ -56,6 +57,26 @@ public class MetricsTest {
     assertTrue(text.contains("lattice_sessions_active 1.0"));
     assertTrue("JVM figures are included", text.contains("jvm_memory_used_bytes"));
     assertFalse("no user data in tags", text.contains("john"));
+  }
+
+  @Test
+  public void storageThreadPoolMailLogsAndJvmAreMeasured() {
+    start(Map.of("lattice.metrics.enabled", true, "lattice.cache.type", "local"));
+    route(app, withCsrf(post("/account/login", Map.of("loginId", "john", "password", "john", "next", "account"))));
+    app.injector().instanceOf(Mailer.class).send("jane@example.com", "Hello", "Text");
+
+    String text = contentAsString(route(app, get("/metrics")));
+    assertTrue("pending state by namespace", text.contains("lattice_short_lived_entries{namespace="));
+    assertTrue(text.contains("lattice_second_factor_accounts 0.0"));
+    assertTrue(text.contains("lattice_second_factor_previous_key{kind=\"authenticator_secrets\"} 0.0"));
+    assertTrue(text.contains("lattice_authlete_executor_tasks{state=\"queued\"}"));
+    assertTrue(text.contains("lattice_authlete_executor_threads 32.0"));
+    assertTrue("no SMTP host: the email is logged", text.contains("lattice_mail_messages_seconds_count{outcome=\"logged\"} 1"));
+    assertTrue("Caffeine's own figures", text.contains("cache_size{cache=\"read_cache\"}"));
+    assertTrue(text.contains("logback_events_total{level=\"warn\"}"));
+    assertTrue(text.contains("jvm_info{"));
+    assertTrue(text.contains("jvm_memory_usage_after_gc"));
+    assertFalse("no user data in tags", text.contains("jane@example.com"));
   }
 
   @Test

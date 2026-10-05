@@ -2,6 +2,7 @@ package com.lattice.oidc.stores.postgres;
 
 import com.lattice.oidc.client.AuthleteExecutionContext;
 import com.lattice.oidc.common.LatticeConfig;
+import com.lattice.oidc.metrics.Metrics;
 import com.typesafe.config.Config;
 import java.time.Duration;
 import javax.inject.Inject;
@@ -28,6 +29,7 @@ public final class StorageCleanup {
   private final PostgresDatabase database;
   private final LatticeConfig config;
   private final Duration auditRetention;
+  private final Metrics metrics;
 
   @Inject
   public StorageCleanup(
@@ -36,8 +38,10 @@ public final class StorageCleanup {
       Config rawConfig,
       ActorSystem actorSystem,
       AuthleteExecutionContext executionContext,
-      ApplicationLifecycle lifecycle) {
+      ApplicationLifecycle lifecycle,
+      Metrics metrics) {
     this.database = database;
+    this.metrics = metrics;
     this.config = config;
     this.auditRetention = rawConfig.getDuration("lattice.audit.retention");
     Duration interval = rawConfig.getDuration("lattice.postgres.cleanup-interval");
@@ -54,7 +58,8 @@ public final class StorageCleanup {
       int entries = database.update("DELETE FROM ephemeral WHERE expires_at <= now()");
       int counters = database.update("DELETE FROM counters WHERE window_ends_at <= now()");
       int consents = database.update("DELETE FROM obb_consents WHERE keep_until <= now()");
-      database.update("DELETE FROM audit_events WHERE occurred_at <= now() - make_interval(secs => ?)", auditRetention);
+      int auditEvents =
+          database.update("DELETE FROM audit_events WHERE occurred_at <= now() - make_interval(secs => ?)", auditRetention);
       // Idle limits differ for "keep me signed in" sessions; zero means no idle limit.
       Duration idle = config.sessionIdleTimeout();
       Duration rememberedIdle = config.rememberMe().idleTimeout();
@@ -66,10 +71,16 @@ public final class StorageCleanup {
                 OR (remember_me AND ? > 0 AND last_seen_at <= now() - make_interval(secs => ?))
               """,
               idle, idle, rememberedIdle, rememberedIdle);
+      metrics.storageCleanup("ephemeral", entries);
+      metrics.storageCleanup("counters", counters);
+      metrics.storageCleanup("obb_consents", consents);
+      metrics.storageCleanup("audit_events", auditEvents);
+      metrics.storageCleanup("sessions", sessions);
       if (entries + counters + consents + sessions > 0) {
         LOG.debug("Storage cleanup: {} entries, {} counters, {} consents, {} sessions", entries, counters, consents, sessions);
       }
     } catch (RuntimeException e) {
+      metrics.storageCleanupFailure();
       LOG.warn("Storage cleanup failed: {}", e.getMessage());
     }
   }
