@@ -14,7 +14,8 @@ import play.inject.ApplicationLifecycle;
 
 /**
  * Deletes expired rows every {@code lattice.postgres.cleanup-interval}: short-lived entries,
- * counters, consents past their keep date, and sessions past their lifetime or idle for longer than
+ * counters, consents past their keep date, audit events past {@code lattice.audit.retention}, and
+ * sessions past their lifetime or idle for longer than
  * {@code lattice.session.idle-timeout}. Every server runs it; the deletes are idempotent, so running
  * it on several servers at once is harmless. Lookups already ignore expired rows, so the cleanup
  * only reclaims space.
@@ -26,6 +27,7 @@ public final class StorageCleanup {
 
   private final PostgresDatabase database;
   private final LatticeConfig config;
+  private final Duration auditRetention;
 
   @Inject
   public StorageCleanup(
@@ -37,6 +39,7 @@ public final class StorageCleanup {
       ApplicationLifecycle lifecycle) {
     this.database = database;
     this.config = config;
+    this.auditRetention = rawConfig.getDuration("lattice.audit.retention");
     Duration interval = rawConfig.getDuration("lattice.postgres.cleanup-interval");
     Cancellable task = actorSystem.scheduler().scheduleAtFixedRate(interval, interval, this::run, executionContext);
     lifecycle.addStopHook(
@@ -51,13 +54,18 @@ public final class StorageCleanup {
       int entries = database.update("DELETE FROM ephemeral WHERE expires_at <= now()");
       int counters = database.update("DELETE FROM counters WHERE window_ends_at <= now()");
       int consents = database.update("DELETE FROM obb_consents WHERE keep_until <= now()");
+      database.update("DELETE FROM audit_events WHERE occurred_at <= now() - make_interval(secs => ?)", auditRetention);
+      // Idle limits differ for "keep me signed in" sessions; zero means no idle limit.
       Duration idle = config.sessionIdleTimeout();
+      Duration rememberedIdle = config.rememberMe().idleTimeout();
       int sessions =
-          idle.isZero()
-              ? database.update("DELETE FROM sessions WHERE expires_at <= now()")
-              : database.update(
-                  "DELETE FROM sessions WHERE expires_at <= now() OR last_seen_at <= now() - make_interval(secs => ?)",
-                  idle);
+          database.update(
+              """
+              DELETE FROM sessions WHERE expires_at <= now()
+                OR (NOT remember_me AND ? > 0 AND last_seen_at <= now() - make_interval(secs => ?))
+                OR (remember_me AND ? > 0 AND last_seen_at <= now() - make_interval(secs => ?))
+              """,
+              idle, idle, rememberedIdle, rememberedIdle);
       if (entries + counters + consents + sessions > 0) {
         LOG.debug("Storage cleanup: {} entries, {} counters, {} consents, {} sessions", entries, counters, consents, sessions);
       }

@@ -52,10 +52,10 @@ import play.mvc.Results;
 public final class PasskeyController extends BaseController {
 
   private static final String KIND = "passkey";
-  private static final String REAUTH = "reauth";
+  static final String REAUTH = "reauth";
   private static final String AUTHZ = AuthorizationController.KIND;
   /** How long a passkey or password confirmation allows sensitive account changes. */
-  private static final long REAUTH_SECONDS = 300;
+  static final long REAUTH_SECONDS = 300;
   private static final Pattern TICKET = Pattern.compile("[A-Za-z0-9_.~-]{1,200}");
 
   /** A started ceremony, waiting for the browser's response. */
@@ -107,6 +107,7 @@ public final class PasskeyController extends BaseController {
   private final UserStore users;
   private final LoginService login;
   private final CibaHandler ciba;
+  private final SignInFlow flow;
 
   @Inject
   public PasskeyController(
@@ -116,7 +117,9 @@ public final class PasskeyController extends BaseController {
       PasskeyStore store,
       UserStore users,
       LoginService login,
-      CibaHandler ciba) {
+      CibaHandler ciba,
+      SignInFlow flow) {
+    this.flow = flow;
     this.sessions = sessions;
     this.interactions = interactions;
     this.passkeys = passkeys;
@@ -309,28 +312,14 @@ public final class PasskeyController extends BaseController {
         });
   }
 
-  /** Passkey sign-in: a new session (acr = phishing-resistant), then continue. */
+  /**
+   * Passkey sign-in: a new session (acr = phishing-resistant), then any required actions, then
+   * continue. A passkey is itself two factors, so no authenticator code is asked for.
+   */
   private Result signIn(Http.Request request, User user, String next) {
-    Map<String, String> sessionOut = new HashMap<>();
-    long now = System.currentTimeMillis() / 1000L;
-    sessions.login(user, now, passkeys.acr(), sessionOut, request, "Passkey");
     audit.record(request, AuditService.Event.LOGIN_SUCCEEDED, "subject", user.getSubject(), "method", "passkey");
-    if (next.startsWith("authz:")) {
-      String ticket = next.substring(6);
-      String browserId = sessionOut.get(UserSessions.BROWSER_ID);
-      interactions
-          .get(AUTHZ, ticket, browserId, AuthorizationInteraction.class)
-          .ifPresent(
-              interaction ->
-                  interactions.put(
-                      AUTHZ,
-                      ticket,
-                      browserId,
-                      interaction
-                          .withPage(interaction.page().withLoggedInAs(Optional.of(user.displayName())).withError(null))
-                          .withShownSubject(user.getSubject())));
-    }
-    return sessions.apply(json(Map.of("redirect", url(next))), request, sessionOut);
+    SignInFlow.Started started = flow.start(request, user, "Passkey", passkeys.acr(), false, next);
+    return sessions.apply(json(Map.of("redirect", started.destination())), request, started.sessionOut());
   }
 
   public Result failed(Http.Request request, String next) {

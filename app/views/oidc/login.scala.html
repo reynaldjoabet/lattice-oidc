@@ -27,6 +27,9 @@
                @if(error.isPresent()){aria-invalid="true"}>
       </div>
     </div>
+    @if(com.lattice.oidc.models.UiSettings.of(request).rememberMe()) {
+      <label class="check"><input type="checkbox" name="rememberMe" value="true"> Keep me signed in</label>
+    }
     <button type="submit" class="primary">Continue</button>
   </form>
 }

@@ -3,6 +3,8 @@ package com.lattice.oidc.security;
 import com.google.inject.ImplementedBy;
 import com.lattice.oidc.common.Jsons;
 import com.lattice.oidc.filters.RequestIdFilter;
+import com.lattice.oidc.metrics.Metrics;
+import com.lattice.oidc.stores.AuditEventStore;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -47,13 +49,18 @@ public final class AuditService {
     SIGN_IN_REPORTED,
     PASSWORD_RESET_REQUESTED,
     PASSWORD_CHANGED,
-    CLIENT_SECRET_ROTATED
+    CLIENT_SECRET_ROTATED,
+    SECOND_FACTOR_ADDED,
+    SECOND_FACTOR_REMOVED,
+    RECOVERY_CODE_USED,
+    RECOVERY_CODES_REPLACED,
+    EMAIL_VERIFIED,
+    TERMS_ACCEPTED,
+    TERMS_DECLINED
   }
 
-  /** How many recent events the operator console shows (kept in memory, newest first). */
+  /** How many recent events the operator console overview shows. */
   public static final int RECENT_LIMIT = 50;
-
-  private final java.util.Deque<Map<String, Object>> recent = new java.util.ArrayDeque<>();
 
   /** Destination of audit records. */
   @ImplementedBy(LogSink.class)
@@ -72,13 +79,21 @@ public final class AuditService {
     }
   }
 
+  private static final Logger LOG = LoggerFactory.getLogger(AuditService.class);
+
   private final Sink sink;
   private final SecurityStats stats;
+  private final Metrics metrics;
+  private final AuditEventStore store;
+  private final Webhooks webhooks;
 
   @Inject
-  public AuditService(Sink sink, SecurityStats stats) {
+  public AuditService(Sink sink, SecurityStats stats, Metrics metrics, AuditEventStore store, Webhooks webhooks) {
     this.sink = sink;
     this.stats = stats;
+    this.metrics = metrics;
+    this.store = store;
+    this.webhooks = webhooks;
   }
 
   /**
@@ -102,18 +117,25 @@ public final class AuditService {
     }
     sink.write(record);
     stats.observe(event, request.remoteAddress(), record.get("login_id"));
-    synchronized (recent) {
-      recent.addFirst(java.util.Collections.unmodifiableMap(record));
-      while (recent.size() > RECENT_LIMIT) {
-        recent.removeLast();
-      }
+    metrics.auditEvent(event.name());
+    try {
+      store.append(record);
+    } catch (RuntimeException e) {
+      // The log line above is the record of last resort; storage trouble never fails the request.
+      LOG.warn("Could not store audit event {}: {}", event, e.getMessage());
+    }
+    if (webhooks.enabled()) {
+      webhooks.deliver(record);
     }
   }
 
-  /** The most recent events on this node, newest first (for the operator console). */
+  /** The most recent events, newest first (for the operator console). */
   public java.util.List<Map<String, Object>> recent() {
-    synchronized (recent) {
-      return java.util.List.copyOf(recent);
-    }
+    return search(new AuditEventStore.Query(java.util.Optional.empty(), java.util.Optional.empty(), java.util.Optional.empty(), RECENT_LIMIT));
+  }
+
+  /** Stored events matching the query, newest first (the console's audit log). */
+  public java.util.List<Map<String, Object>> search(AuditEventStore.Query query) {
+    return store.search(query);
   }
 }

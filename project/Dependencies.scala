@@ -58,6 +58,9 @@ object Dependencies {
     val slf4j   = "2.0.20"
     val logback = "1.6.4"
 
+    // --- Directory ---
+    val unboundid = "7.0.5"
+
     // --- Cache ---
     val caffeine = "3.3.0"
     val jedis    = "8.0.1"
@@ -72,9 +75,10 @@ object Dependencies {
     val angusMail = "2.0.5"
 
     // --- Observability ---
-    val datadog = "2.60.0"
-    val kamon   = "2.7.7"
-    val otel4s  = "1.1.0"
+    val micrometer = "1.17.1"
+    val datadog    = "2.60.0"
+    val kamon      = "2.7.7"
+    val otel4s     = "1.1.0"
 
     // --- Config ---
     val pureconfig = "0.17.10"
@@ -263,6 +267,13 @@ object Dependencies {
 
   // Mail: SMTP for password-reset links (Jakarta Mail implementation, EPL-2.0 / GPL-2.0 with CPE)
   lazy val angusMail = "org.eclipse.angus" % "angus-mail" % Version.angusMail
+
+  // Metrics: Prometheus endpoint (per-app registry, live values)
+  lazy val micrometerPrometheus =
+    "io.micrometer" % "micrometer-registry-prometheus" % Version.micrometer
+
+  // LDAP / Active Directory user federation (Apache 2.0); also an in-memory server for tests
+  lazy val unboundid = "com.unboundid" % "unboundid-ldapsdk" % Version.unboundid
 
   // Cache
   lazy val caffeine =

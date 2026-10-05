@@ -1,0 +1,40 @@
+@*
+ * The second step of a password sign-in: a code from the authenticator app, or a recovery code.
+ *@
+@(id: String, hasRecoveryCodes: Boolean, error: java.util.Optional[String])(implicit request: Http.Request)
+@import scala.jdk.OptionConverters._
+@layout("Two-step verification") {
+  <div class="status">
+    <span class="status-icon info">@icon("phone", "")</span>
+    <h1>Enter the code</h1>
+    <p class="lead">Open your authenticator app and enter the 6-digit code for this account.</p>
+  </div>
+  @for(message <- error.toScala) {
+    <div class="alert alert-error" role="alert" id="code-error">@icon("alert")<span>@message</span></div>
+  }
+  <form method="post" action="@com.lattice.oidc.controllers.routes.SecondFactorController.verify()" class="stack">
+    @helper.CSRF.formField
+    <input type="hidden" name="id" value="@id">
+    <div class="field">
+      <label for="code">Code</label>
+      <input type="text" id="code" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]{6,7}"
+             maxlength="7" class="code-input" required autofocus @if(error.isPresent()){aria-describedby="code-error" aria-invalid="true"}>
+    </div>
+    <button type="submit" class="primary">Verify</button>
+  </form>
+  @if(hasRecoveryCodes) {
+    <details>
+      <summary>Lost your phone? Use a recovery code</summary>
+      <form method="post" action="@com.lattice.oidc.controllers.routes.SecondFactorController.verify()" class="stack">
+        @helper.CSRF.formField
+        <input type="hidden" name="id" value="@id">
+        <div class="field">
+          <label for="recoveryCode">Recovery code</label>
+          <input type="text" id="recoveryCode" name="recoveryCode" autocomplete="off" autocapitalize="characters" spellcheck="false" required>
+          <span class="hint">Each code works once.</span>
+        </div>
+        <button type="submit">Use recovery code</button>
+      </form>
+    </details>
+  }
+}

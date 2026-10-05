@@ -1,0 +1,22 @@
+@*
+ * Required action: accept the current terms (lattice.required-actions.terms-version).
+ *@
+@import scala.jdk.OptionConverters._
+@(termsUrl: java.util.Optional[String], version: String, next: String)(implicit request: Http.Request)
+@layout("Terms of service") {
+  <div class="intro">
+    <h1>Our terms have changed</h1>
+    <p class="lead">To keep using your account, please review and accept the terms (version @version).</p>
+  </div>
+  @for(url <- termsUrl.toScala) {
+    <p><a href="@url" target="_blank" rel="noopener noreferrer">Read the terms</a></p>
+  }
+  <form method="post" action="@com.lattice.oidc.controllers.routes.RequiredActionsController.terms()">
+    @helper.CSRF.formField
+    <input type="hidden" name="next" value="@next">
+    <div class="buttons">
+      <button type="submit" name="decline" value="true">Decline and sign out</button>
+      <button type="submit" name="accept" value="true" class="primary">Accept</button>
+    </div>
+  </form>
+}

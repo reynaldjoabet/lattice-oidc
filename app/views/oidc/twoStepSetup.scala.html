@@ -1,0 +1,30 @@
+@*
+ * Set up an authenticator app: scan the QR code (or type the key), then confirm with a code.
+ *@
+@import com.lattice.oidc.security.SecondFactors
+@import scala.jdk.OptionConverters._
+@(enrollment: SecondFactors.Enrollment, next: String, error: java.util.Optional[String])(implicit request: Http.Request)
+@layout("Set up an authenticator app") {
+  <div class="intro">
+    <h1>Set up an authenticator app</h1>
+    <p class="lead">Scan this code with an authenticator app such as Google Authenticator, Microsoft Authenticator or 1Password. You'll then enter a code from it when you sign in with your password.</p>
+  </div>
+  <div class="qr">@Html(enrollment.qrSvg())</div>
+  <details>
+    <summary>Can't scan? Enter the key instead</summary>
+    <p class="mono key">@enrollment.secret()</p>
+  </details>
+  @for(message <- error.toScala) {
+    <div class="alert alert-error" role="alert" id="code-error">@icon("alert")<span>@message</span></div>
+  }
+  <form method="post" action="@com.lattice.oidc.controllers.routes.SecondFactorController.setup()" class="stack">
+    @helper.CSRF.formField
+    <input type="hidden" name="next" value="@next">
+    <div class="field">
+      <label for="code">Code from the app</label>
+      <input type="text" id="code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" class="code-input" required
+             @if(error.isPresent()){aria-describedby="code-error" aria-invalid="true"}>
+    </div>
+    <button type="submit" class="primary">Turn on</button>
+  </form>
+}

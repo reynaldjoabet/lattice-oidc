@@ -35,11 +35,14 @@ public final class CredentialOfferController extends BaseController {
       "[\"DigitalCredential\", \"IdentityCredential\", \"org.iso.18013.5.1.mDL\"]";
 
   private final UserSessions sessions;
+  private final SignInFlow flow;
   private final LoginService login;
   private final LatticeConfig config;
 
   @Inject
-  public CredentialOfferController(UserSessions sessions, LoginService login, LatticeConfig config) {
+  public CredentialOfferController(
+      UserSessions sessions, LoginService login, LatticeConfig config, SignInFlow flow) {
+    this.flow = flow;
     this.sessions = sessions;
     this.login = login;
     this.config = config;
@@ -85,6 +88,9 @@ public final class CredentialOfferController extends BaseController {
               return page(request, 401, withError(form, Optional.empty(), "Invalid login ID or password."));
             }
             user = auth.user().get();
+            if (flow.needsSecondFactor(user)) {
+              return flow.challenge(request, user, "Password", false, "offer", Optional.empty());
+            }
             sessions.login(user, System.currentTimeMillis() / 1000L, null, sessionOut, request, "Password");
           }
           Optional<String> shown = Optional.of(user.displayName());

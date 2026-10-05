@@ -188,4 +188,19 @@ public class ConsoleTest {
     assertTrue(html.contains("2 different"));
     assertTrue(html.contains("Passkey adoption"));
   }
+
+  @Test
+  public void theAuditLogCanBeFilteredByEventAndSubject() {
+    route(app, withCsrf(post("/account/login", Map.of("loginId", "jane", "password", "wrong", "next", "account"))));
+    Map<String, String> admin = signIn("john");
+
+    String failures = contentAsString(route(app, get("/admin/audit?event=LOGIN_FAILED").session(admin)));
+    assertTrue(failures.contains(">LOGIN_FAILED</span>"));
+    assertFalse("filtered to the chosen event", failures.contains(">LOGIN_SUCCEEDED</span>"));
+
+    String johns = contentAsString(route(app, get("/admin/audit?subject=1001").session(admin)));
+    assertTrue(johns.contains(">LOGIN_SUCCEEDED</span>"));
+    assertFalse(johns.contains(">LOGIN_FAILED</span>"));
+    assertEquals(403, route(app, get("/admin/audit").session(signIn("jane"))).status());
+  }
 }

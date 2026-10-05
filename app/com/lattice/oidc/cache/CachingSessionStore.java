@@ -1,6 +1,7 @@
 package com.lattice.oidc.cache;
 
 import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.metrics.Metrics;
 import com.lattice.oidc.stores.SessionStore;
 import java.time.Duration;
 import java.time.Instant;
@@ -24,11 +25,13 @@ public final class CachingSessionStore implements SessionStore {
 
   private final SessionStore store;
   private final ReadCache cache;
+  private final Metrics metrics;
 
   @Inject
-  public CachingSessionStore(@Named("backing") SessionStore store, ReadCache cache) {
+  public CachingSessionStore(@Named("backing") SessionStore store, ReadCache cache, Metrics metrics) {
     this.store = store;
     this.cache = cache;
+    this.metrics = metrics;
   }
 
   @Override
@@ -42,6 +45,7 @@ public final class CachingSessionStore implements SessionStore {
       return Optional.empty();
     }
     Optional<Session> cached = cache.get(REGION, id).map(json -> Jsons.read(json, Session.class));
+    metrics.cacheLookup(REGION, cached.isPresent());
     if (cached.isPresent()) {
       return cached.filter(session -> session.expiresAt().isAfter(Instant.now()));
     }

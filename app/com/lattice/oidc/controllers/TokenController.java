@@ -39,13 +39,19 @@ public final class TokenController extends BaseController {
   private static final String CHALLENGE = "Basic realm=\"token\"";
 
   private final LoginService login;
+  private final SignInFlow flow;
   private final TokenGrantHandler grants;
   private final NativeSsoHandler nativeSso;
   private final ObbTokenHandler obb;
 
   @Inject
   public TokenController(
-      LoginService login, TokenGrantHandler grants, NativeSsoHandler nativeSso, ObbTokenHandler obb) {
+      LoginService login,
+      TokenGrantHandler grants,
+      NativeSsoHandler nativeSso,
+      ObbTokenHandler obb,
+      SignInFlow flow) {
+    this.flow = flow;
     this.login = login;
     this.grants = grants;
     this.nativeSso = nativeSso;
@@ -152,8 +158,13 @@ public final class TokenController extends BaseController {
     // Validate the credentials of the resource owner (with brute-force protection).
     LoginService.Result auth = login.authenticate(response.getUsername(), response.getPassword(), request.remoteAddress());
     auditLogin(request, response.getUsername(), auth);
-    if (auth.outcome() != LoginService.Outcome.SUCCESS) {
-      // The credentials are invalid. An access token is not issued; Authlete's /api/auth/token/fail
+    // The password grant can't ask for an authenticator code or run required actions, so accounts
+    // that need either can't use it.
+    boolean needsInteraction =
+        auth.outcome() == LoginService.Outcome.SUCCESS
+            && (flow.needsSecondFactor(auth.user().get()) || flow.gate(auth.user().get(), "account").isPresent());
+    if (auth.outcome() != LoginService.Outcome.SUCCESS || needsInteraction) {
+      // The credentials are invalid (or not enough on their own). An access token is not issued; Authlete's /api/auth/token/fail
       // API generates the error response.
       TokenFailResponse fail =
           api()

@@ -258,6 +258,54 @@ How the cache stays correct:
 
 PostgreSQL and Redis are both checked at startup, so a wrong address stops the server at startup instead of the first sign-in.
 
+### Sign-in and account security
+
+**Keep me signed in** (`lattice.session.remember-me`). Password sign-in offers a checkbox. Remembered sessions last up to 30 days and end after 7 days without activity; others keep the 30-minute idle limit and 10-hour lifetime. The session cookie itself lives 30 days and the server enforces each session's limits, so closing the browser doesn't end an unremembered session that's used again within 30 minutes.
+
+**Two-step verification** (`lattice.second-factor`). Users can set up an authenticator app (TOTP, RFC 6238) from their account page. After that, password sign-in also asks for a 6-digit code.
+- **Recovery codes:** 10 are issued when the app is set up and shown once. Each can replace a code exactly once.
+- **Stored safely:** app secrets are encrypted (AES-GCM) and recovery codes stored as keyed hashes.
+- **No reuse:** a code is accepted once.
+- **Wrong codes:** count towards `lattice.login.max-failures`.
+- **ACR:** signing in with a code asserts the ACR `mfa`.
+- **`required = true`:** every account must have an authenticator app or a passkey.
+- **Exempt:** passkey sign-in, since a passkey is already two factors.
+- **The password grant** refuses accounts with an app, because it can't ask for a code.
+
+**Required actions** (`lattice.required-actions`). Steps a user must complete before using apps or their account: verify their email (a link is emailed), accept a new version of the terms, choose a new password, or set up an authenticator app or a passkey. Each is pending while its condition holds, so it clears itself once met. They're enforced everywhere a signed-in user goes:
+- **Consent pages** wait for them.
+- **Account, approval, console, device and credential-offer pages** redirect to them.
+- **Silent sign-in** (`prompt=none`) fails with `interaction_required`.
+- **The password grant** refuses the account.
+
+Enable them for everyone with `verify-email` and `terms-version`, or for one account by listing actions in its `requiredActions` attribute.
+
+**LDAP and Active Directory** (`lattice.ldap`). Read-only user federation, like Keycloak's:
+- **Sign-in:** a sign-in that isn't a local account is looked up in the directory, and the password is checked with an LDAP bind.
+- **Copied locally:** the user is then copied into Lattice's store, keyed by the entry's stable id (`entryUUID`, or `objectGUID` on Active Directory), and refreshed at every sign-in. Passkeys, authenticator apps and sessions stay in Lattice.
+- **Passwords:** password change and reset are left to the directory.
+- **Outages:** a directory outage shows "temporarily unavailable" and doesn't count towards the lockout.
+- **Startup check:** the connection is checked at startup.
+
+### Audit trail, webhooks and metrics
+
+**Stored audit events** (`lattice.audit`). Every security event (sign-ins, consents, sign-outs, password and second-factor changes, client changes, ...) is also stored. With PostgreSQL storage they're kept for `retention` (90 days); in memory, the latest 10,000 are kept. The operator console's **Audit log** page lists them, newest first, filterable by event and account.
+
+**Webhooks** (`lattice.webhooks`). Events can be sent to endpoints such as a SIEM, signed the Standard Webhooks way: `webhook-id`, `webhook-timestamp`, and `webhook-signature: v1,<HMAC-SHA256 of id.timestamp.body>`.
+- **Configuration:** each endpoint has a secret and an optional list of events. One endpoint can also come from `WEBHOOK_URL`, `WEBHOOK_SECRET` and `WEBHOOK_EVENTS`.
+- **Retries:** a failed delivery is retried after 5 seconds, 30 seconds and 2 minutes.
+
+**Metrics** (`lattice.metrics`, off by default). `GET /metrics` serves Prometheus metrics:
+- HTTP requests by route and status
+- audit events by type
+- Authlete API calls by operation, outcome and latency
+- active sessions
+- read-cache hits and misses
+- the PostgreSQL pool
+- the JVM
+
+Tags never contain user data. Set `METRICS_TOKEN` to require `Authorization: Bearer <token>`, and keep the endpoint off the public internet.
+
 ## Tickets: a handle for pending requests
 
 A ticket is Authlete's handle for a request it is in the middle of processing. When Authlete can't finish a request on its own (for example, it needs the user to log in and consent), it remembers the parsed request on its side and gives Lattice an opaque string, the ticket. Lattice later sends that ticket back to finish the request (issue) or reject it (fail).
@@ -868,6 +916,14 @@ $$
 
 The symbol $\equiv$ means "congruent": both sides leave the same remainder when divided by $p$. It is used instead of $=$ because the two sides usually only match after wrapping around $p$. For example, $6^2 = 36$, and $36 \equiv 2 \pmod{17}$ because $36 - 2 = 34$ is a multiple of 17.
 
+**Formal definition.** Let $a, r, m \in \mathbb{Z}$ with $m > 0$. We write
+
+$$
+a \equiv r \pmod{m}
+$$
+
+if $m$ divides $a - r$, written $m \mid (a - r)$. In the example, $17 \mid (36 - 2)$ because $34 = 2 \times 17$. This is the same as saying $a$ and $r$ leave the same remainder when divided by $m$.
+
 Every coordinate is an integer from $0$ to $p - 1$. The curve also has one extra point, the **point at infinity** $\mathcal{O}$.
 
 The points on the curve, together with the point at infinity, form a **group** under the addition rule. A group is closed: adding any two members gives another member. $\mathcal{O}$ is the group's zero: adding it to any point leaves that point unchanged.
@@ -1071,3 +1127,5 @@ The heading shows the provider's server.name from the identity providers file. T
 { "id": "okta", "server": { "name": "Partner Inc (Okta)", "issuer": "https://partner.okta.com" },
   "domains": ["partner.example"], ... }
 ```
+
+One database for all instances. As with Lattice, every Keycloak node connects to the same database (PostgreSQL, MySQL and others). Realms, clients, users, credentials and, since Keycloak 26, user sessions are stored there

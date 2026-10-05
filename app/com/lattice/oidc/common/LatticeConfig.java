@@ -54,6 +54,7 @@ public final class LatticeConfig {
   private final Duration interactionTtl;
   private final Duration sessionMaxLifespan;
   private final Duration sessionIdleTimeout;
+  private final RememberMe rememberMe;
   private final Storage storage;
   private final int loginMaxFailures;
   private final int loginMaxFailuresPerAccount;
@@ -87,6 +88,9 @@ public final class LatticeConfig {
   /** Password reset links: lifetime, and rate limits per account and per IP address. */
   public record Recovery(Duration linkLifetime, int maxRequests, int maxRequestsPerIp, Duration window) {}
 
+  /** "Keep me signed in": whether it's offered, and the limits of such sessions. */
+  public record RememberMe(boolean enabled, Duration idleTimeout, Duration maxLifespan) {}
+
   /** Device authorization grant: wrong user codes allowed per IP address per window. */
   public record Device(int maxAttempts, Duration window) {}
 
@@ -107,6 +111,11 @@ public final class LatticeConfig {
     interactionTtl = lattice.getDuration("session.interaction-ttl");
     sessionMaxLifespan = lattice.getDuration("session.max-lifespan");
     sessionIdleTimeout = lattice.getDuration("session.idle-timeout");
+    rememberMe =
+        new RememberMe(
+            lattice.getBoolean("session.remember-me.enabled"),
+            lattice.getDuration("session.remember-me.idle-timeout"),
+            lattice.getDuration("session.remember-me.max-lifespan"));
     storage = Storage.valueOf(lattice.getString("storage").trim().toUpperCase(java.util.Locale.ROOT));
     loginMaxFailures = lattice.getInt("login.max-failures");
     loginMaxFailuresPerAccount = lattice.getInt("login.max-failures-per-account");
@@ -232,6 +241,10 @@ public final class LatticeConfig {
   /** Inactivity after which a login session ends; zero means no idle limit. */
   public Duration sessionIdleTimeout() {
     return sessionIdleTimeout;
+  }
+
+  public RememberMe rememberMe() {
+    return rememberMe;
   }
 
   public Storage storage() {

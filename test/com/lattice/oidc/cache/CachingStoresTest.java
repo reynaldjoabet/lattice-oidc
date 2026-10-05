@@ -3,6 +3,7 @@ package com.lattice.oidc.cache;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import com.lattice.oidc.metrics.Metrics;
 import com.lattice.oidc.models.User;
 import com.lattice.oidc.stores.InMemorySessionStore;
 import com.lattice.oidc.stores.SessionStore;
@@ -22,6 +23,9 @@ import org.junit.Test;
 
 /** The read cache in front of the user and session stores, with per-server caches. */
 public class CachingStoresTest {
+
+  private static final Metrics METRICS =
+      new Metrics(new play.inject.DelegateApplicationLifecycle(new play.api.inject.DefaultApplicationLifecycle()));
 
   private static final Config CONFIG =
       ConfigFactory.parseMap(Map.of("lattice.cache.ttl", "30 seconds", "lattice.cache.maximum-size", 1000));
@@ -112,14 +116,14 @@ public class CachingStoresTest {
   }
 
   private static Session session(String id, Instant lastSeen, Instant expires) {
-    return new Session(id, "1001", "ua", "127.0.0.1", "Password", lastSeen, lastSeen, expires);
+    return new Session(id, "1001", "ua", "127.0.0.1", "Password", lastSeen, lastSeen, expires, false);
   }
 
   @Test
   public void usersAreServedFromTheCacheUntilTheyChange() {
     CountingUserStore backing = new CountingUserStore();
     backing.save(user("1001", "old-hash"));
-    CachingUserStore users = new CachingUserStore(backing, new LocalReadCache(CONFIG, new LocalInvalidationBus()));
+    CachingUserStore users = new CachingUserStore(backing, new LocalReadCache(CONFIG, new LocalInvalidationBus()), METRICS);
 
     assertEquals("old-hash", users.bySubject("1001").orElseThrow().passwordHash());
     assertEquals("old-hash", users.bySubject("1001").orElseThrow().passwordHash());
@@ -134,8 +138,8 @@ public class CachingStoresTest {
   public void aSignOutOnOneServerIsSeenOnEveryServer() {
     CountingSessionStore shared = new CountingSessionStore();
     LocalInvalidationBus bus = new LocalInvalidationBus();
-    CachingSessionStore serverA = new CachingSessionStore(shared, new LocalReadCache(CONFIG, bus));
-    CachingSessionStore serverB = new CachingSessionStore(shared, new LocalReadCache(CONFIG, bus));
+    CachingSessionStore serverA = new CachingSessionStore(shared, new LocalReadCache(CONFIG, bus), METRICS);
+    CachingSessionStore serverB = new CachingSessionStore(shared, new LocalReadCache(CONFIG, bus), METRICS);
     Instant now = Instant.now();
     shared.create(session("s1", now, now.plusSeconds(3600)));
 
@@ -150,7 +154,7 @@ public class CachingStoresTest {
   @Test
   public void anExpiredSessionIsNotServedFromTheCache() throws InterruptedException {
     CountingSessionStore backing = new CountingSessionStore();
-    CachingSessionStore sessions = new CachingSessionStore(backing, new LocalReadCache(CONFIG, new LocalInvalidationBus()));
+    CachingSessionStore sessions = new CachingSessionStore(backing, new LocalReadCache(CONFIG, new LocalInvalidationBus()), METRICS);
     Instant now = Instant.now();
     backing.create(session("s1", now, now.plusMillis(300)));
     assertTrue(sessions.find("s1").isPresent());
@@ -161,7 +165,7 @@ public class CachingStoresTest {
   @Test
   public void recentActivityIsNotWrittenAgain() {
     CountingSessionStore backing = new CountingSessionStore();
-    CachingSessionStore sessions = new CachingSessionStore(backing, new LocalReadCache(CONFIG, new LocalInvalidationBus()));
+    CachingSessionStore sessions = new CachingSessionStore(backing, new LocalReadCache(CONFIG, new LocalInvalidationBus()), METRICS);
     Instant now = Instant.now();
     backing.create(session("s1", now, now.plusSeconds(3600)));
     sessions.find("s1");

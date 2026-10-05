@@ -10,26 +10,33 @@ import com.lattice.oidc.cache.LocalReadCache;
 import com.lattice.oidc.cache.PostgresInvalidationBus;
 import com.lattice.oidc.cache.ReadCache;
 import com.lattice.oidc.cache.RedisReadCache;
+import com.lattice.oidc.metrics.SessionGauge;
+import com.lattice.oidc.stores.AuditEventStore;
 import com.lattice.oidc.stores.ConsentStore;
 import com.lattice.oidc.stores.CounterStore;
 import com.lattice.oidc.stores.EphemeralStore;
 import com.lattice.oidc.stores.IdentityLinkStore;
+import com.lattice.oidc.stores.InMemoryAuditEventStore;
 import com.lattice.oidc.stores.InMemoryConsentStore;
 import com.lattice.oidc.stores.InMemoryCounterStore;
 import com.lattice.oidc.stores.InMemoryEphemeralStore;
 import com.lattice.oidc.stores.InMemoryIdentityLinkStore;
 import com.lattice.oidc.stores.InMemoryPasskeyStore;
+import com.lattice.oidc.stores.InMemorySecondFactorStore;
 import com.lattice.oidc.stores.InMemorySessionStore;
 import com.lattice.oidc.stores.InMemoryUserStore;
 import com.lattice.oidc.stores.PasskeyStore;
+import com.lattice.oidc.stores.SecondFactorStore;
 import com.lattice.oidc.stores.SessionStore;
 import com.lattice.oidc.stores.UserStore;
+import com.lattice.oidc.stores.postgres.PostgresAuditEventStore;
 import com.lattice.oidc.stores.postgres.PostgresConsentStore;
 import com.lattice.oidc.stores.postgres.PostgresCounterStore;
 import com.lattice.oidc.stores.postgres.PostgresDatabase;
 import com.lattice.oidc.stores.postgres.PostgresEphemeralStore;
 import com.lattice.oidc.stores.postgres.PostgresIdentityLinkStore;
 import com.lattice.oidc.stores.postgres.PostgresPasskeyStore;
+import com.lattice.oidc.stores.postgres.PostgresSecondFactorStore;
 import com.lattice.oidc.stores.postgres.PostgresSessionStore;
 import com.lattice.oidc.stores.postgres.PostgresUserStore;
 import com.lattice.oidc.stores.postgres.StorageCleanup;
@@ -81,6 +88,11 @@ public final class StorageModule extends AbstractModule {
     if (redisState || cache.equals("redis")) {
       bind(RedisConnection.class).asEagerSingleton();
     }
+    bind(SessionGauge.class).asEagerSingleton();
+    if (config.getBoolean("lattice.ldap.enabled")) {
+      // Connect at startup, so a wrong directory address or bind password fails the deployment.
+      bind(com.lattice.oidc.security.LdapDirectory.class).asEagerSingleton();
+    }
 
     // Durable data.
     if (postgres) {
@@ -89,10 +101,14 @@ public final class StorageModule extends AbstractModule {
       bind(PasskeyStore.class).to(PostgresPasskeyStore.class);
       bind(IdentityLinkStore.class).to(PostgresIdentityLinkStore.class);
       bind(ConsentStore.class).to(PostgresConsentStore.class);
+      bind(AuditEventStore.class).to(PostgresAuditEventStore.class);
+      bind(SecondFactorStore.class).to(PostgresSecondFactorStore.class);
     } else {
       bind(PasskeyStore.class).to(InMemoryPasskeyStore.class);
       bind(IdentityLinkStore.class).to(InMemoryIdentityLinkStore.class);
       bind(ConsentStore.class).to(InMemoryConsentStore.class);
+      bind(AuditEventStore.class).to(InMemoryAuditEventStore.class);
+      bind(SecondFactorStore.class).to(InMemorySecondFactorStore.class);
     }
 
     // Users and sessions, with or without the read cache in front.

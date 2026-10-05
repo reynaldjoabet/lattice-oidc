@@ -12,6 +12,9 @@ GET     /assets/*file               controllers.Assets.versioned(path="/public",
 GET     /health/live                com.lattice.oidc.controllers.HealthController.live()
 GET     /health/ready               com.lattice.oidc.controllers.HealthController.ready()
 
+# Prometheus metrics (lattice.metrics.enabled; optional bearer token lattice.metrics.token)
+GET     /metrics                    com.lattice.oidc.controllers.MetricsController.scrape(request: Request)
+
 # End-user account, built-in CIBA approval and operator console
 GET     /account                    com.lattice.oidc.controllers.AccountController.index(request: Request)
 POST    /account/login              com.lattice.oidc.controllers.AccountController.login(request: Request)
@@ -25,6 +28,7 @@ POST    /admin/clients/:id          com.lattice.oidc.controllers.ConsoleControll
 POST    /admin/clients/:id/secret   com.lattice.oidc.controllers.ConsoleController.rotateSecret(request: Request, id: Long)
 POST    /admin/clients/:id/delete   com.lattice.oidc.controllers.ConsoleController.delete(request: Request, id: Long)
 GET     /admin/security             com.lattice.oidc.controllers.ConsoleController.security(request: Request)
+GET     /admin/audit                com.lattice.oidc.controllers.ConsoleController.audit(request: Request, event: String ?= "", subject: String ?= "", before: java.lang.Long ?= null)
 GET     /ciba/approved              com.lattice.oidc.controllers.CibaApprovalController.approved(request: Request)
 
 # Account security: sessions, sign-in alerts, password
@@ -35,6 +39,20 @@ POST    /account/sessions/:id/end   com.lattice.oidc.controllers.AccountSecurity
 POST    /account/alerts/:id         com.lattice.oidc.controllers.AccountSecurityController.answerAlert(request: Request, id: String)
 GET     /account/password           com.lattice.oidc.controllers.AccountSecurityController.passwordForm(request: Request)
 POST    /account/password           com.lattice.oidc.controllers.AccountSecurityController.changePassword(request: Request)
+
+# Required actions (verify email, accept terms, new password, set up a passkey or authenticator app)
+GET     /account/actions            com.lattice.oidc.controllers.RequiredActionsController.page(request: Request, next: String ?= "account")
+POST    /account/actions/verify-email com.lattice.oidc.controllers.RequiredActionsController.sendVerification(request: Request)
+GET     /account/verify-email       com.lattice.oidc.controllers.RequiredActionsController.verifyEmail(request: Request, token: String ?= "")
+POST    /account/actions/terms      com.lattice.oidc.controllers.RequiredActionsController.terms(request: Request)
+POST    /account/actions/password   com.lattice.oidc.controllers.RequiredActionsController.password(request: Request)
+
+# Two-step verification: authenticator apps (TOTP) and recovery codes
+POST    /sign-in/code               com.lattice.oidc.controllers.SecondFactorController.verify(request: Request)
+GET     /account/two-step           com.lattice.oidc.controllers.SecondFactorController.setupPage(request: Request, next: String ?= "account")
+POST    /account/two-step           com.lattice.oidc.controllers.SecondFactorController.setup(request: Request)
+POST    /account/two-step/remove    com.lattice.oidc.controllers.SecondFactorController.remove(request: Request)
+POST    /account/recovery-codes     com.lattice.oidc.controllers.SecondFactorController.recoveryCodes(request: Request)
 
 # Forgotten password
 GET     /account/recover            com.lattice.oidc.controllers.RecoveryController.form(request: Request, next: String ?= "account")

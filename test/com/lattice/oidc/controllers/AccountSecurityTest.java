@@ -182,4 +182,22 @@ public class AccountSecurityTest {
     Thread.sleep(1_200);
     assertFalse("idle longer than lattice.session.idle-timeout", signedIn(mac));
   }
+
+  @Test
+  public void keepMeSignedInUsesTheLongerLimits() throws InterruptedException {
+    Helpers.stop(app);
+    app = app(fake, Map.of("lattice.session.idle-timeout", "1s"));
+    Helpers.start(app);
+    Result remembered =
+        route(
+            app,
+            withCsrf(
+                post(
+                    "/account/login",
+                    Map.of("loginId", "john", "password", "john", "next", "account", "rememberMe", "true"))));
+    Map<String, String> forgotten = signInFromNewBrowser(MAC_SAFARI);
+    Thread.sleep(1_200);
+    assertTrue("kept signed in past the normal idle limit", signedIn(remembered.session().data()));
+    assertFalse(signedIn(forgotten));
+  }
 }

@@ -203,6 +203,40 @@ public final class ConsoleController extends BaseController {
         });
   }
 
+  // ---------------------------------------------------------------- audit log
+
+  /** {@code GET /admin/audit}: stored audit events, newest first, filterable, 50 per page. */
+  public CompletionStage<Result> audit(Http.Request request, String event, String subject, Long before) {
+    return admin(
+        request,
+        state -> {
+          Optional<String> eventFilter = Optional.of(event.trim()).filter(value -> !value.isEmpty());
+          Optional<String> subjectFilter = Optional.of(subject.trim()).filter(value -> !value.isEmpty());
+          List<Map<String, Object>> records =
+              audit.search(
+                  new com.lattice.oidc.stores.AuditEventStore.Query(
+                      eventFilter, subjectFilter, Optional.ofNullable(before).filter(id -> id > 0), AUDIT_PAGE + 1));
+          boolean more = records.size() > AUDIT_PAGE;
+          List<Map<String, Object>> page = more ? records.subList(0, AUDIT_PAGE) : records;
+          Optional<Long> older =
+              more ? Optional.of(((Number) page.get(page.size() - 1).get("id")).longValue()) : Optional.empty();
+          List<String> events =
+              java.util.Arrays.stream(AuditService.Event.values()).map(Enum::name).sorted().toList();
+          return html(
+              views.html.oidc.consoleAudit
+                  .render(
+                      page.stream().map(AdminController::event).toList(),
+                      events,
+                      eventFilter.orElse(""),
+                      subjectFilter.orElse(""),
+                      older,
+                      request)
+                  .body());
+        });
+  }
+
+  private static final int AUDIT_PAGE = 50;
+
   // ---------------------------------------------------------------- security
 
   public CompletionStage<Result> security(Http.Request request) {

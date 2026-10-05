@@ -58,6 +58,8 @@ public final class AuthorizationController extends BaseController {
   private final ConsentStore consents;
   private final LatticeConfig config;
   private final Passkeys passkeys;
+  private final SignInFlow flow;
+  private final com.lattice.oidc.stores.UserStore users;
 
   @Inject
   public AuthorizationController(
@@ -68,7 +70,9 @@ public final class AuthorizationController extends BaseController {
       IdentityProviders identityProviders,
       ConsentStore consents,
       LatticeConfig config,
-      Passkeys passkeys) {
+      Passkeys passkeys,
+      SignInFlow flow,
+      com.lattice.oidc.stores.UserStore users) {
     this.sessions = sessions;
     this.interactions = interactions;
     this.login = login;
@@ -77,6 +81,8 @@ public final class AuthorizationController extends BaseController {
     this.consents = consents;
     this.config = config;
     this.passkeys = passkeys;
+    this.flow = flow;
+    this.users = users;
   }
 
   /**
@@ -226,6 +232,10 @@ public final class AuthorizationController extends BaseController {
         && System.currentTimeMillis() / 1000L - state.authTime() > info.getMaxAge()) {
       return service.fail(info.getTicket(), Reason.EXCEEDS_MAX_AGE);
     }
+    // Pending required actions need the user's interaction.
+    if (flow.gate(state.user(), "account").isPresent()) {
+      return service.fail(info.getTicket(), Reason.INTERACTION_REQUIRED);
+    }
     // Check 3. Subject and Check 4. ACR are performed by AuthorizationHandler.issue(): the
     // requested subject must match the current user, and an essential ACR must be satisfied.
     AuthorizationInteraction interaction =
@@ -322,12 +332,22 @@ public final class AuthorizationController extends BaseController {
         interactions.put(KIND, ticket, browserId, retry);
         return rerender(request, retry, failureMessage(result), 401);
       }
+      // An authenticator app: ask for a code first; the sign-in continues in SecondFactorController.
+      if (flow.needsSecondFactor(result.user().get())) {
+        return flow.challenge(
+            request, result.user().get(), "Password", form.containsKey("rememberMe"), "authz:" + ticket, Optional.empty());
+      }
       Map<String, String> sessionOut = new HashMap<>();
-      sessions.login(result.user().get(), System.currentTimeMillis() / 1000L, null, sessionOut, request, "Password");
+      sessions.login(
+              result.user().get(), System.currentTimeMillis() / 1000L, null, sessionOut, request, "Password", form.containsKey("rememberMe"));
       AuthorizationInteraction signedIn =
           interaction.withPage(interaction.page().withLoggedInAs(Optional.of(result.user().get().displayName())).withError(null))
               .withShownSubject(result.user().get().getSubject());
       interactions.put(KIND, ticket, browserId, signedIn);
+      Optional<Result> gated = flow.gate(result.user().get(), "authz:" + ticket);
+      if (gated.isPresent()) {
+        return sessions.apply(gated.get(), request, sessionOut);
+      }
       String subject = result.user().get().getSubject();
       if (passkeys.offerDue(subject)) {
         passkeys.markOffered(subject);
@@ -362,8 +382,16 @@ public final class AuthorizationController extends BaseController {
       if (result.outcome() != LoginService.Outcome.SUCCESS) {
         return rerender(request, interaction.withShownSubject(null), failureMessage(result), 401);
       }
+      if (flow.needsSecondFactor(result.user().get())) {
+        return flow.challenge(request, result.user().get(), "Password", false, "authz:" + ticket, Optional.empty());
+      }
       long authTime = System.currentTimeMillis() / 1000L;
       String sessionId = sessions.login(result.user().get(), authTime, null, sessionOut, request, "Password");
+      Optional<Result> gated = flow.gate(result.user().get(), "authz:" + ticket);
+      if (gated.isPresent()) {
+        flow.showSignedIn(ticket, sessionOut.get(UserSessions.BROWSER_ID), result.user().get());
+        return sessions.apply(gated.get(), request, sessionOut);
+      }
       grant = new AuthorizationHandler.Grant(result.user().get(), authTime, sessionId);
     } else {
       Optional<LoginState> current = sessions.current(request);
@@ -377,6 +405,10 @@ public final class AuthorizationController extends BaseController {
         return rerender(request, anonymous, "Please sign in.", 401);
       }
       LoginState loginState = current.get();
+      Optional<Result> gated = flow.gate(loginState.user(), "authz:" + ticket);
+      if (gated.isPresent()) {
+        return gated.get();
+      }
       // The app requires a passkey-level sign-in that this session doesn't have: step up first.
       if (needsStepUp(interaction, loginState.acr()) && passkeys.hasPasskeys(loginState.user().getSubject())) {
         return Responses.of(
@@ -443,13 +475,22 @@ public final class AuthorizationController extends BaseController {
     AuthorizationPage page = interaction.page().withError(message);
     if (interaction.shownSubject() == null) {
       page = page.withLoggedInAs(Optional.empty());
+    } else {
+      // Signed in: required actions come before the consent page.
+      Optional<Result> gated =
+          users.bySubject(interaction.shownSubject()).flatMap(user -> flow.gate(user, "authz:" + interaction.ticket()));
+      if (gated.isPresent()) {
+        return gated.get();
+      }
     }
     return Pages.authorization(request, page, status);
   }
 
   static String failureMessage(LoginService.Result result) {
-    return result.outcome() == LoginService.Outcome.LOCKED
-        ? "Too many failed attempts. Try again later."
-        : "Invalid login ID or password.";
+    return switch (result.outcome()) {
+      case LOCKED -> "Too many failed attempts. Try again later.";
+      case UNAVAILABLE -> "Sign-in is temporarily unavailable. Please try again shortly.";
+      default -> "Invalid login ID or password.";
+    };
   }
 }

@@ -69,6 +69,7 @@ public final class IdentityBrokerController extends BaseController {
       String ticket) {}
 
   private final IdentityProviders providers;
+  private final SignInFlow flow;
   private final Interactions interactions;
   private final UserSessions sessions;
   private final UserStore users;
@@ -82,7 +83,9 @@ public final class IdentityBrokerController extends BaseController {
       UserSessions sessions,
       UserStore users,
       IdentityLinkStore links,
-      LoginService login) {
+      LoginService login,
+      SignInFlow flow) {
+    this.flow = flow;
     this.providers = providers;
     this.interactions = interactions;
     this.sessions = sessions;
@@ -238,6 +241,16 @@ public final class IdentityBrokerController extends BaseController {
                 request, linkId, link, local.get(), Optional.of(AuthorizationController.failureMessage(result)), 401);
           }
           interactions.take(LINK, linkId, browserId, PendingLink.class);
+          if (flow.needsSecondFactor(local.get())) {
+            // The account has an authenticator app: the link is made once the code is entered.
+            return flow.challenge(
+                request,
+                local.get(),
+                "Password",
+                false,
+                "authz:" + link.ticket(),
+                Optional.of(new String[] {link.providerId(), link.externalSubject()}));
+          }
           links.link(link.providerId(), link.externalSubject(), local.get().getSubject());
           audit.record(
               request,

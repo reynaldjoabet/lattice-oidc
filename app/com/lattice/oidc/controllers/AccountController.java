@@ -47,9 +47,15 @@ public final class AccountController extends BaseController {
 
   /** Where {@code POST /account/login} may continue to, by name. */
   static final Map<String, String> DESTINATIONS =
-      Map.of("account", "/account", "ciba", "/ciba", "admin", "/admin");
+      Map.of(
+          "account", "/account",
+          "ciba", "/ciba",
+          "admin", "/admin",
+          "device", "/api/device/verification",
+          "offer", "/api/offer/issue");
 
   private final UserSessions sessions;
+  private final SignInFlow flow;
   private final LoginService login;
   private final IdentityLinkStore links;
   private final IdentityProviders providers;
@@ -57,6 +63,7 @@ public final class AccountController extends BaseController {
   private final LatticeConfig config;
   private final PasskeyStore passkeys;
   private final SignInAlerts alerts;
+  private final com.lattice.oidc.security.SecondFactors secondFactors;
 
   @Inject
   public AccountController(
@@ -67,7 +74,11 @@ public final class AccountController extends BaseController {
       CibaHandler ciba,
       LatticeConfig config,
       PasskeyStore passkeys,
-      SignInAlerts alerts) {
+      SignInAlerts alerts,
+      SignInFlow flow,
+      com.lattice.oidc.security.SecondFactors secondFactors) {
+    this.secondFactors = secondFactors;
+    this.flow = flow;
     this.sessions = sessions;
     this.login = login;
     this.links = links;
@@ -117,7 +128,11 @@ public final class AccountController extends BaseController {
                   AdminController.isAdmin(user, config),
                   passkeys.forSubject(user.getSubject()),
                   sessions.sessionsOf(user.getSubject()).size(),
-                  alerts.pending(user.getSubject(), current.get().sessionId()));
+                  alerts.pending(user.getSubject(), current.get().sessionId()),
+                  new AccountPage.TwoStep(
+                      secondFactors.enrolled(user.getSubject()),
+                      secondFactors.remainingRecoveryCodes(user.getSubject()),
+                      user.passwordHash() != null));
           return Responses.of(200, views.html.oidc.account.render(page, request).body(), Responses.HTML, null);
         });
   }
@@ -133,9 +148,11 @@ public final class AccountController extends BaseController {
           if (result.outcome() != LoginService.Outcome.SUCCESS) {
             return loginPage(request, next, Optional.of(AuthorizationController.failureMessage(result)), 401);
           }
-          Map<String, String> sessionOut = new HashMap<>();
-          sessions.login(result.user().get(), System.currentTimeMillis() / 1000L, null, sessionOut, request, "Password");
-          return sessions.apply(Results.seeOther(DESTINATIONS.get(next)), request, sessionOut);
+          boolean rememberMe = form.containsKey("rememberMe");
+          if (flow.needsSecondFactor(result.user().get())) {
+            return flow.challenge(request, result.user().get(), "Password", rememberMe, next, Optional.empty());
+          }
+          return flow.startAndRedirect(request, result.user().get(), "Password", null, rememberMe, next);
         });
   }
 
@@ -157,6 +174,9 @@ public final class AccountController extends BaseController {
     List<AccountPage.SignInMethod> methods = new ArrayList<>();
     if (user.passwordHash() != null) {
       methods.add(new AccountPage.SignInMethod("Password", "login ID " + user.loginId()));
+    } else if (com.lattice.oidc.security.LdapDirectory.isFederated(user)) {
+      // From the LDAP directory: the password is checked, and changed, there.
+      methods.add(new AccountPage.SignInMethod("Organisation password", "login ID " + user.loginId() + ", managed by your organisation's directory"));
     } else if (user.getSubject().contains("@")) {
       // A brokered account ({@code sub@provider-id}) signs in only through its provider.
       String providerId = user.getSubject().substring(user.getSubject().lastIndexOf('@') + 1);

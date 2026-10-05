@@ -53,7 +53,7 @@ public class InMemoryStoresTest {
   public void sessionsAreTouchedAtMostOncePerInterval() {
     InMemorySessionStore store = new InMemorySessionStore();
     Instant start = Instant.now().minusSeconds(120);
-    store.create(new Session("s1", "1001", "ua", "127.0.0.1", "Password", start, start, start.plusSeconds(3600)));
+    store.create(new Session("s1", "1001", "ua", "127.0.0.1", "Password", start, start, start.plusSeconds(3600), false));
     store.touch("s1", start.plusSeconds(30), Duration.ofMinutes(1));
     assertEquals("within the interval: no write", start, store.find("s1").orElseThrow().lastSeenAt());
     Instant later = start.plusSeconds(90);
@@ -72,7 +72,7 @@ public class InMemoryStoresTest {
   public void sessionsPastTheirLifetimeAreGone() {
     InMemorySessionStore store = new InMemorySessionStore();
     Instant past = Instant.now().minusSeconds(60);
-    store.create(new Session("s1", "1001", null, null, "Password", past, past, past.plusSeconds(1)));
+    store.create(new Session("s1", "1001", null, null, "Password", past, past, past.plusSeconds(1), false));
     assertTrue(store.find("s1").isEmpty());
     assertEquals(0, store.countActive());
   }

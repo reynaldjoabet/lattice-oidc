@@ -1,0 +1,21 @@
+@*
+ * Required action: verify the email address.
+ *@
+@import scala.jdk.OptionConverters._
+@(email: String, next: String, message: java.util.Optional[String])(implicit request: Http.Request)
+@layout("Verify your email") {
+  <div class="status">
+    <span class="status-icon info">@icon("mail", "")</span>
+    <h1>Verify your email</h1>
+    <p class="lead">Before you continue, confirm that <strong>@email</strong> is yours. We'll email you a link.</p>
+  </div>
+  @for(text <- message.toScala) {
+    <div class="alert alert-info" role="status">@icon("mail")<span>@text</span></div>
+  }
+  <form method="post" action="@com.lattice.oidc.controllers.routes.RequiredActionsController.sendVerification()" class="stack">
+    @helper.CSRF.formField
+    <input type="hidden" name="next" value="@next">
+    <button type="submit" class="primary">Send verification link</button>
+  </form>
+  <a class="button" href="@com.lattice.oidc.controllers.routes.RequiredActionsController.page(next)">I've opened the link, continue</a>
+}

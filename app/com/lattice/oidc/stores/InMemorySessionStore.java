@@ -41,7 +41,7 @@ public final class InMemorySessionStore implements SessionStore {
             session.lastSeenAt().plus(interval).isBefore(now)
                 ? new Session(
                     session.id(), session.subject(), session.userAgent(), session.ip(), session.method(),
-                    session.createdAt(), now, session.expiresAt())
+                    session.createdAt(), now, session.expiresAt(), session.rememberMe())
                 : session);
   }
 

@@ -442,3 +442,9 @@ a.link { color: var(--accent); font-weight: 600; font-size: 14px; }
 .meter > .w90 { width: 90%; }
 .meter > .w95 { width: 95%; }
 .meter > .w100 { width: 100%; }
+
+/* ---------- Two-step verification ---------- */
+.recovery-codes { list-style: none; margin: 0; padding: 16px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); font-size: 15px; }
+.key { word-break: break-all; letter-spacing: .08em; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); }
+details > summary { cursor: pointer; color: var(--accent); font-weight: 500; font-size: 14.5px; min-height: 44px; display: flex; align-items: center; }
+details[open] > summary { margin-bottom: 10px; }

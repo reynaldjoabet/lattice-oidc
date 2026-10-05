@@ -51,6 +51,7 @@ public final class DeviceController extends BaseController {
   private final DeviceHandler device;
 
   private final CounterStore counters;
+  private final SignInFlow flow;
   private final LatticeConfig config;
 
   @Inject
@@ -60,7 +61,9 @@ public final class DeviceController extends BaseController {
       LoginService login,
       DeviceHandler device,
       CounterStore counters,
-      LatticeConfig config) {
+      LatticeConfig config,
+      SignInFlow flow) {
+    this.flow = flow;
     this.sessions = sessions;
     this.interactions = interactions;
     this.login = login;
@@ -148,6 +151,10 @@ public final class DeviceController extends BaseController {
                       ? "Too many failed attempts. Try again later."
                       : "Invalid login ID or password.";
               return page(request, 401, userCode, Optional.empty(), Optional.of(message));
+            }
+            if (flow.needsSecondFactor(auth.user().get())) {
+              // After the code, the user comes back here and enters the device code again.
+              return flow.challenge(request, auth.user().get(), "Password", false, "device", Optional.empty());
             }
             sessions.login(auth.user().get(), System.currentTimeMillis() / 1000L, null, sessionOut, request, "Password");
             shown = Optional.of(auth.user().get().displayName());

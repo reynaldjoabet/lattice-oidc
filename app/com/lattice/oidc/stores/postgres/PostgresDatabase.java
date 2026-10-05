@@ -1,5 +1,6 @@
 package com.lattice.oidc.stores.postgres;
 
+import com.lattice.oidc.metrics.Metrics;
 import com.typesafe.config.Config;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
@@ -45,7 +46,7 @@ public final class PostgresDatabase {
   private final HikariDataSource dataSource;
 
   @Inject
-  public PostgresDatabase(Config config, ApplicationLifecycle lifecycle) {
+  public PostgresDatabase(Config config, ApplicationLifecycle lifecycle, Metrics metrics) {
     Config postgres = config.getConfig("lattice.postgres");
     HikariConfig hikari = new HikariConfig();
     hikari.setPoolName("lattice-postgres");
@@ -53,6 +54,7 @@ public final class PostgresDatabase {
     hikari.setUsername(postgres.getString("username"));
     hikari.setPassword(postgres.getString("password"));
     hikari.setMaximumPoolSize(postgres.getInt("maximum-pool-size"));
+    hikari.setMetricRegistry(metrics.registry());
     this.dataSource = new HikariDataSource(hikari);
     lifecycle.addStopHook(
         () -> {

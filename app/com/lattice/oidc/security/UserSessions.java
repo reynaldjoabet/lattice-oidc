@@ -97,7 +97,7 @@ public final class UserSessions {
   }
 
   /** The logged-in user, if the session is still registered, within its lifetime and not idle. */
-  public Optional<LoginState> current(Http.Request request) {
+  public Optional<LoginState> current(Http.RequestHeader request) {
     Http.Session session = request.session();
     Optional<String> sessionId = session.get(SESSION_ID);
     Optional<String> subject = session.get(SUBJECT);
@@ -146,7 +146,8 @@ public final class UserSessions {
   }
 
   private boolean idle(Session session, Instant now) {
-    Duration idleTimeout = config.sessionIdleTimeout();
+    Duration idleTimeout =
+        session.rememberMe() ? config.rememberMe().idleTimeout() : config.sessionIdleTimeout();
     return !idleTimeout.isZero() && !session.lastSeenAt().plus(idleTimeout).isAfter(now);
   }
 
@@ -184,6 +185,23 @@ public final class UserSessions {
       Map<String, String> sessionOut,
       Http.RequestHeader request,
       String method) {
+    return login(user, authTime, acr, sessionOut, request, method, false);
+  }
+
+  /**
+   * As {@link #login(User, long, String, Map, Http.RequestHeader, String)}, where {@code rememberMe}
+   * ("keep me signed in", if {@code lattice.session.remember-me.enabled}) gives the session the
+   * longer limits of {@code lattice.session.remember-me}.
+   */
+  public String login(
+      User user,
+      long authTime,
+      String acr,
+      Map<String, String> sessionOut,
+      Http.RequestHeader request,
+      String method,
+      boolean rememberMe) {
+    boolean remembered = rememberMe && config.rememberMe().enabled();
     String sessionId = randomId();
     String browserId =
         request == null ? null : request.session().get(BROWSER_ID).orElseGet(UserSessions::randomId);
@@ -192,7 +210,15 @@ public final class UserSessions {
     Instant now = Instant.now();
     store.create(
         new Session(
-            sessionId, user.getSubject(), userAgent, ip, method, now, now, now.plus(config.sessionMaxLifespan())));
+            sessionId,
+            user.getSubject(),
+            userAgent,
+            ip,
+            method,
+            now,
+            now,
+            now.plus(remembered ? config.rememberMe().maxLifespan() : config.sessionMaxLifespan()),
+            remembered));
     if (browserId != null) {
       sessionOut.put(BROWSER_ID, browserId);
       alerts.onSignIn(user.getSubject(), browserId, sessionId, UserAgents.describe(userAgent), ip, method);

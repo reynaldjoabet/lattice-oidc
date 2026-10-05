@@ -2,6 +2,8 @@ package com.lattice.oidc.client;
 
 import com.authlete.common.api.AuthleteApi;
 import com.authlete.common.conf.AuthleteSimpleConfiguration;
+import com.lattice.oidc.metrics.MeteredAuthleteApi;
+import com.lattice.oidc.metrics.Metrics;
 import javax.inject.Inject;
 import javax.inject.Provider;
 import javax.inject.Singleton;
@@ -9,7 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import play.libs.ws.WSClient;
 
-/** Builds the process-wide Authlete client: on the Play WS transport. */
+/** Builds the process-wide Authlete client: on the Play WS transport, with every call timed. */
 @Singleton
 public final class AuthleteApiProvider implements Provider<AuthleteApi> {
 
@@ -18,7 +20,7 @@ public final class AuthleteApiProvider implements Provider<AuthleteApi> {
   private final AuthleteApi api;
 
   @Inject
-  public AuthleteApiProvider(AuthleteSettings settings, WSClient ws) {
+  public AuthleteApiProvider(AuthleteSettings settings, WSClient ws, Metrics metrics) {
     AuthleteSimpleConfiguration configuration =
         new AuthleteSimpleConfiguration()
             .setApiVersion("V3")
@@ -31,7 +33,7 @@ public final class AuthleteApiProvider implements Provider<AuthleteApi> {
         .getSettings()
         .setReadTimeout((int) settings.readTimeout().toMillis())
         .setConnectionTimeout((int) settings.connectTimeout().toMillis());
-    this.api = client;
+    this.api = MeteredAuthleteApi.wrap(client, metrics);
     LOG.info("Authlete client configured: {}", settings);
   }
 

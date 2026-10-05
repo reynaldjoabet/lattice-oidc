@@ -1,0 +1,16 @@
+@*
+ * New recovery codes, shown once. Each works once instead of an authenticator code.
+ *@
+@import scala.jdk.CollectionConverters._
+@(codes: java.util.List[String], continueUrl: String)(implicit request: Http.Request)
+@layout("Your recovery codes") {
+  <div class="intro">
+    <h1>Save your recovery codes</h1>
+    <p class="lead">If you lose your phone, sign in with one of these instead of a code. Each works once. This is the only time they're shown.</p>
+  </div>
+  <ul class="recovery-codes mono">
+    @for(code <- codes.asScala) { <li>@code</li> }
+  </ul>
+  <div class="alert alert-warning">@icon("alert")<span>Store them somewhere safe, such as a password manager. Anyone with a code and your password can sign in.</span></div>
+  <a class="button primary" href="@continueUrl">I've saved them</a>
+}

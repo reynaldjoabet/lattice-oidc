@@ -15,7 +15,10 @@ import java.util.Set;
 @ImplementedBy(InMemorySessionStore.class)
 public interface SessionStore {
 
-  /** A login session: who, from where, how they signed in, and when it was created and last used. */
+  /**
+   * A login session: who, from where, how they signed in, when it was created and last used, and
+   * whether the user chose "keep me signed in" (which sets longer limits).
+   */
   record Session(
       String id,
       String subject,
@@ -24,7 +27,8 @@ public interface SessionStore {
       String method,
       Instant createdAt,
       Instant lastSeenAt,
-      Instant expiresAt) {}
+      Instant expiresAt,
+      boolean rememberMe) {}
 
   void create(Session session);
 

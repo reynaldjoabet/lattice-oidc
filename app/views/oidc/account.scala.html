@@ -96,6 +96,49 @@
   </section>
 
   <section>
+    <h2 class="section">Two-step verification</h2>
+    <ul class="rows">
+      <li>
+        <span class="tile" aria-hidden="true">@icon("phone", "")</span>
+        <span class="grow">
+          <strong>Authenticator app</strong>
+          <span class="meta">@if(page.twoStep().authenticatorApp()){On: password sign-ins also ask for a code} else {Off}</span>
+        </span>
+        @if(!page.twoStep().authenticatorApp()) {
+          <a class="manage" href="@com.lattice.oidc.controllers.routes.SecondFactorController.setupPage("account")">Set up</a>
+        }
+      </li>
+      @if(page.twoStep().authenticatorApp()) {
+        <li>
+          <span class="tile" aria-hidden="true">@icon("key", "")</span>
+          <span class="grow">
+            <strong>Recovery codes</strong>
+            <span class="meta">@page.twoStep().recoveryCodesLeft() left@if(page.twoStep().recoveryCodesLeft() < 3){ · get new ones soon}</span>
+          </span>
+        </li>
+      }
+    </ul>
+    @if(page.twoStep().authenticatorApp()) {
+      <details>
+        <summary>Get new recovery codes, or remove the app</summary>
+        <form method="post" class="stack" action="@com.lattice.oidc.controllers.routes.SecondFactorController.recoveryCodes()">
+          @helper.CSRF.formField
+          @if(page.twoStep().hasPassword()) {
+            <div class="field">
+              <label for="codes-password">Confirm with your password</label>
+              <div class="password"><input type="password" id="codes-password" name="password" autocomplete="current-password" required></div>
+            </div>
+          }
+          <div class="buttons">
+            <button type="submit">Get new recovery codes</button>
+            <button type="submit" class="destructive" formaction="@com.lattice.oidc.controllers.routes.SecondFactorController.remove()">Remove the app</button>
+          </div>
+        </form>
+      </details>
+    }
+  </section>
+
+  <section>
     <h2 class="section">Other sign-in methods</h2>
     <ul class="rows">
       @for(method <- page.signInMethods().asScala) {

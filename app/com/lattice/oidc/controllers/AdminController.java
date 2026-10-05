@@ -129,7 +129,7 @@ public final class AdminController extends BaseController {
     return String.join(" ", storage + ".", shortLived, cache).trim();
   }
 
-  private static AdminPage.Event event(Map<String, Object> record) {
+  static AdminPage.Event event(Map<String, Object> record) {
     String name = String.valueOf(record.get("event"));
     Object client = record.containsKey("client_id") ? record.get("client_id") : record.get("client");
     String time = String.valueOf(record.get("ts"));

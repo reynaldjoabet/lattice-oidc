@@ -1,6 +1,7 @@
 package com.lattice.oidc.cache;
 
 import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.metrics.Metrics;
 import com.lattice.oidc.models.User;
 import com.lattice.oidc.stores.UserStore;
 import java.util.List;
@@ -44,11 +45,13 @@ public final class CachingUserStore implements UserStore {
 
   private final UserStore store;
   private final ReadCache cache;
+  private final Metrics metrics;
 
   @Inject
-  public CachingUserStore(@Named("backing") UserStore store, ReadCache cache) {
+  public CachingUserStore(@Named("backing") UserStore store, ReadCache cache, Metrics metrics) {
     this.store = store;
     this.cache = cache;
+    this.metrics = metrics;
   }
 
   @Override
@@ -57,6 +60,7 @@ public final class CachingUserStore implements UserStore {
       return Optional.empty();
     }
     Optional<String> cached = cache.get(REGION, subject);
+    metrics.cacheLookup(REGION, cached.isPresent());
     if (cached.isPresent()) {
       return Optional.of(Jsons.read(cached.get(), Cached.class).user());
     }

@@ -5,19 +5,23 @@ import java.util.Optional;
 import play.libs.typedmap.TypedKey;
 import play.mvc.Http;
 
-/** Branding of the end-user pages, from {@code lattice.ui}. Read by the page layout. */
+/**
+ * Branding of the end-user pages, from {@code lattice.ui}, and whether password sign-in offers "keep
+ * me signed in" ({@code lattice.session.remember-me.enabled}). Read by the page templates.
+ */
 public record UiSettings(
     String brandName,
     Optional<String> privacyUrl,
     Optional<String> termsUrl,
-    Optional<String> helpUrl) {
+    Optional<String> helpUrl,
+    boolean rememberMe) {
 
   /** Request attribute under which {@code UiFilter} provides the settings to templates. */
   public static final TypedKey<UiSettings> KEY = TypedKey.create("uiSettings");
 
   /** Used when a page is rendered for a request that did not pass through the filters. */
   public static final UiSettings DEFAULT =
-      new UiSettings("Lattice", Optional.empty(), Optional.empty(), Optional.empty());
+      new UiSettings("Lattice", Optional.empty(), Optional.empty(), Optional.empty(), false);
 
   public static UiSettings from(Config root) {
     Config ui = root.getConfig("lattice.ui");
@@ -25,7 +29,8 @@ public record UiSettings(
         ui.getString("brand-name"),
         optionalString(ui, "privacy-url"),
         optionalString(ui, "terms-url"),
-        optionalString(ui, "help-url"));
+        optionalString(ui, "help-url"),
+        root.getBoolean("lattice.session.remember-me.enabled"));
   }
 
   public static UiSettings of(Http.RequestHeader request) {

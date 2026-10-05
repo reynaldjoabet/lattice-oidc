@@ -1,0 +1,15 @@
+@*
+ * Required action: create a passkey. Completed as soon as the account has one.
+ *@
+@(next: String)(implicit request: Http.Request)
+@layout("Create a passkey") {
+  <div class="status">
+    <span class="status-icon info">@icon("passkey", "")</span>
+    <h1>Create a passkey</h1>
+    <p class="lead">Your organisation asks you to sign in with a passkey: your fingerprint, face or screen lock instead of a password. It can't be phished.</p>
+  </div>
+  <div class="stack">
+    <button type="button" class="primary" data-passkey="register" data-next="@next" data-passkey-only hidden>@icon("passkey")Create a passkey</button>
+    <noscript><p class="muted">Creating a passkey needs JavaScript.</p></noscript>
+  </div>
+}

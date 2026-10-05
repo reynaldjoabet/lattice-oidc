@@ -1,0 +1,52 @@
+@*
+ * Operator console: the stored audit trail, newest first, filterable by event and subject.
+ *@
+@import com.lattice.oidc.models.AdminPage
+@import scala.jdk.CollectionConverters._
+@import scala.jdk.OptionConverters._
+@(events: java.util.List[AdminPage.Event], eventNames: java.util.List[String], event: String, subject: String, older: java.util.Optional[java.lang.Long])(implicit request: Http.Request)
+@consoleLayout("Audit log", "audit") {
+  <div class="console-head">
+    <div>
+      <h1>Audit log</h1>
+      <p class="muted">Security events from every server, newest first</p>
+    </div>
+  </div>
+
+  <form method="get" action="@com.lattice.oidc.controllers.routes.ConsoleController.audit()" class="filters" role="search">
+    <label class="visually-hidden" for="event">Event</label>
+    <select id="event" name="event">
+      <option value="" @if(event.isEmpty()){selected}>All events</option>
+      @for(name <- eventNames.asScala) { <option value="@name" @if(name == event){selected}>@name</option> }
+    </select>
+    <label class="visually-hidden" for="subject">Subject</label>
+    <input type="search" id="subject" name="subject" value="@subject" placeholder="Subject (account id)">
+    <button type="submit">Filter</button>
+  </form>
+
+  <section class="panel">
+    @if(events.isEmpty()) {
+      <p class="muted">No matching events.</p>
+    } else {
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th scope="col">Time (UTC)</th><th scope="col">Event</th><th scope="col">Subject</th><th scope="col">Client</th><th scope="col">IP</th></tr></thead>
+          <tbody>
+            @for(entry <- events.asScala) {
+              <tr>
+                <td class="mono">@entry.time()</td>
+                <td><span class="tag-event @entry.tone()">@entry.name()</span></td>
+                <td>@entry.subject()</td>
+                <td>@entry.client()</td>
+                <td class="mono">@entry.ip()</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+    @for(before <- older.toScala) {
+      <a class="button" href="@com.lattice.oidc.controllers.routes.ConsoleController.audit(event, subject, before)">Older</a>
+    }
+  </section>
+}

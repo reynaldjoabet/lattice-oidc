@@ -27,6 +27,10 @@ import org.slf4j.LoggerFactory;
  * out with a handful of attempts. Unknown accounts cost the same hash verification as known ones,
  * so timing does not reveal which exist. Counters are kept in the {@link CounterStore}, shared by
  * every server.
+ *
+ * <p>With an LDAP directory ({@link LdapDirectory}), an identifier that isn't a local account, or is
+ * one that came from the directory, is checked against the directory instead. A local account with
+ * the same login ID takes precedence.
  */
 @Singleton
 public final class LoginService {
@@ -34,7 +38,9 @@ public final class LoginService {
   public enum Outcome {
     SUCCESS,
     INVALID_CREDENTIALS,
-    LOCKED
+    LOCKED,
+    /** The LDAP directory couldn't be reached; not counted as a failed attempt. */
+    UNAVAILABLE
   }
 
   public record Result(Outcome outcome, Optional<User> user) {}
@@ -49,12 +55,14 @@ public final class LoginService {
   private final UserStore users;
   private final CounterStore counters;
   private final LatticeConfig config;
+  private final LdapDirectory directory;
 
   @Inject
-  public LoginService(UserStore users, CounterStore counters, LatticeConfig config) {
+  public LoginService(UserStore users, CounterStore counters, LatticeConfig config, LdapDirectory directory) {
     this.users = users;
     this.counters = counters;
     this.config = config;
+    this.directory = directory;
   }
 
   /** Clears failed sign-in attempts for the account (after its password is reset). */
@@ -99,14 +107,25 @@ public final class LoginService {
     }
 
     Optional<User> user = find(loginId.trim());
-    String hash = user.map(User::passwordHash).orElse(null);
-    boolean ok = Password.check(password, hash != null ? hash : DUMMY_HASH).withArgon2();
-    if (ok && hash != null) {
+    Optional<User> authenticated;
+    if (directory.enabled() && (user.isEmpty() || LdapDirectory.isFederated(user.get()))) {
+      try {
+        authenticated = directory.authenticate(loginId.trim(), password);
+      } catch (LdapDirectory.Unavailable e) {
+        LOG.warn("Sign-in for '{}' could not reach the LDAP directory: {}", loginId, e.getMessage());
+        return new Result(Outcome.UNAVAILABLE, Optional.empty());
+      }
+    } else {
+      String hash = user.map(User::passwordHash).orElse(null);
+      boolean ok = Password.check(password, hash != null ? hash : DUMMY_HASH).withArgon2();
+      authenticated = ok && hash != null ? user : Optional.empty();
+    }
+    if (authenticated.isPresent()) {
       counters.reset(accountKey);
       if (accountAndIpKey != null) {
         counters.reset(accountAndIpKey);
       }
-      return new Result(Outcome.SUCCESS, user);
+      return new Result(Outcome.SUCCESS, authenticated);
     }
 
     counters.increment(accountKey, config.loginLockout());

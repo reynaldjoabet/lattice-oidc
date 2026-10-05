@@ -16,7 +16,8 @@ import javax.inject.Singleton;
 @Singleton
 public final class PostgresSessionStore implements SessionStore {
 
-  private static final String COLUMNS = "id, subject, user_agent, ip, method, created_at, last_seen_at, expires_at";
+  private static final String COLUMNS =
+      "id, subject, user_agent, ip, method, created_at, last_seen_at, expires_at, remember_me";
 
   private final PostgresDatabase database;
 
@@ -34,13 +35,14 @@ public final class PostgresSessionStore implements SessionStore {
         row.getString("method"),
         PostgresDatabase.instant(row, "created_at"),
         PostgresDatabase.instant(row, "last_seen_at"),
-        PostgresDatabase.instant(row, "expires_at"));
+        PostgresDatabase.instant(row, "expires_at"),
+        row.getBoolean("remember_me"));
   }
 
   @Override
   public void create(Session session) {
     database.update(
-        "INSERT INTO sessions (" + COLUMNS + ") VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO sessions (" + COLUMNS + ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         session.id(),
         session.subject(),
         session.userAgent(),
@@ -48,7 +50,8 @@ public final class PostgresSessionStore implements SessionStore {
         session.method(),
         session.createdAt(),
         session.lastSeenAt(),
-        session.expiresAt());
+        session.expiresAt(),
+        session.rememberMe());
   }
 
   @Override

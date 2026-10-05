@@ -5,11 +5,13 @@ import Dependencies.{
   flywayPostgres,
   hikaricp,
   jedis,
+  micrometerPrometheus,
   nimbusOauth2Oidc,
   password4j,
   postgres,
   qrcodegen,
   slf4j,
+  unboundid,
   webauthn
 }
 
@@ -76,6 +78,8 @@ ThisBuild / libraryDependencies ++= Seq(
   slf4j,
   caffeine,
   jedis,
+  micrometerPrometheus,
+  unboundid,
   bouncycastle,
   password4j,
   hikaricp,
