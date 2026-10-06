@@ -4,8 +4,8 @@ import com.lattice.oidc.common.Jsons;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.stores.EphemeralStore;
 import java.util.Optional;
-import javax.inject.Inject;
-import javax.inject.Singleton;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 
 /**
  * Short-lived state of multi-step browser flows (authorization consent, device verification,

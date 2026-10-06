@@ -6,8 +6,8 @@ import com.lattice.oidc.metrics.Metrics;
 import com.typesafe.config.Config;
 import io.micrometer.core.instrument.binder.cache.CaffeineCacheMetrics;
 import java.util.Optional;
-import javax.inject.Inject;
-import javax.inject.Singleton;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 
 /**
  * {@code lattice.cache = local}: a bounded cache in each server's memory (Caffeine). Changes are

@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import javax.inject.Singleton;
+import jakarta.inject.Singleton;
 
 /** {@link IdentityLinkStore} in memory, for one server (development and tests). */
 @Singleton

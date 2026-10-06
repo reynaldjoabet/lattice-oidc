@@ -6,8 +6,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
-import javax.inject.Inject;
-import javax.inject.Singleton;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 
 /** {@link AppConsentStore} in PostgreSQL (table {@code app_consents}). */
 @Singleton

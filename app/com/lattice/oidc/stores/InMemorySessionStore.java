@@ -9,7 +9,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import javax.inject.Singleton;
+import jakarta.inject.Singleton;
 
 /** {@link SessionStore} in memory, for one server (development and tests). */
 @Singleton

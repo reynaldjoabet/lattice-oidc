@@ -8,9 +8,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import javax.inject.Inject;
-import javax.inject.Named;
-import javax.inject.Singleton;
+import jakarta.inject.Inject;
+import jakarta.inject.Named;
+import jakarta.inject.Singleton;
 
 /**
  * Caches the lookup made on every signed-in request, a session by id. Ending a session or recording

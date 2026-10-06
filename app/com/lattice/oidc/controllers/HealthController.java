@@ -8,7 +8,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 import play.libs.Json;
 import play.mvc.Controller;
 import play.mvc.Result;

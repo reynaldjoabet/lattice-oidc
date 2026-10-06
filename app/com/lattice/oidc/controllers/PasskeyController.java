@@ -26,7 +26,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletionStage;
 import java.util.regex.Pattern;
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 import play.mvc.BodyParser;
 import play.mvc.Http;
 import play.mvc.Result;

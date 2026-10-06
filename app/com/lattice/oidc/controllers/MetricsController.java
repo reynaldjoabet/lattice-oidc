@@ -4,7 +4,7 @@ import com.lattice.oidc.metrics.Metrics;
 import com.typesafe.config.Config;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 import play.mvc.Controller;
 import play.mvc.Http;
 import play.mvc.Result;

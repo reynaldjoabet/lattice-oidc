@@ -11,8 +11,8 @@ import java.util.Base64;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
-import javax.inject.Inject;
-import javax.inject.Singleton;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 
 /** {@link PasskeyStore} in PostgreSQL (tables {@code passkeys}, {@code user_handles}, {@code passkey_offers}). */
 @Singleton

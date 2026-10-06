@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import javax.inject.Singleton;
+import jakarta.inject.Singleton;
 
 /** Thread-safe in-memory passkey store (lost on restart, like {@link InMemoryUserStore}). */
 @Singleton

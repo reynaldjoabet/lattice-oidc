@@ -3,8 +3,8 @@ package com.lattice.oidc.stores.postgres;
 import com.lattice.oidc.stores.IdentityLinkStore;
 import java.util.List;
 import java.util.Optional;
-import javax.inject.Inject;
-import javax.inject.Singleton;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 
 /** {@link IdentityLinkStore} in PostgreSQL (table {@code identity_links}). */
 @Singleton

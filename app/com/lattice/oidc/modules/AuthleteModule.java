@@ -6,7 +6,7 @@ import com.google.inject.Provides;
 import com.lattice.oidc.client.AuthleteApiProvider;
 import com.lattice.oidc.client.AuthleteSettings;
 import com.typesafe.config.Config;
-import javax.inject.Singleton;
+import jakarta.inject.Singleton;
 import play.Environment;
 
 /**

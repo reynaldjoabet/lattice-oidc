@@ -6,9 +6,9 @@ import com.nimbusds.jose.jwk.JWKSet;
 import java.text.ParseException;
 import java.time.Duration;
 import java.util.Map;
-import javax.inject.Inject;
-import javax.inject.Provider;
-import javax.inject.Singleton;
+import jakarta.inject.Inject;
+import jakarta.inject.Provider;
+import jakarta.inject.Singleton;
 
 /** This server's issuer identifier and signing keys, as configured in Authlete (cached). */
 @Singleton

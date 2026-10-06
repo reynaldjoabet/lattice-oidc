@@ -8,8 +8,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
-import javax.inject.Inject;
-import javax.inject.Singleton;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 
 /** {@link EphemeralStore} in PostgreSQL (table {@code ephemeral}). Expiry uses the database clock. */
 @Singleton

@@ -3,7 +3,7 @@ package com.lattice.oidc.controllers;
 import com.lattice.oidc.common.Responses;
 import com.lattice.oidc.security.UserSessions;
 import java.util.Optional;
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 import play.mvc.Controller;
 import play.mvc.Http;
 import play.mvc.Result;

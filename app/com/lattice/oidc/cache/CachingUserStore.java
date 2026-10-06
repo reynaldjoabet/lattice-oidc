@@ -7,9 +7,9 @@ import com.lattice.oidc.stores.UserStore;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import javax.inject.Inject;
-import javax.inject.Named;
-import javax.inject.Singleton;
+import jakarta.inject.Inject;
+import jakarta.inject.Named;
+import jakarta.inject.Singleton;
 
 /**
  * Caches the lookup made on every signed-in request, a user by subject. Saving a user (a new

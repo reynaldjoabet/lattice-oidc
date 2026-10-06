@@ -6,8 +6,8 @@ import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MultiGauge;
 import io.micrometer.core.instrument.Tags;
 import java.util.concurrent.atomic.AtomicLong;
-import javax.inject.Inject;
-import javax.inject.Singleton;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 
 /**
  * Gauges read from storage, across every server, refreshed before a scrape (at most every {@link

@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
-import javax.inject.Singleton;
+import jakarta.inject.Singleton;
 
 /** {@link AuditEventStore} in memory, for one server: the latest {@link #CAPACITY} records. */
 @Singleton

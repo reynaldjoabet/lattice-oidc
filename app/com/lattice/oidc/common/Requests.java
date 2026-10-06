@@ -15,8 +15,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import javax.inject.Inject;
-import javax.inject.Singleton;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import play.mvc.Http;
 
 /** Extracts protocol inputs (parameters, credentials, certificates, URLs) from Play requests. */

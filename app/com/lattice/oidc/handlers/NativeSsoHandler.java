@@ -16,9 +16,9 @@ import java.util.Base64;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import javax.inject.Inject;
-import javax.inject.Provider;
-import javax.inject.Singleton;
+import jakarta.inject.Inject;
+import jakarta.inject.Provider;
+import jakarta.inject.Singleton;
 import play.mvc.Result;
 
 /**

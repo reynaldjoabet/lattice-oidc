@@ -4,8 +4,8 @@ import com.typesafe.config.Config;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
-import javax.inject.Inject;
-import javax.inject.Singleton;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 
 /** Typed view of the {@code lattice} configuration section. */
 @Singleton

@@ -9,8 +9,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import javax.inject.Inject;
-import javax.inject.Singleton;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 
 /** {@link SessionStore} in PostgreSQL (tables {@code sessions} and {@code session_clients}). */
 @Singleton

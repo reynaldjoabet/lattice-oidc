@@ -14,7 +14,7 @@ import com.lattice.oidc.security.AuditService;
 import com.lattice.oidc.security.ObbCertValidator;
 import java.security.GeneralSecurityException;
 import java.util.concurrent.CompletionStage;
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 import play.mvc.BodyParser;
 import play.mvc.Http;
 import play.mvc.Result;

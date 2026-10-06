@@ -8,7 +8,7 @@ import java.security.GeneralSecurityException;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 import play.mvc.Controller;
 import play.mvc.Http;
 import play.mvc.Result;

@@ -16,7 +16,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import javax.inject.Singleton;
+import jakarta.inject.Singleton;
 
 /**
  * Sign-in security figures for the operator console (screen 38): failed and locked sign-ins and

@@ -4,8 +4,8 @@ import com.lattice.oidc.stores.SecondFactorStore;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import javax.inject.Inject;
-import javax.inject.Singleton;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 
 /** {@link SecondFactorStore} in PostgreSQL (tables {@code totp_credentials} and {@code recovery_codes}). */
 @Singleton

@@ -4,8 +4,8 @@ import com.lattice.oidc.metrics.Metrics;
 import com.typesafe.config.Config;
 import io.micrometer.core.instrument.Gauge;
 import java.util.concurrent.atomic.AtomicInteger;
-import javax.inject.Inject;
-import javax.inject.Singleton;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import org.apache.pekko.actor.ActorSystem;
 import play.libs.concurrent.CustomExecutionContext;
 

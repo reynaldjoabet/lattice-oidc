@@ -4,8 +4,8 @@ import com.lattice.oidc.stores.redis.RedisConnection;
 import com.typesafe.config.Config;
 import java.time.Duration;
 import java.util.Optional;
-import javax.inject.Inject;
-import javax.inject.Singleton;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import redis.clients.jedis.params.SetParams;
 
 /**

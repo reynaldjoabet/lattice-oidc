@@ -18,7 +18,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletionStage;
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 import play.mvc.Http;
 import play.mvc.Result;
 

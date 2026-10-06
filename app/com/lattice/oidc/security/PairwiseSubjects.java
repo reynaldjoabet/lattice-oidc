@@ -8,8 +8,8 @@ import java.security.GeneralSecurityException;
 import java.util.Base64;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
-import javax.inject.Inject;
-import javax.inject.Singleton;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 
 /**
  * Pairwise subject identifiers (OIDC Core §8.1): {@code base64url(HMAC-SHA256(secret, sector |

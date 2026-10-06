@@ -2,8 +2,8 @@ package com.lattice.oidc.stores.postgres;
 
 import com.lattice.oidc.stores.CounterStore;
 import java.time.Duration;
-import javax.inject.Inject;
-import javax.inject.Singleton;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 
 /** {@link CounterStore} in PostgreSQL (table {@code counters}). Windows use the database clock. */
 @Singleton

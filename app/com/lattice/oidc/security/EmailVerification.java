@@ -13,8 +13,8 @@ import java.time.Duration;
 import java.util.Base64;
 import java.util.Optional;
 import java.util.function.Function;
-import javax.inject.Inject;
-import javax.inject.Singleton;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 
 /**
  * Email verification links (the {@code VERIFY_EMAIL} required action). A link carries a random

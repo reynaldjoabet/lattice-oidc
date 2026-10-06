@@ -5,7 +5,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import javax.inject.Singleton;
+import jakarta.inject.Singleton;
 
 /** {@link ConsentStore} in memory, for one server (development and tests). */
 @Singleton

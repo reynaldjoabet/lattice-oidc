@@ -2,8 +2,8 @@ package com.lattice.oidc.metrics;
 
 import com.lattice.oidc.stores.SessionStore;
 import io.micrometer.core.instrument.Gauge;
-import javax.inject.Inject;
-import javax.inject.Singleton;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 
 /**
  * {@code lattice_sessions_active}: login sessions within their lifetime, across every server. Read

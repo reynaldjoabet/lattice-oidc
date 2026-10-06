@@ -5,8 +5,8 @@ import com.lattice.oidc.models.Consent;
 import com.lattice.oidc.stores.ConsentStore;
 import java.time.Instant;
 import java.util.Optional;
-import javax.inject.Inject;
-import javax.inject.Singleton;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 
 /** {@link ConsentStore} in PostgreSQL (table {@code obb_consents}). */
 @Singleton

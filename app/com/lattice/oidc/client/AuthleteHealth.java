@@ -2,9 +2,9 @@ package com.lattice.oidc.client;
 
 import com.authlete.common.api.AuthleteApi;
 import java.util.Map;
-import javax.inject.Inject;
-import javax.inject.Provider;
-import javax.inject.Singleton;
+import jakarta.inject.Inject;
+import jakarta.inject.Provider;
+import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
