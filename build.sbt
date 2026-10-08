@@ -1,3 +1,4 @@
+import com.typesafe.sbt.packager.docker.DockerChmodType
 import Dependencies.{
   angusMail,
   bouncycastle,
@@ -110,9 +111,63 @@ ThisBuild / libraryDependencies ++= Seq(
   "com.authlete"             % "authlete-java-common"   % "4.48"
 )
 
+// Compile Java for the oldest JDK CI tests (21), whichever JDK runs sbt, so the classes also run
+// on the newer JRE in the Docker image.
+ThisBuild / javacOptions ++= Seq("--release", "21")
+
 lazy val root = (project in file("."))
-  .enablePlugins(PlayJava)
-  .settings(name := "lattice-oidc")
+  // PlayJava already brings JavaServerAppPackaging (the start script and `stage`/`dist`).
+  .enablePlugins(PlayJava, DockerPlugin)
+  .settings(
+    name := "lattice-oidc",
+
+    // Nothing reads the Scaladoc/Javadoc jar, so don't build it for `stage`, `dist` or the image.
+    Compile / doc / sources                := Seq.empty,
+    Compile / packageDoc / publishArtifact := false,
+
+    // `Docker/publishLocal` builds the image, `Docker/stage` writes only the Dockerfile and files.
+
+    // Ubuntu (glibc) rather than Alpine (musl): it's the variant the JDK is built and tested on.
+    // For a release, pin it to a digest: "eclipse-temurin:25-jre-noble@sha256:...".
+    dockerBaseImage := "eclipse-temurin:25-jre-noble",
+
+    // Runs as a numeric, non-root user (USER 1001:0), so Kubernetes' runAsNonRoot can verify it.
+    // The app's files are read-only (u=rX,g=rX). For files nobody in the container can change, also
+    // run with a read-only root filesystem (readOnlyRootFilesystem in Kubernetes).
+    Docker / daemonUser    := "lattice",
+    Docker / daemonUserUid := Some("1001"),
+    dockerChmodType        := DockerChmodType.UserGroupReadExecute,
+
+    dockerExposedPorts := Seq(9000),
+
+    dockerEnvVars := Map(
+      // Always applied: the java launcher reads it, whatever JAVA_OPTS says. The app directory is
+      // read-only, so Play writes no RUNNING_PID file, and logs go to stdout only.
+      "JDK_JAVA_OPTIONS" -> "-Dpidfile.path=/dev/null -Dlogger.resource=logback-container.xml",
+      // Defaults an operator can replace by setting JAVA_OPTS. The heap follows the container's
+      // memory limit, and an OutOfMemoryError exits so the orchestrator restarts the container.
+      "JAVA_OPTS" -> "-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"
+    ),
+
+    // Image name and tags: [DOCKER_REGISTRY/][DOCKER_USERNAME/]lattice-oidc:<version>, plus the
+    // short commit in GitHub Actions. No "latest": a deployment names the exact image it runs.
+    dockerRepository   := sys.env.get("DOCKER_REGISTRY"),
+    dockerUsername     := sys.env.get("DOCKER_USERNAME"),
+    dockerUpdateLatest := false,
+    dockerAliases     ++= {
+      val alias = dockerAlias.value
+      sys.env.get("GITHUB_SHA").map(sha => alias.withTag(Some(sha.take(12)))).toSeq
+    },
+
+    // `Docker/publish` builds and pushes both architectures with buildx.
+    dockerBuildxPlatforms := Seq("linux/amd64", "linux/arm64"),
+
+    dockerLabels := Map(
+      "org.opencontainers.image.title"   -> name.value,
+      "org.opencontainers.image.version" -> version.value,
+      "org.opencontainers.image.source"  -> "https://github.com/reynaldjoabet/lattice-oidc"
+    ) ++ sys.env.get("GITHUB_SHA").map("org.opencontainers.image.revision" -> _)
+  )
 
 addCommandAlias("fmt", "scalafmtAll; scalafmtSbt")
 addCommandAlias("fmtCheck", "scalafmtCheckAll; scalafmtSbtCheck")

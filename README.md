@@ -1,5 +1,216 @@
 # lattice-oidc
 
+## Lattice and Authlete: who does what
+
+Authlete is a hosted OAuth 2.0 / OpenID Connect **protocol engine**. Authlete calls its model **semi-hosted**:
+
+- **The operator hosts** the authorization server: its endpoints, sign-in, consent and pages. Lattice is that authorization server.
+- **Authlete** handles the protocol work behind those endpoints: parsing and validating requests, issuing and storing tokens, and introspection. Lattice calls it through a REST API.
+
+```mermaid
+flowchart LR
+    subgraph Clients["API clients"]
+        Web["Websites"]
+        Mobile["Mobile apps"]
+        Devices["Networked devices"]
+    end
+    subgraph Hosted["Hosted by you"]
+        subgraph Lattice["Lattice (authorization server)"]
+            Endpoints["OAuth/OIDC endpoints<br/>/api/authorization, /api/token, ..."]
+            Identity["Identity and access<br/>sign-in · consent · entitlements"]
+            Decision["Authorization decision"]
+        end
+        APIs["Your APIs / gateway<br/>/data, /function, ..."]
+    end
+    subgraph Authlete["Authlete (hosted)"]
+        Backend["Authorization backend APIs"]
+        Tokens[("Token database")]
+    end
+    Clients -- "OAuth/OIDC requests" --> Endpoints
+    Endpoints --> Identity
+    Endpoints --> Decision
+    Endpoints -- "protocol processing" --> Backend
+    Clients -- "API requests with access tokens" --> APIs
+    APIs -- "token introspection" --> Backend
+    Backend --- Tokens
+```
+
+| Lattice decides and keeps | Authlete processes and keeps |
+| --- | --- |
+| User accounts, passwords (Argon2), passkeys, authenticator apps, LDAP | Request validation for OAuth 2.0, OpenID Connect, PKCE, PAR, CIBA, device flow, FAPI and more |
+| Sign-in, sessions, consent (and [remembered consent](#sign-in-and-account-security)), required actions | Authorization codes, access and refresh tokens, and their lifetimes |
+| The authorization decision: who may grant what, and which claims are released | ID token signing, discovery metadata, JWKS |
+| Pages, audit trail, metrics | Token introspection and revocation |
+
+Authlete never sees a password or any other credential. Lattice authenticates the user, then tells Authlete only the result: the subject, the claims to release and the ACR.
+
+### One authorization, step by step
+
+Each Lattice endpoint forwards the client's request as is, and Authlete's answer (its `action`) tells Lattice what to do next.
+
+| Step | Client calls Lattice | Lattice calls Authlete | Authlete answers |
+| --- | --- | --- | --- |
+| 1. Authorization request | `GET /api/authorization` | `POST /auth/authorization` with the raw query | `INTERACTION` and a ticket, or an error to return |
+| 2. Sign-in and consent | (pages) `POST /api/authorization/decision` | `POST /auth/authorization/issue` with the ticket, subject and claims | `LOCATION`: the redirect carrying the code |
+| 3. Token request | `POST /api/token` | `POST /auth/token` | `OK` and the token response to return |
+| 4. API access | the client calls your API with the token | your API calls `POST /auth/introspection` (or Lattice's `POST /api/introspection`) | whether the token is valid, its scopes and subject |
+
+The [Tickets](#tickets-a-handle-for-pending-requests) section explains the ticket that links steps 1 and 2.
+
+### Authlete compared with Duende IdentityServer
+
+The two put the boundary in different places.
+
+| | Authlete (with Lattice) | Duende IdentityServer |
+| --- | --- | --- |
+| Shape | You host the endpoints, in any language. Protocol logic and token storage are a REST service. | The whole token server runs in-process, in your own ASP.NET Core host. |
+| Per-request external dependency | Yes: each OAuth/OIDC request calls Authlete. | None: everything is in your infrastructure. |
+| Tokens stored | At Authlete. | In your own infrastructure. |
+| User credentials | Stay on your side. | Stay on your side. |
+| Known for | Financial-grade API (FAPI 1.0 and 2.0) certification and open-banking profiles. | .NET-native identity hosts. |
+| Licensing | Authlete's commercial plans. | Editions by features and number of client IDs. |
+| Fits | Polyglot or heavily regulated environments that want protocol logic as a service. | Keeping the whole token server inside a .NET system. |
+
+### AI agents, MCP and client ID metadata documents (CIMD)
+
+The Model Context Protocol (MCP) lets AI applications call tools on an MCP server. Its authorization profile uses OAuth 2.1:
+- **The authorization server** issues scoped, time-limited access tokens. It decides who gets access and with which permissions.
+- **The MCP server** checks the token on each request. It decides whether that request may run.
+- **The client is trusted only through its token:** it holds least-privilege access that can be revoked.
+
+**Tokens solve only half the problem.** OAuth assumed that registering a client is a controlled step, done by people. AI agents can appear dynamically, register themselves and ask for broad permissions with no one involved. **CIMD** (OAuth Client ID Metadata Document, an IETF draft) changes how a client is identified:
+- **The client ID is a URL:** the client publishes a JSON metadata document at an HTTPS URL, and that URL is its client ID.
+- **Fetched on demand:** when a flow starts, the authorization server fetches and validates the document. No registration database is needed.
+- **Server-side policy:** the authorization server can add its own validation on top, such as an allowlist of acceptable client hosts.
+
+```mermaid
+flowchart LR
+    subgraph AI["AI application"]
+        Client["MCP client"]
+    end
+    Metadata["Client metadata document<br/>(on the AI application's website)"]
+    subgraph Provider["Service provider"]
+        AS["Authorization server<br/>OAuth 2.1, RFC 8414, RFC 8707, RFC 7591, CIMD"]
+        MCP["MCP server<br/>OAuth 2.1, RFC 9728"]
+        Users[("Users / credentials")]
+        Data[("Data / functionality")]
+    end
+    AuthleteBox["Authlete"]
+    Console["Authlete management console:<br/>allowlists, metadata policies"]
+    Client -- "authorization / token request, client_id = metadata URL" --> AS
+    Client -- "MCP requests with access tokens" --> MCP
+    AS --> Users
+    MCP --> Data
+    AS -- "protocol processing, token management" --> AuthleteBox
+    AuthleteBox -- "retrieves" --> Metadata
+    Console --> AuthleteBox
+```
+
+**Where Lattice stands:**
+
+| Piece | Status in Lattice |
+| --- | --- |
+| Authorization server metadata (RFC 8414) | Served at `/.well-known/oauth-authorization-server` and `/.well-known/openid-configuration` |
+| Dynamic client registration (RFC 7591) | `POST /api/register` |
+| Resource indicators (RFC 8707) | Passed to Authlete with the request, as received |
+| Protected resource metadata (RFC 9728) | Not Lattice's job: the MCP server (the resource) publishes it |
+| CIMD | Not used by Lattice's code yet. Authlete supports it as service settings: client ID metadata documents on or off, an allowlist, whether plain HTTP is permitted, and whether the document is always fetched. Because Lattice forwards the authorization request as is, URL client IDs should work once CIMD is enabled for the Authlete service, but this is untested. Lattice also doesn't yet pass Authlete's per-request `cimdOptions` on its authorization and token calls. |
+
+## Access tokens: what they prove
+
+### Authentication or authorization?
+
+When an API receives `Authorization: Bearer <token>`, two separate things happen:
+
+- **The API authenticates the token, not the person.** It checks the token is genuine: either by verifying its signature, or by asking the authorization server through introspection. It also checks the token is active, unexpired and issued for this API.
+- **What the token proves is authorization.** It tells the API which permission the request is using, for example: user 1001 allowed app 42 to `read:notes` until 10:30. The API then decides whether this particular request is allowed.
+
+"The access token authenticates the request" therefore means only that the request is authenticated as a use of that permission. The token doesn't say that the user is present, or that they signed in recently. Nor does it say that the user signed in to this app: that is the ID token's job in OpenID Connect.
+
+| | ID token | Access token |
+| --- | --- | --- |
+| Question it answers | Who signed in to this app, when and how? | What may the bearer do, at which API, until when? |
+| Addressed to | The client app (`aud` = its client ID) | The API (resource server) |
+| Used for | Authentication: signing the user in | Authorization: calling APIs |
+| Read by the client? | Yes, and validated | No, it's opaque to the client; only the API interprets it |
+
+Treating an access token as proof of sign-in is a classic mistake. Another app the user signed in to could replay a token issued to it as a sign-in. OpenID Connect added the ID token, addressed to one specific client, to keep the two apart.
+
+### Authenticating the "bearer"
+
+With standard OAuth 2.0 bearer tokens (RFC 6750), the API isn't authenticating the sender of the request; it only authenticates the token itself. The security model is that whoever holds the string may use it, like a cinema ticket. The request is authenticated entirely by the presence of a valid token, which is why a stolen bearer token can be successfully replayed by an attacker.
+
+**Sender-constrained tokens** close that gap. The token is bound to a key the client holds, and every request must also prove possession of that key:
+
+| Mechanism | How the client proves possession | Where it's bound |
+| --- | --- | --- |
+| DPoP (RFC 9449) | A `DPoP` header: a short-lived JWT signed with the client's private key, covering the HTTP method and URL | The token records the key's thumbprint (`cnf.jkt`) |
+| Mutual TLS (RFC 8705) | The TLS client certificate presented on the connection | The token records the certificate's thumbprint (`cnf.x5t#S256`) |
+
+A stolen sender-constrained token is useless without the private key. Only then does the token authenticate the sender, as "the client that holds this key". FAPI 2.0 requires one of the two.
+
+**In Lattice:** the token endpoint passes the `DPoP` proof and the TLS client certificate to Authlete, which binds the token to them. The endpoints that accept access tokens pass them again, and Authlete checks that the request matches the binding. Those endpoints are UserInfo, the Open Banking resource APIs and the credential endpoint.
+
+### Opaque or JWT: where the permission is written
+
+Both formats stand for the same permission. They differ in where the API finds it.
+
+- **An opaque token** is a random string that points to a record held by the authorization server (here, Authlete's token database). It contains no user, no scopes and no expiry. The API learns them through introspection (RFC 7662). Its answer always has `active`, and for an active token usually also `sub`, `client_id`, `scope`, `exp` and `aud`.
+- **A JWT access token** (RFC 9068) carries those fields itself, signed by the authorization server, so the API verifies the signature and reads them with no network call.
+
+| | Opaque | JWT |
+| --- | --- | --- |
+| How the API checks it's genuine | Introspection: the server knows it and it's active | Signature verification with the server's public key |
+| Where the permission comes from | The introspection response | The token's own claims |
+| Revocation | Immediate: the next introspection says `active: false` | It stays valid until it expires, unless the API also asks the server |
+| Who can read it | Nobody without the server | Anyone holding it can decode it (signed, not encrypted) |
+| Cost per request | A call to the server (usually cached briefly) | Local verification |
+
+Authlete issues opaque access tokens by default, and JWT access tokens when the service is configured with a signing algorithm for them. The ID token is always a JWT, because the client must read it.
+
+### What "grant" means
+
+The word is used in three ways:
+
+- **The permission the user gave**, which is what a token represents: who (`sub`) let which app (`client_id`) do what (`scope`, or `authorization_details` for fine-grained rights) at which API (`aud`) until when (`exp`). In Lattice, the remembered consent (`AppConsentStore`) records this per account and app.
+- **An authorization grant, in RFC 6749's sense:** the credential a client exchanges for tokens. The grant types are an authorization code, a refresh token, client credentials, a device code, a CIBA request and others. This is the meaning of `grant_type=authorization_code`.
+- **A grant in Grant Management for OAuth 2.0**, a FAPI specification Authlete supports: a long-lived record of a user's permissions for a client, with an ID (`grant_id`) that the client can query, extend or revoke. Lattice serves it at `/api/gm/{grantId}`.
+
+### Consent, grant and access token
+
+The difference is between the human action, the technical record, and the credential issued from that record.
+
+- **Consent** is the user agreeing to delegate access. It happens when a user reads the requested scopes on an authorization screen and clicks "Allow". The word is also used for the stored record of that decision, as with an Open Banking consent or Lattice's `AppConsentStore`.
+- **The grant** is the technical permission created as a result of that consent, which the app then holds.
+- **An access token** is a short-lived credential issued from the grant, which the app presents to an API.
+
+| | Consent | Grant | Access token |
+| --- | --- | --- | --- |
+| What it is | The user's decision: "Acme Notes may read my notes" | The permission the app holds: user 1001 → app 42 → `read:notes` | The credential presented to an API to use that permission |
+| Held by | The authorization server, as a record of what was approved | The authorization server, on the app's behalf | The app, sent with each API call |
+| Lifetime | A moment (approved at 09:12), plus its record | Until revoked or expired by policy | Minutes to an hour |
+| How many | One per approval | Usually one per user and app, growing as more is approved | Many: replaced as each expires, usually with a refresh token |
+| Scope | What was asked and approved | Everything currently approved | Can be narrower: some scopes, or one API (`aud`) |
+
+As an analogy: consent is signing a power-of-attorney form, the grant is the power of attorney on file, and access tokens are the day passes printed from it.
+
+**A grant can exist without anyone clicking a consent screen:**
+- **Client credentials, in machine-to-machine architectures.** No user is involved and nothing is delegated: the app acts for itself. An administrator or system policy pre-authorizes it, by registering which scopes the client may request. RFC 6749 calls the client credentials themselves the authorization grant. No user ever sees a consent screen, but the client can still obtain access tokens. With Authlete, the permission comes from the client's registration rather than from a stored per-user record.
+- **Pre-approved apps:** an administrator approved the app for users in advance, or it is a trusted first-party app.
+- **Remembered consent:** the user approved the same permissions earlier.
+
+The opposite also holds: if the user clicks Deny, no grant is created.
+
+**Revoking works differently at each level:**
+- **One access token:** the grant stays, and the app gets a new token with its refresh token.
+- **The grant:** the app's access ends. Its refresh tokens stop working, and opaque access tokens fail introspection at once. JWT access tokens may stay valid until they expire, unless the API checks with the server.
+- **The consent record:** the user is simply asked again next time.
+
+**In Lattice:**
+- **Consent:** the consent page, logged as `CONSENT_GRANTED` or `CONSENT_DENIED`. `AppConsentStore` remembers the approval so the page can be skipped (`CONSENT_REUSED`).
+- **Grant:** held by Authlete and listed on the account page as connected apps. "Remove access" deletes it in Authlete, revoking the app's tokens, and also clears the remembered consent.
+- **Access tokens:** issued by Authlete at `/api/token`, and checked by introspection.
+
 ## Security fixes compared to the reference server
 
 - JWT bearer and token exchange: the reference never checked the signature on JWT bearer assertions or JWT subject tokens, so a forged JWT got tokens. These are now verified against this server's own Authlete keys or a configured list of trusted issuers; anything else is rejected.
@@ -959,16 +1170,16 @@ A keyspace is the theoretical set of all keys an algorithm can use. For uniforml
 - **AES-128:** 2^128 possible keys, roughly 3.4 * 10^38.
 - **AES-256:** 2^256 possible keys, roughly 1.1 * 10^77.
 
-Because a 256-bit ECC key provides the exact same security as a massive 3072-bit RSA key, ECC offers significant performance advantages. For example, ECDSA with the P-256 curve is widely used in TLS and other protocols, providing strong security with smaller key sizes and faster computations.
+Because a 256-bit ECC key provides about the same security as a much larger 3072-bit RSA key (128 bits, per NIST SP 800-57), ECC offers significant performance advantages. For example, ECDSA with the P-256 curve is widely used in TLS and other protocols, providing strong security with smaller key sizes and faster computations.
 
 When a cryptographic library executes an algorithm, the speed depends heavily on whether the operands fit cleanly inside the CPU's hardware registers.
 
-- `ECC 256`: A 256-bit number is relatively small. It fits entirely into just four standard 64-bit CPU registers, or a single 256-bit SIMD (like AVX-256) register. The CPU can execute arithmetic on these numbers using a highly optimized, short pipeline of micro-operations entirely within the CPU core, without constantly hitting the memory bus.
+- `ECC 256`: A 256-bit number is relatively small. It fits entirely into just four standard 64-bit CPU registers, or a single 256-bit SIMD register (AVX2's YMM registers). The CPU can execute arithmetic on these numbers using a highly optimized, short pipeline of micro-operations entirely within the CPU core, without constantly hitting the memory bus.
 - `RSA 3072`: A 3072-bit integer is massive; it completely exceeds native hardware register capacities. To process it, the CPU must break the number down into an array of forty-eight 64-bit words and perform arbitrary-precision ("BigInteger") arithmetic. Multiplying two 3072-bit numbers requires thousands of CPU cycles, constant load/store instructions to shuttle data back and forth from memory, and heavy utilization of the instruction decoder just to manage the arrays.
 
 
 `RSA (Modular Exponentiation)`: RSA operations rely on equations like $c \equiv m^e \pmod{n}$. Exponentiating a 3072-bit number requires a process called "repeated squaring and multiplication." Even with algorithmic shortcuts like the Chinese Remainder Theorem, the CPU is forced to perform computationally expensive, multi-word multiplications over and over again until the exponent is resolved.
-- `ECC (Elliptic Curve Point Multiplication)`: ECC operations involve finding a point on a curve defined by $y^2 = x^3 + ax + b$. The mathematics of elliptic curves allows for much smaller numbers to be used while still providing equivalent security. Point multiplication is a more efficient operation than modular exponentiation, and it can be performed using optimized algorithms that take advantage of the curve's properties.
+- `ECC (Elliptic Curve Point Multiplication)`: ECC operations involve finding a point on a curve defined by $y^2 = x^3 + ax + b$. The mathematics of elliptic curves allows for much smaller numbers to be used while still providing equivalent security. At equal security, ECC signing and key generation are much faster than RSA's. Verification is the exception: RSA verifies with the small public exponent 65537, which is cheap, so RSA verification is usually faster than ECDSA verification.
 
 
 `The mathematics of RSA require the resulting digital signature to be exactly the same size as the cryptographic modulus (the key size)`
@@ -1196,22 +1407,22 @@ Static ECDH reuses the same private key across many connections, for months or y
 
 **In a TLS 1.3 handshake:**
 
-1. Each side generates a fresh key pair and sends its public key. The server signs its share with its long-term key to prove who it is.
+1. Each side generates a fresh key pair and sends its public key. The server proves who it is by signing the handshake transcript, which includes both shares, with its long-term key (the `CertificateVerify` message).
 2. Each side computes the same ECDH shared secret, then runs it through the key schedule (HKDF in 1.3) to get the session keys.
 3. Each side discards the ephemeral private key and the shared secret. The session keys stay in memory until the connection closes.
 
 
-as a client of Authlete's own management API. If you set `AUTHLETE_DPOP_KEY`, the token Lattice uses to call Authlete is DPoP-bound, and PlayAuthleteApiBase.java:80 signs a proof on every call. That's Lattice proving its identity to Authlete, separate from your apps' DPoP.
+Lattice is itself a client of Authlete's API. If you set `AUTHLETE_DPOP_KEY`, the token Lattice uses to call Authlete is DPoP-bound: [PlayAuthleteApiBase.java:80](app/com/lattice/oidc/client/PlayAuthleteApiBase.java#L80) loads the key, and [line 166](app/com/lattice/oidc/client/PlayAuthleteApiBase.java#L166) adds a freshly signed proof to every call. That's Lattice proving its identity to Authlete, separate from your apps' DPoP.
 
 
-The heading shows the provider's server.name from the identity providers file. The demo's file comes from the test helper FakeUpstreamProvider, which writes `"name":"Upstream"` `(FakeUpstreamProvider.java)`. "Upstream" there is just jargon for "the provider we sign in through".
+The heading shows the provider's `server.name` from the identity providers file. The demo's file comes from the test helper [FakeUpstreamProvider.java](test/com/lattice/oidc/handlers/FakeUpstreamProvider.java#L164), which writes `"name":"Upstream"`. "Upstream" there is just jargon for "the provider we sign in through".
 
 ```json
 { "id": "okta", "server": { "name": "Partner Inc (Okta)", "issuer": "https://partner.okta.com" },
   "domains": ["partner.example"], ... }
 ```
 
-One database for all instances. As with Lattice, every Keycloak node connects to the same database (PostgreSQL, MySQL and others). Realms, clients, users, credentials and, since Keycloak 26, user sessions are stored there
+One database for all instances. As with Lattice, every Keycloak node connects to the same database (PostgreSQL, MySQL and others). Realms, clients, users, credentials and, since Keycloak 26, user sessions are stored there.
 
 ```scala
 def apply[A](x: A | Null): Option[A] = if (x == null) None else Some(x)
@@ -1230,3 +1441,618 @@ o.map(_.length)                     // ok, no .nn
 
 val back = o.orNull                 // String | Null, no implicit evidence needed
 ```
+
+What is authenticated is the token, not the person. When your API receives `Authorization: Bearer <token>`, it checks that the token is genuine. Either it verifies the signature, or it asks the authorization server through introspection
+
+It also checks that the token hasn't expired or been revoked, and that it was issued for this API. That check is authentication in the narrow sense: it establishes the credential is real and came from the authorization server you trust
+
+What the token proves is authorization.
+
+What it does not prove:
+- Who is sending the request. So a bearer token doesn't authenticate the sender at all. Sender-constrained tokens fix this. With DPoP (RFC 9449) or mutual-TLS-bound tokens (RFC 8705), the client must also prove it holds a private key the token is bound to. Then the token does authenticate the sender
+- `That the user is present, or signed in just now`. The token may have been issued hours ago, or refreshed without the user involved. It records that the user granted access, not that they're at the keyboard.
+- `That the user signed in to this app`. That's the ID token's job in OpenID Connect. An ID token is addressed to one client (`aud`) and says who signed in, when (`auth_time`) and how (`acr`).
+
+The Authorization header doesn't help. In HTTP (RFC 9110), that header carries credentials, which is an authentication concept. The name predates OAuth. With OAuth, the credential it carries happens to be a grant of authorization.
+
+the API authenticates the token, and the token tells it what has been authorized.
+
+A JWT access token (RFC 9068) carries the grant inside it, signed by the authorization server. The API verifies the signature with the server's public key and reads the same fields from the token, with no call to the server.
+
+A grant answers five questions:
+
+| Question | Field in a JWT access token (RFC 9068) | Example |
+| --- | --- | --- |
+| Who gave the permission? | `sub` (the user) | `1001` |
+| To which app? | `client_id` | `42` (Acme Notes) |
+| To do what? | `scope` (or `authorization_details` for fine-grained rights) | `openid profile read:notes` |
+| At which API? | `aud` (the resource server) | `https://notes.example/api` |
+| Until when? | `exp`, plus `iat` for when it was issued | `10:30` |
+
+A JWT access token is those answers, signed by the authorization server:
+```json
+{
+  "iss": "https://lattice.example",
+  "sub": "1001",
+  "client_id": "42",
+  "aud": "https://notes.example/api",
+  "scope": "openid profile read:notes",
+  "iat": 1791240600,
+  "exp": 1791244200,
+  "jti": "a1b2c3"
+}
+```
+
+In RFC 6749, an authorization grant is the credential the client exchanges for tokens, not the permission itself. The grant types are those credentials
+
+```sh
+Consent  ──▶  Grant  ──▶  Access token
+(a decision)  (the permission)  (a short-lived pass that carries it)
+```
+
+Consent: the user's decision
+Consent is the moment Alice sees a screen like this and clicks Yes:
+
+DevDashboard wants to:
+✓ Read your profile
+✓ Read your orders
+[ Yes ] [ No ]
+
+It's a human approving something. In Keycloak:
+- The screen only appears if the client has "Consent required" turned on. It's off by default
+- The decision is stored as a `UserConsentModel`. It records which client scopes this user approved for this client.
+
+```java
+
+package org.keycloak.models;
+
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+import org.keycloak.common.util.MultivaluedHashMap;
+
+
+public class UserConsentModel {
+
+    private final ClientModel client;
+    private final Set<ClientScopeModel> clientScopes = new HashSet<>();
+    private final MultivaluedHashMap<String, String> parameters = new MultivaluedHashMap<>();
+    private Long createdDate;
+    private Long lastUpdatedDate;
+
+    public UserConsentModel(ClientModel client) {
+        this.client = client;
+    }
+
+    public ClientModel getClient() {
+        return client;
+    }
+
+    public void addGrantedClientScope(ClientScopeModel clientScope) {
+        addGrantedClientScope(clientScope, null);
+    }
+
+    public void addGrantedClientScope(ClientScopeModel clientScope, String parameter) {
+        if (clientScope.isAlwaysConsent()) {
+            // always consent scopes are skipped
+            return;
+        }
+        clientScopes.add(clientScope);
+        if (ClientScopeModel.isParameterizedScope(clientScope)) {
+            if (parameter == null) {
+                throw new IllegalArgumentException("Parameter value is compulsory for Parameterized Scope " + clientScope.getName());
+            }
+            parameters.add(clientScope.getId(), parameter);
+        }
+    }
+
+    public Set<ClientScopeModel> getGrantedClientScopes() {
+        return clientScopes;
+    }
+
+    public List<String> getParameters(ClientScopeModel clientScope) {
+        if (ClientScopeModel.isParameterizedScope(clientScope)) {
+            return parameters.getList(clientScope.getId());
+        }
+        return Collections.emptyList();
+    }
+
+    public boolean isClientScopeGranted(ClientScopeModel clientScope) {
+        return isClientScopeGranted(clientScope, null);
+    }
+
+    public boolean isClientScopeGranted(ClientScopeModel clientScope, String parameter) {
+        for (ClientScopeModel apprClientScope : clientScopes) {
+            if (apprClientScope.getId().equals(clientScope.getId())) {
+                if (ClientScopeModel.isParameterizedScope(clientScope)) {
+                    return parameter != null && parameters.getList(apprClientScope.getId()).contains(parameter);
+                } else {
+                    return parameter == null && parameters.getList(apprClientScope.getId()).isEmpty();
+                }
+            }
+        }
+        return false;
+    }
+
+    public Long getCreatedDate() {
+        return createdDate;
+    }
+
+    public void setCreatedDate(Long createdDate) {
+        this.createdDate = createdDate;
+    }
+
+    public Long getLastUpdatedDate() {
+        return lastUpdatedDate;
+    }
+
+    public void setLastUpdatedDate(Long lastUpdatedDate) {
+        this.lastUpdatedDate = lastUpdatedDate;
+    }
+}
+```
+
+## Grant: the permission itself
+A grant is the authorization that exists as a result: "DevDashboard may read Alice's orders". It's the actual permission, which outlives any one token.
+The OAuth spec uses "grant" in two related senses, which is why it's confusing.
+
+1. Authorization grant (RFC 6749 §1.3): "a credential representing the resource owner's authorization". It's what the client hands in at the token endpoint to get tokens
+
+The access token is derived from the grant.
+
+```sh
+POST /realms/myrealm/protocol/openid-connect/token
+
+grant_type=authorization_code      ← the grant TYPE (a fixed label)
+code=a8f3e2c1-77b0-4d...           ← the GRANT (the actual credential)
+client_id=devdashboard
+redirect_uri=https://...
+```
+
+1. ## Authorization code: web apps, SPAs, mobile apps
+
+```sh
+## get the grant. This happens in the browser,
+GET $KC/auth?client_id=devdashboard
+            &response_type=code
+            &redirect_uri=https://dash.example/cb
+            &scope=openid orders:read
+            &state=xyz
+            &code_challenge=E9Melhoa2Owv...&code_challenge_method=S256
+```
+The user logs in (and consents, if required). Keycloak redirects back:
+
+```sh
+https://dash.example/cb?code=a8f3e2c1-77b0.4f2e.9c1d...&state=xyz
+                             └──────── the GRANT ────────┘
+```
+
+```sh
+##  exchange it. The app's backend calls:
+curl -X POST $KC/token \
+  -u devdashboard:dash-secret \
+  -d grant_type=authorization_code \
+  -d code=a8f3e2c1-77b0.4f2e.9c1d... \
+  -d redirect_uri=https://dash.example/cb \
+  -d code_verifier=dBjftJeZ4CVP...
+```
+
+2. ## Refresh token: keeping the user logged in
+This is always available to clients that got a refresh token earlier.
+
+```sh
+curl -X POST $KC/token \
+  -u devdashboard:dash-secret \
+  -d grant_type=refresh_token \
+  -d refresh_token=eyJhbGciOiJIUzUxMiIs...
+```  
+- `grant_type=refresh_token` is the type.
+- `refresh_token` is the grant: long-lived, tied to the user's Keycloak session.
+
+3. ## Client credentials: service to service, no user
+
+```sh
+curl -X POST $KC/token \
+  -u billing-job:job-secret \
+  -d grant_type=client_credentials
+
+```
+- `grant_type=client_credentials` is the type.
+- The grant is `-u billing-job:job-secret`
+
+For stronger security, replace the secret with a signed JWT:
+
+```sh
+  -d client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer \
+  -d client_assertion=eyJhbGciOiJSUzI1NiIs...
+```  
+
+4. ## Device code: TVs, CLIs, IoT
+These are devices with no browser or keyboard. It's turned on by the client's OAuth 2.0 Device Authorization Grant setting.
+
+Step A: the device asks for a code pair.
+```sh
+curl -X POST $KC/auth/device -d client_id=smart-tv -d scope=openid
+```
+The response:
+```json
+{ "device_code": "Uo3Kd8...",          ← the grant (kept secret, on the device)
+  "user_code": "WDJB-MJHT",           ← shown on screen
+  "verification_uri": "https://kc.example/realms/myrealm/device",
+  "interval": 5, "expires_in": 600 }
+```
+The user opens that URL on their phone, logs in, and types `WDJB-MJHT`.
+
+Step B: the device polls every 5 seconds.
+
+```sh
+curl -X POST $KC/token \
+  -d client_id=smart-tv \
+  -d grant_type=urn:ietf:params:oauth:grant-type:device_code \
+  -d device_code=Uo3Kd8...
+```
+- The long `grant_type` URN is the type.
+- `device_code` is the grant.
+
+5. ## Token exchange: services calling services as the user
+
+Scenario: a gateway receives Alice's token and needs a token for a downstream API, with a different audience and narrower scope. 
+
+```sh
+curl -X POST $KC/token \
+  -u orders-gateway:gw-secret \
+  -d grant_type=urn:ietf:params:oauth:grant-type:token-exchange \
+  -d subject_token=eyJhbGciOiJSUzI1NiIs... \
+  -d subject_token_type=urn:ietf:params:oauth:token-type:access_token \
+  -d audience=inventory-api \
+  -d scope=inventory:read
+```  
+
+- The `token-exchange` URN is the type.
+- `subject_token` (Alice's existing access token) is the grant.
+
+6. ## CIBA: approve on your phone
+CIBA stands for Client-Initiated Backchannel Authentication. Example: a bank's call-centre app asks the customer to approve a login on their banking app. 
+
+Step A: the client starts it, with no browser involved:
+```sh
+curl -X POST $KC/ext/ciba/auth \
+  -u callcenter:cc-secret \
+  -d scope=openid -d login_hint=alice -d binding_message="Approve login 4821"
+```  
+The response is `{ "auth_req_id": "1c266114-a1be...", "interval": 5 }`, and Alice gets a push notification.
+
+Step B: the client polls.
+
+```sh
+curl -X POST $KC/token \
+  -u callcenter:cc-secret \
+  -d grant_type=urn:openid:params:grant-type:ciba \
+  -d auth_req_id=1c266114-a1be...
+```
+
+`grant_type=urn:openid:params:grant-type:ciba` is the type and `auth_req_id` is the grant.
+
+7. ## JWT bearer: trusting an assertion from another system
+An external system signs a JWT about a user, and Keycloak trades it for its own token.
+
+```sh
+curl -X POST $KC/token \
+  -u partner-app:secret \
+  -d grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer \
+  -d assertion=eyJhbGciOiJSUzI1NiIs...
+```  
+
+The `jwt-bearer` URN is the type and `assertion` (the signed JWT) is the grant
+
+
+8. ## UMA ticket: fine-grained permissions (Authorization Services)
+The app asks `"may Alice do view on resource invoice-42?"` and gets back an RPT, an access token containing the permissions that were granted.
+```sh
+curl -X POST $KC/token \
+  -H "Authorization: Bearer <alice's access token>" \
+  -d grant_type=urn:ietf:params:oauth:grant-type:uma-ticket \
+  -d audience=invoices-api \
+  -d permission=invoice-42#view
+```
+- The `uma-ticket` URN is the type.
+- The grant is Alice's bearer token, plus a `ticket` if the resource server issued one.
+
+9. ## Password: legacy, avoid
+The app collects the user's password itself. It's turned on by the client's Direct access grants setting.
+```sh
+curl -X POST $KC/token \
+  -d client_id=legacy-cli \
+  -d grant_type=password \
+  -d username=alice -d password=s3cret
+```  
+- `grant_type=password` is the type and `username + password` are the grant.
+
+
+10. ## Pre-authorized code: digital credentials
+This is part of OID4VCI, used for wallet apps and verifiable credentials: `grant_type=urn:ietf:params:oauth:grant-type:pre-authorized_code` with `pre-authorized_code=...`, which the credential issuer gave the wallet in its credential offer.
+
+the grant type names the kind of proof, and the other parameter is the proof itself
+
+```sh
+urn:ietf:params:oauth:client-assertion-type:jwt-bearer 
+urn:ietf:params:oauth:grant-type:jwt-bearer 
+```   
+
+## Client assertion: a replacement for the client secret
+Recall that every token request has two parts: authenticate the client, then present the grant. A client assertion only changes the first part.
+
+```sh
+curl -X POST $KC/token \
+  -d grant_type=client_credentials \                       ← grant type: unchanged
+  -d client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer \
+  -d client_assertion=eyJhbGciOiJSUzI1NiIs...              ← replaces client_secret
+```  
+The JWT the client signs, with its own private key:
+
+```json
+{
+  "iss": "billing-job",          ← the client
+  "sub": "billing-job",          ← the client again: "I am me"
+  "aud": "https://kc.example/realms/myrealm",
+  "jti": "5f1c9a...",            ← unique, so it can't be replayed
+  "exp": 1760000060              ← lives for seconds
+}
+```
+Keycloak checks the signature against the public key (or JWKS URL) registered on the client.
+
+It works with any grant, because it only replaces `client_secret`:
+
+```sh
+-d grant_type=authorization_code -d code=...      -d client_assertion=...
+-d grant_type=refresh_token      -d refresh_token=... -d client_assertion=...
+```
+
+## JWT bearer grant: the JWT is the permission
+Here the JWT replaces the grant. It's typically a statement about a user, made by a system Keycloak trusts.
+
+Scenario: a partner company has already logged Alice in on their side. Their system signs a JWT saying "this is Alice", and Keycloak trades it for a Keycloak token without sending Alice to a login page.
+
+```sh
+curl -X POST $KC/token \
+  -u partner-app:secret \                                   ← client authentication (separate!)
+  -d grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer \  ← grant type
+  -d assertion=eyJhbGciOiJSUzI1NiIs...                      ← the grant
+```  
+The JWT, signed by the partner's identity system:
+```json
+{
+  "iss": "https://idp.partner.com",   ← a third party, not the client
+  "sub": "alice@partner.com",          ← a USER
+  "aud": "https://kc.example/realms/myrealm",
+  "exp": 1760000300
+}
+```
+
+*They can appear in the same request*
+
+Keycloak requires client authentication for the jwt-bearer grant: isConfidentialOnlyGrantType() returns true, as the comment there notes, even though the RFC makes it optional. So a high-security setup sends two different JWTs:
+```sh
+curl -X POST $KC/token \
+  -d grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer \
+  -d assertion=eyJ...ALICE...                       ← JWT #1: "this is Alice" (signed by partner IdP)
+  -d client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer \
+  -d client_assertion=eyJ...PARTNER-APP...          ← JWT #2: "I am partner-app" (signed by the client)
+```
+
+Every token request answers two questions
+
+```sh
+POST /token
+┌──────────────────────────────────────────────┐
+│ Part 1: WHO is the client?                   │  ← client authentication
+│ Part 2: WHAT grant is it presenting?         │  ← grant_type + grant
+└──────────────────────────────────────────────┘
+```
+
+Because the two parts are independent, a client authentication method can generally be combined with any grant type. The exceptions are grants that need a confidential client, such as client credentials, which a public client (no authentication at all) can't use.
+
+With a client secret:
+```sh
+grant_type=authorization_code        ┐
+code=a8f3e2c1...                     │ Part 2: the grant (identical)
+redirect_uri=https://dash.example/cb ┘
+client_id=devdashboard               ┐
+client_secret=dash-secret            ┘ Part 1: "I'm devdashboard, here's my password"
+```
+With a signed JWT:
+
+```sh
+grant_type=authorization_code        ┐
+code=a8f3e2c1...                     │ Part 2: the grant (identical)
+redirect_uri=https://dash.example/cb ┘
+client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer  ┐
+client_assertion=eyJhbGciOiJSUzI1NiIs...                                      ┘ Part 1: "I'm devdashboard, here's my signature"
+```
+
+Alice writes Bob a cheque for $100. At the bank:
+
+- The cheque is the grant. It proves Alice authorized paying $100 to Bob.
+- Bob's ID card is the client authentication. It proves the person at the counter is Bob.
+Neither works alone:
+- ID without a cheque: the bank knows you're Bob, but nobody authorized paying you anything.
+- Cheque without ID: if someone stole the cheque, they could cash it.
+The bank checks both, and checks that they match: the cheque is made out to Bob, and you are Bob.
+
+### The same thing at Keycloak's token endpoint
+
+```sh
+grant_type=authorization_code
+code=a8f3e2c1...                ← the cheque: "Alice authorized devdashboard"
+client_id=devdashboard
+client_secret=dash-secret       ← the ID card: "I am devdashboard"
+```
+
+Public clients (SPAs, mobile apps), where there's no client authentication.
+
+## Grants all look alike
+Here are real values a client might send. Which is which?
+
+```sh
+a8f3e2c1-77b0.4f2e.9c1d.5b...      ← authorization code? device code? CIBA auth_req_id?
+eyJhbGciOiJIUzUxMiIs...            ← refresh token? access token for exchange? jwt-bearer assertion?
+```
+You can't tell, and Keycloak couldn't reliably either:
+
+- Codes, device codes and CIBA request IDs are all opaque random strings.
+- Refresh tokens, access tokens and assertions are all JWTs.
+
+*It tells Keycloak which parameters to *expect*
+The parameters for each type differ completely:
+
+```sh
+authorization_code → code, redirect_uri, code_verifier
+refresh_token      → refresh_token, scope
+token-exchange     → subject_token, subject_token_type, audience, requested_token_type
+device_code        → device_code
+password           → username, password
+```
+
+*It lets Keycloak say no before looking at the grant*
+An admin decides which grant types each client may use (the Capability config switches). That check needs only the type:
+```sh
+spa sends grant_type=password
+→ "Direct access grants" is OFF for spa
+→ rejected, and the username/password are never even checked
+```
+Event logs, client policies and FAPI rules also work at the type level. For example, a policy might say "token exchange only from these clients"
+
+
+```sh
+Client "dashboard-a" (configured: Client Id and Secret)
+  grant_type=authorization_code, code=...,  client_secret=...         ✓
+
+Client "dashboard-b" (configured: Signed JWT)
+  grant_type=authorization_code, code=...,  client_assertion=eyJ...   ✓
+
+Client "dashboard-a" sends client_assertion instead                    ✗ rejected
+```
+
+Duende IdentityServer labels each record in its grant store with one of these types (`IdentityServerConstants.PersistedGrantTypes`):
+
+```c#
+    public static class PersistedGrantTypes
+    {
+        public const string AuthorizationCode = "authorization_code";
+        public const string BackChannelAuthenticationRequest = "ciba";
+        public const string ReferenceToken = "reference_token";
+        public const string RefreshToken = "refresh_token";
+        public const string UserConsent = "user_consent";
+        public const string DeviceCode = "device_code";
+        public const string UserCode = "user_code";
+    }
+```
+
+When the Resource Server (API) receives the token, it validates specific properties to authenticate the request itself:
+
+- `Proof of Origin`: Verifying the signature (for a JWT) or querying the introspection endpoint (for an opaque token) proves the token was minted by your trusted identity infrastructure, not forged by an attacker.
+
+- `Proof of Integrity`: For a JWT, the signature ensures that the scopes, user ID and expiration time haven't been altered. An opaque token carries none of these, so there is nothing to alter: the introspection response supplies them.
+
+- `Proof of Audience`: Checking the aud claim ensures the request was intended for this specific API, preventing an attacker from taking a token meant for the Billing API and using it to authenticate a request to the HR API.
+
+Think of a standard Bearer token like a concert ticket. The security guard at the door does not authenticate you—they don't check your ID or know your name. They authenticate the ticket by checking the watermark, the date, and the venue. Because the ticket is authentic, your request to enter is authenticated and granted.
+
+
+RFC 6749 (§1.4) makes it clear that the token represents the grant of permission (authorization), not the identity of the user. When an API validates the token, it is validating the authorization.
+
+It authenticates who created the token. Cryptographers call this data origin authentication, and it's a different thing from entity authentication
+
+*How the signature proves who made the token*
+
+- Only the authorization server has the private key. It signs the token's header and payload with it.
+- Anyone can check the signature with the public key. The check passes only if the matching private key produced the signature over exactly those bytes.
+
+Turning it into entity authentication
+To authenticate the caller as well, bind the token to a key the client owns:
+- `DPoP (RFC 9449)`. The token carries `cnf.jkt`, a hash of the client's public key. Each request includes a DPoP proof signed with the matching private key, so the API checks both who made the token and who is presenting it.
+- `mTLS (RFC 8705)`. The token carries `cnf.x5t#S256`, a hash of the client's certificate. The client proves it holds that certificate's key during the TLS handshake.
+
+RFC 4949 defines data-origin authentication as corroborating that received data came from its claimed source. It also states that a digital-signature mechanism can provide this service because a party without the private key cannot create a valid signature
+
+```sh
+Data-origin authentication
+    Who originally produced this data?
+
+Peer-entity authentication
+    Who is communicating with me right now?
+```
+
+That distinction is crucial for bearer tokens. A JWT signature can authenticate the token’s origin, but it does not necessarily authenticate the party currently presenting it.
+
+## NIST FIPS 186-5
+NIST states that digital signatures are used both to:
+- detect unauthorized modification of data; and
+- authenticate the identity of the signatory.
+That directly supports the concepts of integrity and origin authentication
+
+A MAC provides data origin authentication and data integrity protection. MACs are used to authenticate both the source of a message and its integrity.
+
+### Data Origin Authentication
+The verification that information was generated by a system entity and has not been subsequently altered.
+
+> Both signatures and MACs provide for integrity checking -- verifying that the
+> message has not been modified since the integrity value was computed. However,
+> MACs provide for origination identification only under specific circumstances.
+> It can normally be assumed that a private key used for a signature is only in
+> the hands of a single entity (although perhaps a distributed entity, in the
+> case of replicated servers); however, a MAC key needs to be in the hands of
+> all the entities that use it for integrity computation and checking.
+> Validation of a MAC only provides corroboration that the message was generated
+> by one of the parties that knows the symmetric MAC key. This means that
+> origination can only be determined if a MAC key is known only to two entities
+> and the recipient knows that it did not create the message. MAC validation
+> cannot be used to prove origination to a third party.
+
+
+### Docker image
+
+The build makes the image with sbt-native-packager, which Play already uses for `stage` and `dist`. A fat JAR (sbt-assembly) isn't used: a Play app needs its `conf/` directory and several `reference.conf` files merged, which `stage` handles and an assembly JAR would need custom merge rules for.
+
+```sh
+sbt --client Docker/publishLocal      # build lattice-oidc:<version> into the local Docker daemon
+sbt --client Docker/stage             # only write target/docker/stage (Dockerfile and files)
+DOCKER_REGISTRY=ghcr.io DOCKER_USERNAME=reynaldjoabet sbt --client Docker/publish   # push amd64 + arm64
+```
+
+**What the settings in `build.sbt` do:**
+
+| Setting | Why |
+| --- | --- |
+| `eclipse-temurin:25-jre-noble` base | A JRE (no compiler) on Ubuntu with glibc, the platform the JDK is built and tested on. Alpine's musl works for most apps but is a second, less-tested target. Pin a digest for releases. |
+| `javacOptions --release 21` | The classes run on Java 21 or newer, whichever JDK compiled them. Without it, building on JDK 25 makes classes a Java 21 runtime can't load. |
+| User `lattice`, UID 1001, group 0 | Not root. The numeric `USER 1001:0` lets Kubernetes' `runAsNonRoot` check it. |
+| `UserGroupReadExecute` permissions | The app's files are read-only (`u=rX,g=rX`). They are still owned by `lattice`, which could `chmod` them back, so run with a read-only root filesystem (`--read-only`, or `readOnlyRootFilesystem` in Kubernetes) to make them truly unchangeable. |
+| `JDK_JAVA_OPTIONS` | Always applied. `-Dpidfile.path=/dev/null` stops Play writing `RUNNING_PID` into the read-only app directory (it would fail to start), and `-Dlogger.resource=logback-container.xml` logs to stdout only. |
+| `JAVA_OPTS` | Defaults an operator can replace: heap at 75% of the container's memory limit, and exit on `OutOfMemoryError` so the orchestrator restarts the container. |
+| Port 9000 | Play's default `http.port`. |
+| Tags | `<version>`, plus the 12-character commit in GitHub Actions. No `latest`: a deployment should name the exact image it runs. |
+| OCI labels | Title, version, source repository and, in CI, the commit. |
+
+**What's deliberately left out:**
+
+- **`-Djava.security.egd=file:/dev/./urandom`:** obsolete. Since JDK 9, `SecureRandom` on Linux doesn't block on `/dev/random`.
+- **`-XX:+UseContainerSupport`:** on by default since JDK 10.
+- **`-Dfile.encoding=UTF-8`:** the default since JDK 18 (JEP 400).
+- **A fixed `-Xmx`:** it overrides `MaxRAMPercentage`, so the heap would no longer follow the container's limit.
+- **`-XX:+ZGenerational`:** Java 21 needs it for generational ZGC, but JDK 24 removed the non-generational mode and ignores the flag with a warning. G1, the default, suits a request/response server.
+- **A Docker `HEALTHCHECK`:** Kubernetes ignores it, and the image has no `curl`. Point the probes at `/health/live` and `/health/ready` instead.
+- **`tini`:** the start script `exec`s `java`, so the JVM is PID 1 and receives `SIGTERM` directly, and Play shuts down gracefully. It starts no child processes that would need reaping.
+
+**Running it:**
+
+```sh
+docker run --rm -p 9000:9000 --read-only --tmpfs /tmp \
+  -e APPLICATION_SECRET=$(openssl rand -hex 32) \
+  -e AUTHLETE_SERVICE_APIKEY=<id> -e AUTHLETE_SERVICE_ACCESSTOKEN=<token> \
+  lattice-oidc:0.1.0-SNAPSHOT
+```
+
+`--read-only` keeps the container filesystem unchangeable. Play still needs somewhere for temporary files such as uploads, so `--tmpfs /tmp` gives it a writable `/tmp`. I haven't run this exact command, so test it before relying on it. Other services a production deployment needs alongside it: PostgreSQL, Redis, Prometheus, Grafana and a reverse proxy such as HAProxy.
