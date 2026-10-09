@@ -19,7 +19,7 @@ import java.util.concurrent.Semaphore;
  */
 public final class PasswordHasher {
 
-  private static volatile Semaphore permits = new Semaphore(defaultConcurrency(), true);
+  private static volatile Semaphore slots = new Semaphore(defaultConcurrency(), true);
   private static volatile int concurrency = defaultConcurrency();
 
   private PasswordHasher() {}
@@ -34,7 +34,7 @@ public final class PasswordHasher {
       throw new IllegalArgumentException("lattice.login.hashing-concurrency must be at least 1: " + limit);
     }
     concurrency = limit;
-    permits = new Semaphore(limit, true);
+    slots = new Semaphore(limit, true);
   }
 
   public static int concurrency() {
@@ -53,7 +53,7 @@ public final class PasswordHasher {
 
   /** Runs {@code work} within the limit (package-private for the test). */
   static <T> T limited(java.util.function.Supplier<T> work) {
-    Semaphore current = permits;
+    Semaphore current = slots;
     try {
       current.acquire();
     } catch (InterruptedException e) {
