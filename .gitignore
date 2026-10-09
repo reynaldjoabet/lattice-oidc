@@ -51,3 +51,4 @@ metals.sbt
 
 # Performance test output (perf/run.sh, JMH)
 perf/results/
+perf/.work/

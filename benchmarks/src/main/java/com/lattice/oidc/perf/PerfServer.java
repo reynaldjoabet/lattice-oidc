@@ -35,6 +35,10 @@ import play.test.TestServer;
  * Redis and the cache are configured by the usual environment variables ({@code LATTICE_STORAGE},
  * {@code DATABASE_URL}, {@code LATTICE_SHORT_LIVED_STATE}, {@code LATTICE_CACHE}, ...).
  *
+ * <p>To run several behind a load balancer, give each its own {@code PERF_PORT} and set {@code
+ * PERF_PUBLIC_PORT} to the balancer's port; they then need a shared PostgreSQL and Redis
+ * (perf/run.sh does all of this).
+ *
  * <p>Runs until interrupted, or for {@code PERF_SERVER_SECONDS} (default 1800).
  */
 public final class PerfServer {
@@ -67,9 +71,11 @@ public final class PerfServer {
     long latency = Long.parseLong(System.getenv().getOrDefault("PERF_AUTHLETE_LATENCY_MS", "0"));
     long seconds = Long.parseLong(System.getenv().getOrDefault("PERF_SERVER_SECONDS", "1800"));
     int port = Integer.parseInt(System.getenv().getOrDefault("PERF_PORT", "9000"));
+    // The port clients (or the load balancer in front) use; requests carry it in their Host header.
+    int publicPort = Integer.parseInt(System.getenv().getOrDefault("PERF_PUBLIC_PORT", String.valueOf(port)));
 
     FakeAuthleteApi fake = new FakeAuthleteApi();
-    fake.answer("getServiceConfiguration", after(latency, a -> "{\"issuer\":\"http://localhost:" + port + "\",\"scopes_supported\":[\"openid\",\"profile\",\"email\"]}"))
+    fake.answer("getServiceConfiguration", after(latency, a -> "{\"issuer\":\"http://localhost:" + publicPort + "\",\"scopes_supported\":[\"openid\",\"profile\",\"email\"]}"))
         .answer("getServiceJwks", after(latency, a -> "{\"keys\":[]}"))
         .answer("getClientAuthorizationList", after(latency, a -> new AuthorizedClientListResponse()))
         .answer(
@@ -95,7 +101,7 @@ public final class PerfServer {
                 a -> {
                   AuthorizationIssueResponse r = new AuthorizationIssueResponse();
                   r.setAction(AuthorizationIssueResponse.Action.LOCATION);
-                  r.setResponseContent("http://localhost:" + port + "/account");
+                  r.setResponseContent("http://localhost:" + publicPort + "/account");
                   return r;
                 }))
         .answer("authorizationFail", after(latency, a -> new AuthorizationFailResponse()))
@@ -119,7 +125,11 @@ public final class PerfServer {
     settings.put("authlete.service-id", "1");
     settings.put("authlete.service-access-token", "perf");
     settings.put("play.http.secret.key", "perf-server-secret-perf-server-secret-perf-server-secret");
-    settings.put("play.filters.hosts.allowed", List.of("localhost:" + port, "127.0.0.1:" + port));
+    settings.put(
+        "play.filters.hosts.allowed",
+        List.of("localhost:" + port, "127.0.0.1:" + port, "localhost:" + publicPort, "127.0.0.1:" + publicPort));
+    // Several servers can run on one machine (behind a load balancer): each needs its own cluster port.
+    settings.put("pekko.remote.artery.canonical.port", 0);
     // The scripted Authlete replaces the real client, so the resilience layer (cache, retries,
     // circuit breaker) is put around it as in the application, unless PERF_RESILIENCE=off.
     boolean resilience = !"off".equalsIgnoreCase(System.getenv().getOrDefault("PERF_RESILIENCE", "on"));

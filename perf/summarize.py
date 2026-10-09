@@ -2,7 +2,7 @@
 """Turns oha's JSON results into a Markdown table. Usage: summarize.py <dir> <scenarios> <duration> <connections> <latency>"""
 import json, os, platform, subprocess, sys
 
-directory, scenarios, duration, connections, latency, resilience = sys.argv[1:7]
+directory, scenarios, duration, connections, latency, resilience, topology = sys.argv[1:8]
 
 def ms(seconds):
     return f"{seconds * 1000:.1f}" if seconds is not None else "-"
@@ -33,12 +33,26 @@ def cpu():
 
 print("# Load test results\n")
 print(f"- Duration per scenario: {duration}; connections: {connections} (sign-in: one per core)")
+print(f"- Topology: {topology}")
 print(f"- Scripted Authlete latency: {latency} ms; resilience layer: {resilience}")
 print(f"- Machine: {cpu()}, {os.cpu_count()} cores; the load generator runs on the same machine as the server")
 print()
 print("| Scenario | Requests/s | p50 (ms) | p95 (ms) | p99 (ms) | Slowest (ms) | Success | Errors |")
 print("| --- | --: | --: | --: | --: | --: | --: | --: |")
 print("\n".join(rows))
+
+for name in scenarios.split():
+    path = os.path.join(directory, f"{name}.json")
+    if name == "failover" and os.path.exists(path) and os.path.getsize(path):
+        errors = json.load(open(path)).get("errorDistribution", {})
+        print("\nFailover: one server was killed half way through; requests that failed because of it:\n")
+        print("\n".join(f"- {count} x {message}" for message, count in errors.items()) or "- none")
+
+distribution = os.path.join(directory, "distribution.txt")
+if os.path.exists(distribution) and os.path.getsize(distribution):
+    print("\nRequests each server handled (health checks and the warm-up included):\n\n```")
+    print(open(distribution).read().rstrip())
+    print("```")
 
 metrics = os.path.join(directory, "metrics.txt")
 if os.path.exists(metrics):

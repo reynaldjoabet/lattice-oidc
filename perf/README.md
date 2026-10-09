@@ -36,12 +36,13 @@ Each class sets its own warm-up and measurement. Read the `Score` as the time pe
 
 ```sh
 brew install oha                      # once
-perf/run.sh                           # every scenario, 15 s each
+perf/run.sh                           # one server, every scenario, 15 s each
 DURATION=30s CONNECTIONS=128 perf/run.sh
 SCENARIOS="health login" perf/run.sh
+INSTANCES=3 perf/run.sh               # three servers behind HAProxy (see "Behind a load balancer")
 ```
 
-It starts Lattice in production mode with a scripted Authlete (`PerfServer`), signs in once to get a session cookie and CSRF token, runs each scenario with `oha`, stops the server, and writes `perf/results/<time>.md`.
+It starts Lattice in production mode with a scripted Authlete (`PerfServer`), signs in once to get a session cookie and CSRF token, runs each scenario with `oha`, stops everything, and writes `perf/results/<time>.md`.
 
 | Scenario | Request | What it exercises |
 | --- | --- | --- |
@@ -61,7 +62,13 @@ It starts Lattice in production mode with a scripted Authlete (`PerfServer`), si
 | `AUTHLETE_LATENCY_MS` | `0` | A delay on every scripted Authlete call. A real one takes a few to tens of milliseconds, so try `25`. |
 | `RESILIENCE` | `on` | `off` removes the resilience layer, to see what it does. |
 | `SCENARIOS` | all | A space-separated list. |
-| `START_SERVER`, `BASE_URL` | `yes`, `http://localhost:9000` | Use `START_SERVER=no` to test a server you started yourself, such as a real deployment. |
+| `INSTANCES` | `1` | How many Lattice servers (separate JVMs). More than one puts a proxy in front. |
+| `PROXY` | `haproxy` if `INSTANCES` > 1, else `none` | `haproxy`, `nginx` or `none`. Set it with one server to measure the proxy hop. |
+| `BALANCE` | `leastconn` | `leastconn` or `roundrobin`. |
+| `SHARED_STATE` | `database` | With several servers: `database` starts PostgreSQL and Redis, which they share; `none` keeps each server's state in memory. |
+| `CACHE` | `redis` | The read cache with a shared database: `none`, `local` or `redis`. |
+| `PERF_JAVA_OPTS` | `-Xms512m -Xmx1g` | JVM options for each server. |
+| `START_SERVER`, `BASE_URL` | `yes`, `http://127.0.0.1:9000` | Use `START_SERVER=no` to test a server you started yourself, such as a real deployment. |
 
 PostgreSQL, Redis and the read cache take the usual settings, for example `LATTICE_STORAGE=postgres DATABASE_URL=... LATTICE_SHORT_LIVED_STATE=redis LATTICE_CACHE=redis perf/run.sh`.
 
@@ -93,3 +100,49 @@ Sign-in is the expensive endpoint. One Argon2 check takes about 24 ms on one thr
 | 8 | 69 ms | about 115 |
 
 So about 100 sign-ins per second per server is the ceiling on this machine, and the HTTP `login` scenario (which also renders pages and creates sessions, and shares the CPU with the load generator) reached about 75. Size servers for the sign-in rate you expect at peak, not for the page rate, and expect the `login` p99 to climb long before the other pages do. Run it on your own hardware: the shape holds, but the numbers don't transfer.
+
+## Behind a load balancer
+
+A deployment runs several Lattice servers behind a proxy that spreads requests and takes a dead server out. `INSTANCES=N perf/run.sh` builds that on one machine:
+
+```text
+oha  ->  HAProxy or nginx (127.0.0.1:9000)  ->  Lattice servers (9101, 9102, ...)  ->  PostgreSQL + Redis
+```
+
+- **Real, separate JVMs,** each with its own heap and garbage collector, in production mode.
+- **Shared state,** as in a deployment: with `SHARED_STATE=database` the servers use one PostgreSQL (sessions, accounts, audit) and one Redis (pending sign-ins, rate-limit counters, read cache). A sign-in on one server is then valid on the next, which is what a proxy without sticky sessions needs. They share the session-cookie secret too.
+- **Health checks.** HAProxy checks `/health/live` every second and removes a server after two failures. nginx (open source) checks passively, taking a server out for a second after two failed requests.
+- **Proxy headers.** The proxy adds `X-Forwarded-For`, and the allowed-hosts filter sees the proxy's address, as in production.
+
+```sh
+INSTANCES=3 perf/run.sh                                    # HAProxy, least connections
+INSTANCES=3 PROXY=nginx BALANCE=roundrobin perf/run.sh
+INSTANCES=3 SCENARIOS="signin-page failover" perf/run.sh   # also kills a server half way through
+PROXY=haproxy perf/run.sh                                  # one server behind the proxy
+```
+
+Needs `haproxy` or `nginx`, and for `SHARED_STATE=database` also `postgres`, `initdb`, `pg_ctl`, `createdb` and `redis-server` (`brew install haproxy postgresql@18 redis`). The report lists how many requests each server handled, which shows whether the balancing was even.
+
+**The `failover` scenario** runs last. Halfway through, it kills one server and counts the requests that failed. It needs `INSTANCES` of 2 or more.
+
+### What it showed (Apple M1, in-memory state per server, 3 servers)
+
+| Test | Result |
+| --- | --- |
+| Even spread, HAProxy `leastconn`, 10 s of the sign-in page | 33,857 / 30,856 / 36,246 requests per server |
+| Even spread, nginx `roundrobin` | 35,693 / 35,690 (one server killed first) |
+| HAProxy, one server killed half way through 20 s under load | 22 of about 87,000 requests failed (99.97% succeeded), all "connection closed before message completed", i.e. in flight on the dead server |
+| nginx, the same | none failed |
+| One server, direct vs through the proxy, health check | 22,125 / 17,021 (HAProxy) / 15,696 (nginx) requests per second |
+| One server, direct vs through the proxy, sign-in page | 6,726 / 6,382 (HAProxy) / 6,625 (nginx) |
+
+- **The proxy hop costs a quarter on the lightest request and little on real pages,** because there the server's work dominates.
+- **The difference in failover is configuration, not quality.** nginx retries a request that was in flight on a server that died, if it is safe to repeat (a `GET`). HAProxy retries only failed connections unless told to (`retry-on`). For writes, retrying a request that may have been processed is not safe either way.
+- **The HAProxy config follows the HAProxy manual and the failover test is unchanged.** `perf/proxy/haproxy.cfg.template` uses `http-reuse safe`, the manual's recommended mode (`aggressive` is for clients that can retry, and writes can't be retried safely), and it drops `on-marked-down shutdown-sessions`, which the manual reserves for stuck backends and which would also cut sign-ins that were about to finish. It retries only connection failures, and sets `hard-stop-after 30s`. `nbthread` is left to HAProxy's CPU detection, which reports 8 usable CPUs here; forcing one thread gave 15.8k and 18.7k requests per second against 20.2k and 18.9k for automatic, within the noise. Failover with three servers still loses about 22 in-flight requests out of tens of thousands, because the proxy can't know whether a request on a dead server was processed.
+- **The config doesn't raise throughput on one machine.** Its settings protect a real deployment (slow clients, a server that stops answering, a cold start), which this test doesn't stress. Measuring them needs the load generator on another machine.
+- **Throughput with three servers on one machine is lower than with one.** The three JVMs, the proxy and the load generator share 8 cores. Adding servers can't add capacity on one machine; this setup tests the balancing, the health checks and failover, not scaling. To measure scaling, run the servers and the load generator on separate machines (`START_SERVER=no`).
+
+### Caveats
+
+- **The database costs aren't in the `SHARED_STATE=none` numbers.** With in-memory state per server there's no PostgreSQL or Redis latency, so sign-in, sessions and the read cache look faster than they are. Use `SHARED_STATE=database` (the default) for those.
+- **A broken PostgreSQL install stops the default mode.** If `initdb` doesn't run (for example, "Library not loaded: libssl.3.dylib" after a Homebrew update removed `openssl@3`), the script says so; `brew reinstall postgresql@18` fixes it. `SHARED_STATE=none` works without it. The database mode has therefore not been run in the numbers above.
