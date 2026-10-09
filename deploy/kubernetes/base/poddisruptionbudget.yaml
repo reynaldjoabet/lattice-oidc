@@ -1,0 +1,12 @@
+# Node drains and upgrades take down one replica at a time.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: lattice
+spec:
+  maxUnavailable: 1
+  # An unready pod (for example while Authlete is unreachable) may still be evicted.
+  unhealthyPodEvictionPolicy: AlwaysAllow
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: server

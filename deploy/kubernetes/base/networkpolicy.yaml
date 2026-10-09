@@ -1,0 +1,59 @@
+# Default deny, then only what Lattice needs. Requires a CNI that enforces NetworkPolicy (Calico,
+# Cilium, ...). Kubelet probes come from the node and are allowed by those CNIs.
+#
+# Only the gateway may reach the pods, which is what makes trusting the private ranges for
+# X-Forwarded-For safe (play.http.forwarded.trustedProxies in deploy/config/production.conf).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: lattice
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: server
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        # The Gateway API implementation's namespace. Change it to yours.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: gateway-system
+        # Prometheus, for /metrics. Change it to yours.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: http
+          protocol: TCP
+  egress:
+    # DNS.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # PostgreSQL and Redis, wherever they run. Narrow "to" to their addresses when known.
+    - ports:
+        - port: 5432
+          protocol: TCP
+        - port: 6379
+          protocol: TCP
+    # Authlete, upstream identity providers, LDAPS, and mail submission.
+    - ports:
+        - port: 443
+          protocol: TCP
+        - port: 636
+          protocol: TCP
+        - port: 587
+          protocol: TCP
+        - port: 465
+          protocol: TCP

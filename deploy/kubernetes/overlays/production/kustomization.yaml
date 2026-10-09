@@ -1,0 +1,51 @@
+# One production environment. Copy this directory per environment and change the values below.
+#
+#   cp secrets.env.example secrets.env && chmod 600 secrets.env   # fill it in; never commit it
+#   kubectl apply -k deploy/kubernetes/overlays/production
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Same as the base: kustomize only links generated names (hash suffixes) within one namespace.
+namespace: lattice
+
+resources:
+  - ../../base
+  - httproute.yaml
+  # With the Prometheus Operator installed:
+  # - servicemonitor.yaml
+
+# Lets kustomize rename the Secret that servicemonitor.yaml refers to (it adds a hash suffix).
+configurations:
+  - kustomizeconfig.yaml
+
+images:
+  - name: lattice-oidc
+    # Pushed by `sbt --client Docker/publish` (DOCKER_REGISTRY=ghcr.io DOCKER_USERNAME=...).
+    newName: ghcr.io/reynaldjoabet/lattice-oidc
+    newTag: 0.1.0-SNAPSHOT
+    # For a release, pin the exact image instead of the tag:
+    # digest: sha256:...
+
+configMapGenerator:
+  - name: lattice-env
+    literals:
+      - PUBLIC_BASE_URL=https://login.example.com
+      - ALLOWED_HOST=login.example.com
+      - PASSKEYS_RP_ID=login.example.com
+      - PASSKEYS_ORIGINS=https://login.example.com
+      - AUTHLETE_BASE_URL=https://us.authlete.com
+      - DATABASE_URL=jdbc:postgresql://lattice-postgres-rw.lattice.svc:5432/lattice?sslmode=require
+      - DATABASE_USERNAME=lattice
+      # 3-10 replicas share the database: keep replicas x pool size under its max_connections.
+      - DATABASE_POOL_SIZE=10
+      - ADMIN_LOGIN_IDS=
+      - MAIL_FROM=Lattice <no-reply@example.com>
+      - SMTP_HOST=
+      - SMTP_PORT=587
+
+# Prefer an external secret store in production (External Secrets Operator, Sealed Secrets, a
+# CSI secrets driver): then delete this generator and create a Secret named lattice-secrets.
+secretGenerator:
+  - name: lattice-secrets
+    envs:
+      - secrets.env

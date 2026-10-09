@@ -1,0 +1,123 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lattice
+spec:
+  replicas: 3 # the HorizontalPodAutoscaler takes over from here
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # Never below the current capacity during a rollout.
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: server
+    spec:
+      serviceAccountName: lattice
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      # preStop (10 s) plus Play's coordinated shutdown, which drains in-flight requests.
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001 # the image's USER 1001:0, which owns the app's read-only files
+        seccompProfile:
+          type: RuntimeDefault
+      topologySpreadConstraints:
+        # At most one replica more on any node than on another, so a node failure takes few.
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: server
+          matchLabelKeys:
+            - pod-template-hash
+        # Spread over zones when the cluster has them.
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: server
+          matchLabelKeys:
+            - pod-template-hash
+      containers:
+        - name: lattice
+          image: lattice-oidc # set by the overlay's `images`
+          imagePullPolicy: IfNotPresent
+          # Arguments to the start script: load the production overrides.
+          args:
+            - -Dconfig.file=/etc/lattice/production.conf
+          ports:
+            - name: http
+              containerPort: 9000
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: lattice-env # non-secret settings, from the overlay
+            - secretRef:
+                name: lattice-secrets # from the overlay
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              # The heap is 75% of this (MaxRAMPercentage, in the image's JAVA_OPTS). No CPU
+              # limit: throttling a JVM stalls its GC and request threads; requests reserve CPU.
+              memory: 1Gi
+          # The JVM, Flyway's migrations and Play's startup can take a while: liveness waits.
+          startupProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 36 # 3 minutes
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          # Ready only when Authlete answers (HealthController): without it no flow can work.
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 6 # the check itself gives up after 5 s
+            failureThreshold: 3
+          lifecycle:
+            # Keep serving while the endpoint removal reaches the Service and the gateway, so
+            # no request is sent to a pod that is already shutting down.
+            preStop:
+              sleep:
+                seconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: config
+              mountPath: /etc/lattice
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: lattice-config
+        # Play's temporary files (uploads); everything else is read-only.
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi

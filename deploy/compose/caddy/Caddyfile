@@ -1,0 +1,27 @@
+{
+	email {$ACME_EMAIL}
+	# No admin API listening inside the container.
+	admin off
+}
+
+# Certificates come from Let's Encrypt (or ZeroSSL) automatically, and HTTP redirects to HTTPS.
+# The DNS name must point at this host, with ports 80 and 443 open.
+{$LATTICE_DOMAIN} {
+	encode zstd gzip
+
+	# Not public: Prometheus scrapes Lattice directly on the backend network.
+	@internal path /metrics /metrics/*
+	respond @internal 404
+
+	# Caddy replaces any X-Forwarded-For the client sent with the client's real address, and sets
+	# X-Forwarded-Proto: https, which Lattice trusts from this proxy only.
+	reverse_proxy lattice:9000 {
+		health_uri /health/live
+		health_interval 10s
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}

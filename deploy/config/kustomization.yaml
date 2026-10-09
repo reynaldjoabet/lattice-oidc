@@ -1,0 +1,10 @@
+# Makes production.conf a ConfigMap for Kubernetes (deploy/kubernetes/base includes this
+# directory). Compose mounts the same file directly. The name gets a hash of the content, so
+# changing the file rolls the Deployment.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+configMapGenerator:
+  - name: lattice-config
+    files:
+      - production.conf

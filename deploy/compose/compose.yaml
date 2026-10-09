@@ -1,0 +1,252 @@
+# Lattice on one host: Caddy (TLS) -> Lattice -> PostgreSQL and Valkey.
+#
+#   sbt --client Docker/publishLocal          # builds the image this file runs
+#   cp .env.example .env && chmod 600 .env    # then fill it in
+#   docker compose up -d
+#   docker compose --profile monitoring up -d # also Prometheus and Grafana
+#
+# See deploy/README.md.
+
+name: lattice
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+x-hardening: &hardening
+  read_only: true
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    <<: *hardening
+    # Binding ports 80 and 443 needs this one capability.
+    cap_add:
+      - NET_BIND_SERVICE
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3
+    environment:
+      LATTICE_DOMAIN: ${LATTICE_DOMAIN:?set LATTICE_DOMAIN in .env}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in .env}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data # certificates: keep across restarts
+      - caddy-config:/config
+    tmpfs:
+      - /tmp
+    networks:
+      - edge
+    depends_on:
+      lattice:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    logging: *logging
+
+  lattice:
+    # The image `sbt --client Docker/publishLocal` builds, or the one Docker/publish pushed.
+    image: ${LATTICE_IMAGE:-lattice-oidc:0.1.0-SNAPSHOT}
+    restart: unless-stopped
+    <<: *hardening
+    # Arguments to the start script: load the production overrides.
+    command: ["-Dconfig.file=/etc/lattice/production.conf"]
+    environment:
+      PUBLIC_BASE_URL: https://${LATTICE_DOMAIN:?set LATTICE_DOMAIN in .env}
+      ALLOWED_HOST: ${LATTICE_DOMAIN:?set LATTICE_DOMAIN in .env}
+      PASSKEYS_RP_ID: ${LATTICE_DOMAIN:?set LATTICE_DOMAIN in .env}
+      PASSKEYS_ORIGINS: https://${LATTICE_DOMAIN:?set LATTICE_DOMAIN in .env}
+      DATABASE_URL: jdbc:postgresql://postgres:5432/lattice
+      DATABASE_USERNAME: lattice
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:?set DATABASE_PASSWORD in .env}
+      REDIS_URL: redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}@valkey:6379
+      APPLICATION_SECRET: ${APPLICATION_SECRET:?set APPLICATION_SECRET in .env}
+      PAIRWISE_SECRET: ${PAIRWISE_SECRET:?set PAIRWISE_SECRET in .env}
+      SECOND_FACTOR_ENCRYPTION_KEY: ${SECOND_FACTOR_ENCRYPTION_KEY:?set SECOND_FACTOR_ENCRYPTION_KEY in .env}
+      AUTHLETE_BASE_URL: ${AUTHLETE_BASE_URL:-https://us.authlete.com}
+      AUTHLETE_SERVICE_APIKEY: ${AUTHLETE_SERVICE_APIKEY:?set AUTHLETE_SERVICE_APIKEY in .env}
+      AUTHLETE_SERVICE_ACCESSTOKEN: ${AUTHLETE_SERVICE_ACCESSTOKEN:?set AUTHLETE_SERVICE_ACCESSTOKEN in .env}
+      RS0_SECRET: ${RS0_SECRET:?set RS0_SECRET in .env}
+      METRICS_TOKEN: ${METRICS_TOKEN:?set METRICS_TOKEN in .env}
+      ADMIN_LOGIN_IDS: ${ADMIN_LOGIN_IDS:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      # Replaces the image's default JAVA_OPTS: keep the two flags when adding others.
+      JAVA_OPTS: ${LATTICE_JAVA_OPTS:--XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError}
+    volumes:
+      - ../config/production.conf:/etc/lattice/production.conf:ro
+    tmpfs:
+      - /tmp # Play's temporary files (uploads); the rest of the filesystem is read-only
+    # No published port: only Caddy reaches Lattice, which is what makes trusting the private
+    # ranges for X-Forwarded-For safe (play.http.forwarded.trustedProxies).
+    networks:
+      - edge
+      - backend
+    healthcheck:
+      # The image has no curl; bash's /dev/tcp makes the request.
+      test:
+        - CMD
+        - bash
+        - -c
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/9000 &&
+          printf 'GET /health/live HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3 &&
+          head -n 1 <&3 | grep -q ' 200 '
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+    stop_grace_period: 40s # Play's coordinated shutdown drains in-flight requests
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 1G # the heap is 75% of this (MaxRAMPercentage)
+          cpus: "2"
+    logging: *logging
+
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      POSTGRES_DB: lattice
+      POSTGRES_USER: lattice
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:?set DATABASE_PASSWORD in .env}
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    shm_size: 256m
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "lattice", "-d", "lattice"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    stop_grace_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    logging: *logging
+
+  # Valkey: the open-source (BSD) fork of Redis 7.2, wire-compatible with Jedis. It holds only
+  # short-lived state and a read cache, so nothing is persisted: a restart loses pending sign-ins
+  # and rate-limit counters, never accounts or sessions (those are in PostgreSQL).
+  valkey:
+    image: valkey/valkey:8-alpine
+    restart: unless-stopped
+    <<: *hardening
+    # Start as valkey directly: the entrypoint's switch from root (su-exec) needs capabilities
+    # that are dropped here.
+    user: valkey
+    command:
+      - valkey-server
+      - --requirepass
+      - ${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      - --maxmemory
+      - 256mb
+      # Every key Lattice writes has a TTL: evict those nearest to expiry first.
+      - --maxmemory-policy
+      - volatile-ttl
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}
+    deploy:
+      resources:
+        limits:
+          memory: 320M
+    logging: *logging
+
+  prometheus:
+    profiles: ["monitoring"]
+    image: prom/prometheus:v3.5.0
+    restart: unless-stopped
+    <<: *hardening
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    secrets:
+      - metrics_token
+    networks:
+      - backend
+    logging: *logging
+
+  grafana:
+    profiles: ["monitoring"]
+    image: grafana/grafana-oss:12.1.1
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    tmpfs:
+      - /tmp
+    # Only on this host; reach it through an SSH tunnel, not the internet.
+    ports:
+      - "127.0.0.1:3000:3000"
+    networks:
+      - backend
+      - monitoring-ui
+    logging: *logging
+
+secrets:
+  metrics_token:
+    environment: METRICS_TOKEN
+
+networks:
+  # Caddy and Lattice. Not internal: Lattice calls Authlete and SMTP, Caddy gets certificates.
+  edge: {}
+  # Databases and monitoring: no route to the internet.
+  backend:
+    internal: true
+  # Lets Grafana's published port work; Grafana has no other reason to leave the backend.
+  monitoring-ui: {}
+
+volumes:
+  caddy-data:
+  caddy-config:
+  postgres-data:
+  prometheus-data:
+  grafana-data:

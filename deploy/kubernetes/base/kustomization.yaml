@@ -1,0 +1,22 @@
+# Lattice, independent of any one environment. Overlays (overlays/production) add the image, the
+# host name, the secrets and the route.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: lattice
+
+labels:
+  - pairs:
+      app.kubernetes.io/name: lattice
+      app.kubernetes.io/part-of: lattice
+    includeSelectors: true
+
+resources:
+  - ../../config
+  - namespace.yaml
+  - serviceaccount.yaml
+  - deployment.yaml
+  - service.yaml
+  - poddisruptionbudget.yaml
+  - horizontalpodautoscaler.yaml
+  - networkpolicy.yaml

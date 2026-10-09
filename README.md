@@ -2030,11 +2030,34 @@ DOCKER_REGISTRY=ghcr.io DOCKER_USERNAME=reynaldjoabet sbt --client Docker/publis
 | `javacOptions --release 21` | The classes run on Java 21 or newer, whichever JDK compiled them. Without it, building on JDK 25 makes classes a Java 21 runtime can't load. |
 | User `lattice`, UID 1001, group 0 | Not root. The numeric `USER 1001:0` lets Kubernetes' `runAsNonRoot` check it. |
 | `UserGroupReadExecute` permissions | The app's files are read-only (`u=rX,g=rX`). They are still owned by `lattice`, which could `chmod` them back, so run with a read-only root filesystem (`--read-only`, or `readOnlyRootFilesystem` in Kubernetes) to make them truly unchangeable. |
-| `JDK_JAVA_OPTIONS` | Always applied. `-Dpidfile.path=/dev/null` stops Play writing `RUNNING_PID` into the read-only app directory (it would fail to start), and `-Dlogger.resource=logback-container.xml` logs to stdout only. |
+| `JDK_JAVA_OPTIONS` | Always applied (the JVM logs a `Picked up JDK_JAVA_OPTIONS` line at start). `-Dpidfile.path=/dev/null` stops Play writing `RUNNING_PID` into the read-only app directory (it would fail to start), and `-Dlogger.resource=logback-container.xml` logs to stdout only. |
 | `JAVA_OPTS` | Defaults an operator can replace: heap at 75% of the container's memory limit, and exit on `OutOfMemoryError` so the orchestrator restarts the container. |
 | Port 9000 | Play's default `http.port`. |
+| `tini` entrypoint | Recommended by the native-packager docs. The JVM isn't PID 1, so it responds to the signals used for thread and heap dumps, and `tini` forwards `SIGTERM` (Play then shuts down gracefully) and reaps orphaned processes. Installed from Ubuntu's packages, as root, before the user is created. See [Why `tini`](#why-tini-process-1-is-special-in-linux). |
+| `no_version_check=1` | The start script otherwise runs `java -version` first, an extra JVM on every start, just to reject Java older than 8. |
 | Tags | `<version>`, plus the 12-character commit in GitHub Actions. No `latest`: a deployment should name the exact image it runs. |
 | OCI labels | Title, version, source repository and, in CI, the commit. |
+
+#### Why `tini`: process 1 is special in Linux
+
+Inside a container, the entrypoint runs as **PID 1**, the process Linux treats as `init`. PID 1 differs from every other process in two ways:
+
+1. **Signals have no default action.** For a normal process, an unhandled `SIGTERM` terminates it. For PID 1, the kernel ignores any signal it hasn't installed a handler for. `docker stop` and Kubernetes send `SIGTERM`. If PID 1 ignores it, they wait out the grace period (10 seconds by default in Docker, 30 in Kubernetes), then send `SIGKILL`: no clean shutdown, and every stop or deploy is slow.
+2. **It must reap orphans.** When a process exits after its parent, it's re-parented to PID 1, and PID 1 must collect its exit status (`wait()`). If PID 1 never does, those processes stay as **zombies**, filling the process table.
+
+`tini` is a tiny init process, about 1 MB, written for exactly this job. It runs as PID 1 and starts the app as its child. It then:
+
+- **forwards signals** (`SIGTERM`, `SIGINT`, `SIGQUIT` for thread dumps, and others) to the app, so they get handled;
+- **reaps any zombie processes**;
+- **exits with the app's exit code**, so the orchestrator sees why the app stopped.
+
+**How much it matters for Lattice.** The start script that sbt-native-packager generates is a bash script, and it ends with `exec "$@"`, so bash replaces itself with `java`. Without `tini`, the JVM would be PID 1. The JVM does install its own `SIGTERM` handler, which runs shutdown hooks, so Play would still shut down cleanly. `tini` guards against the remaining cases:
+
+- **The startup window:** before the `exec`, PID 1 is bash, which ignores `SIGTERM`. A stop during startup would hang until the grace period runs out.
+- **Zombies:** the JVM never reaps orphaned processes. Lattice doesn't start subprocesses today, but anything that ever does would leak them.
+- **Consistency:** `docker run --init` adds `tini`, but Kubernetes has no equivalent. Building `tini` into the image gives the same behaviour everywhere.
+
+**How the build adds it.** `dockerCommands` inserts `USER root` and the `apt-get install tini` step into the final `mainstage` of the generated Dockerfile, directly after `FROM … AS mainstage`. Switching to root explicitly means the step doesn't depend on what the plugin writes next. The image still ends with `USER 1001:0`, so the app doesn't run as root. A `require` fails the build if `mainstage` is ever missing. Without it, the step would silently land in the discarded `stage0`, and the image would have no `tini`. `dockerEntrypoint` then puts `/usr/bin/tini --` in front of the start script; `--` ends `tini`'s own options, so arguments pass through to the app untouched. This relies on `apt-get`, so it suits Debian and Ubuntu bases only. On Alpine it would be `apk add --no-cache tini`, with the binary at `/sbin/tini`.
 
 **What's deliberately left out:**
 
@@ -2044,7 +2067,6 @@ DOCKER_REGISTRY=ghcr.io DOCKER_USERNAME=reynaldjoabet sbt --client Docker/publis
 - **A fixed `-Xmx`:** it overrides `MaxRAMPercentage`, so the heap would no longer follow the container's limit.
 - **`-XX:+ZGenerational`:** Java 21 needs it for generational ZGC, but JDK 24 removed the non-generational mode and ignores the flag with a warning. G1, the default, suits a request/response server.
 - **A Docker `HEALTHCHECK`:** Kubernetes ignores it, and the image has no `curl`. Point the probes at `/health/live` and `/health/ready` instead.
-- **`tini`:** the start script `exec`s `java`, so the JVM is PID 1 and receives `SIGTERM` directly, and Play shuts down gracefully. It starts no child processes that would need reaping.
 
 **Running it:**
 
@@ -2055,4 +2077,13 @@ docker run --rm -p 9000:9000 --read-only --tmpfs /tmp \
   lattice-oidc:0.1.0-SNAPSHOT
 ```
 
-`--read-only` keeps the container filesystem unchangeable. Play still needs somewhere for temporary files such as uploads, so `--tmpfs /tmp` gives it a writable `/tmp`. I haven't run this exact command, so test it before relying on it. Other services a production deployment needs alongside it: PostgreSQL, Redis, Prometheus, Grafana and a reverse proxy such as HAProxy.
+`--read-only` keeps the container filesystem unchangeable. Play still needs somewhere for temporary files such as uploads, so `--tmpfs /tmp` gives it a writable `/tmp`. I haven't run this exact command, so test it before relying on it. For a full deployment, with PostgreSQL, Redis, TLS, monitoring and Kubernetes manifests, see [deploy/README.md](deploy/README.md).
+
+A Docker image name has up to four parts:
+```sh
+ghcr.io / my-company / lattice-oidc : 0.1.0-SNAPSHOT
+registry   namespace      image name     tag
+```
+```sh
+dockerUsername := sys.env.get("DOCKER_USERNAME")//my company
+```

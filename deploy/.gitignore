@@ -1,0 +1,3 @@
+# Real secrets: only the *.example files are committed.
+compose/.env
+kubernetes/overlays/*/secrets.env

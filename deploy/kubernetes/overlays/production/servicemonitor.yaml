@@ -1,0 +1,19 @@
+# Prometheus Operator scrape configuration. Enable it in kustomization.yaml once the operator's
+# CRDs are installed.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: lattice
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: lattice
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      authorization:
+        type: Bearer
+        credentials:
+          name: lattice-secrets
+          key: METRICS_TOKEN

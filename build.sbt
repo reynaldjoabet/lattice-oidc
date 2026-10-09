@@ -1,4 +1,4 @@
-import com.typesafe.sbt.packager.docker.DockerChmodType
+import com.typesafe.sbt.packager.docker.{Cmd, DockerChmodType}
 import Dependencies.{
   angusMail,
   bouncycastle,
@@ -139,6 +139,35 @@ lazy val root = (project in file("."))
     dockerChmodType        := DockerChmodType.UserGroupReadExecute,
 
     dockerExposedPorts := Seq(9000),
+
+    // The start script's version check runs `java -version` first, an extra JVM on every start,
+    // only to reject Java older than 8. The classes need 21, so it can never help.
+    bashScriptExtraDefines += "no_version_check=1",
+
+    // tini as PID 1, as the native-packager docs recommend: the JVM then responds to the signals
+    // used for thread and heap dumps, and tini reaps any orphaned processes. It is installed in
+    // the final stage, as root, before the user is created.
+    dockerCommands := {
+      val commands  = dockerCommands.value
+      val mainStage = commands.indexWhere {
+        case Cmd("FROM", args @ _*) => args.lastOption.contains("mainstage")
+        case _                      => false
+      }
+      // Without it, the RUN would land in the discarded stage0 and the image would have no tini.
+      require(mainStage >= 0, "no 'FROM ... AS mainstage' in dockerCommands")
+      // Insert right after "FROM ... AS mainstage", switching to root explicitly rather than relying
+      // on what the plugin writes next. The final "USER 1001:0" still comes later.
+      val (before, after) = commands.splitAt(mainStage + 1)
+      before ++ Seq(
+        Cmd("USER", "root"),
+        Cmd(
+          "RUN",
+          "apt-get update && apt-get install -y --no-install-recommends tini" +
+            " && rm -rf /var/lib/apt/lists/*"
+        )
+      ) ++ after
+    },
+    dockerEntrypoint := "/usr/bin/tini" +: "--" +: dockerEntrypoint.value,
 
     dockerEnvVars := Map(
       // Always applied: the java launcher reads it, whatever JAVA_OPTS says. The app directory is

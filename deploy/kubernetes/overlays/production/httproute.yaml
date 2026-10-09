@@ -1,0 +1,38 @@
+# Public traffic through the Gateway API (ingress-nginx is retired; any Gateway API
+# implementation works: Envoy Gateway, Cilium, Istio, NGINX Gateway Fabric, cloud gateways).
+# The Gateway terminates TLS for the host name and sets X-Forwarded-For and X-Forwarded-Proto.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: lattice
+spec:
+  parentRefs:
+    # Your Gateway, with an HTTPS listener for the host name below.
+    - name: public
+      namespace: gateway-system
+      sectionName: https
+  hostnames:
+    - login.example.com
+  rules:
+    # Keep /metrics off the internet: rewritten to a path Lattice doesn't serve, so it answers 404.
+    # (The Gateway API has no "deny"; this uses only the URLRewrite filter.)
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /metrics
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplaceFullPath
+              replaceFullPath: /not-found
+      backendRefs:
+        - name: lattice
+          port: 80
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: lattice
+          port: 80

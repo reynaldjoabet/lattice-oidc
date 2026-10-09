@@ -8,11 +8,15 @@ GET     /                           com.lattice.oidc.controllers.HomeController.
 # Map static resources from the /public folder to the /assets URL path
 GET     /assets/*file               controllers.Assets.versioned(path="/public", file: Asset)
 
-# Health probes
+# Health probes. "anyhost" exempts them from the allowed-hosts filter: Kubernetes probes and
+# Prometheus address the pod by IP, and these responses don't depend on the Host header.
++ anyhost
 GET     /health/live                com.lattice.oidc.controllers.HealthController.live()
++ anyhost
 GET     /health/ready               com.lattice.oidc.controllers.HealthController.ready()
 
 # Prometheus metrics (lattice.metrics.enabled; optional bearer token lattice.metrics.token)
++ anyhost
 GET     /metrics                    com.lattice.oidc.controllers.MetricsController.scrape(request: Request)
 
 # End-user account, built-in CIBA approval and operator console

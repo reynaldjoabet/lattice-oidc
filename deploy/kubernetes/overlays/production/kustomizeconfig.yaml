@@ -1,0 +1,7 @@
+# Teaches kustomize where a ServiceMonitor refers to a Secret, so the generated name (with its
+# hash suffix) is filled in there too.
+nameReference:
+  - kind: Secret
+    fieldSpecs:
+      - kind: ServiceMonitor
+        path: spec/endpoints/authorization/credentials/name
