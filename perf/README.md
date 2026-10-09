@@ -146,3 +146,40 @@ Needs `haproxy` or `nginx`, and for `SHARED_STATE=database` also `postgres`, `in
 
 - **The database costs aren't in the `SHARED_STATE=none` numbers.** With in-memory state per server there's no PostgreSQL or Redis latency, so sign-in, sessions and the read cache look faster than they are. Use `SHARED_STATE=database` (the default) for those.
 - **A broken PostgreSQL install stops the default mode.** If `initdb` doesn't run (for example, "Library not loaded: libssl.3.dylib" after a Homebrew update removed `openssl@3`), the script says so; `brew reinstall postgresql@18` fixes it. `SHARED_STATE=none` works without it. The database mode has therefore not been run in the numbers above.
+
+### Read cache: none, local (Caffeine) and Redis
+
+Three servers behind HAProxy, a shared PostgreSQL (`lattice_perf` database on the local server) and Redis, the `account` scenario (a signed-in page, 64 connections, 15 s per run). Lattice's cache types are `none`, `local` (in-process Caffeine, the one closest to "Play's cache") and `redis`. Cache hits were checked in the server metrics: over 99% of session and user lookups were hits with both caches.
+
+| Cache | Round 1 | Round 2 | Average | p50 (ms), rounds 1 / 2 |
+| --- | --: | --: | --: | --: |
+| `none` | 963 | 763 | 863 | 46 / 62 |
+| `local` | 971 | 914 | 943 | 49 / 51 |
+| `redis` | 812 | 822 | 817 | 60 / 57 |
+
+- **`local` is about 9% faster than none, and `redis` about 5% slower.** The round-to-round spread for `none` is 26%, so only the Redis result is clearly a difference. Redis answers each cached lookup over the network, so it adds a round trip per lookup; with a local PostgreSQL, a query costs about the same, so there's nothing to save.
+- **The cache didn't remove most of the database work.** The account page also queries identity links, the authenticator-app check and passkeys on every request, none of which are cached.
+- **Pool exhaustion gave HTTP 500 errors in 2 of 8 `local` runs** (24 and 27 of about 2,250 and 8,400 requests). The server log shows `Connection is not available, request timed out ... (total=10, active=10, waiting=5)`: each server's 10-connection pool was full. No `none` or `redis` run (5 in total) produced such errors. That is too few runs to blame the cache, but any change that speeds the server up can push load onto the pool. Before comparing caches on pure speed, raise `DATABASE_POOL_SIZE` and recount the errors; the production overlay sets 10 per replica too.
+
+**Pool size: 10 or 20 connections per server.** Three servers, the local cache, 64 connections, the `account` scenario, 15 s per run, six runs each, alternating. Run on a quieter machine (load average falling from 10 to 6 at the start):
+
+| Pool | Requests/s, six runs | Average | p99 (ms), six runs | HTTP 500s |
+| --: | --- | --: | --- | --: |
+| 10 | 1,106 · 994 · 978 · 979 · 888 · 791 | 956 | 315 · 304 · 308 · 315 · 385 · 401 (average 338) | 0 in 6 runs |
+| 20 | 969 · 1,021 · 1,011 · 873 · 563 · 808 | 874 | 391 · 393 · 404 · 446 · 1,145 · 499 (average 546) | 1 in 6 runs |
+
+Pool 10 gives about 9% more throughput on average and a lower p99. The two pool sizes behave the same way on errors: the 500s occur under load spikes, and an earlier, more loaded session had them at both sizes. A larger pool doesn't remove the errors, it only moves work onto the database sooner, which raises the tail. Keep 10 per replica, and expect 500s under overload until the database work per request is lower (for example, caching identity links and passkeys as well).
+
+### Read cache with in-memory storage (no PostgreSQL)
+
+One server behind HAProxy, in-memory stores, the `account` scenario (64 connections, 15 s per run), three rounds with the order of the settings rotated each time. Cache hits were over 99.99% for `local` and `redis` (for example, 172,640 session hits and 6 misses in one run).
+
+| Cache | Round 1 | Round 2 | Round 3 | Average requests/s | p50 (ms) | p99 (ms) |
+| --- | --: | --: | --: | --: | --: | --: |
+| `none` | 6,939 | 6,579 | 4,461 | 5,993 | 7.7 – 10.9 | 31 – 78 |
+| `local` (Caffeine) | 5,751 | 5,426 | 4,018 | 5,065 | 7.9 – 13.6 | 43 – 54 |
+| `redis` | 2,486 | 2,600 | 2,115 | 2,400 | 19.0 – 22.3 | 103 – 161 |
+
+- **No cache is fastest, then `local`, then `redis`, in every round,** whatever the run order. Round 3 is slower for all three, which looks like machine drift, so compare within a round.
+- **With a hash map as the store, a cache can only add cost.** A hit stores and reads JSON (about 15% slower for `local`), and `redis` adds two network round trips per request, one for the user and one for the session (about 60% slower).
+- **PostgreSQL is the main cost of this page.** The same page ran at about 1,000 requests per second with PostgreSQL and 5,000–7,000 with in-memory stores. The cache pays off only against a store that is slower than the cache.

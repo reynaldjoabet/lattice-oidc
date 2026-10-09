@@ -102,6 +102,26 @@ public class RequiredActionsTest {
     assertEquals(400, route(app, get("/account/verify-email?token=" + token.group(1))).status());
     assertEquals("/account", route(app, get("/account/actions?next=account").session(jane)).redirectLocation().orElse(null));
   }
+  @Test
+  public void aLinkVerifiesOnlyTheAddressItWasSentTo() {
+    start(Map.of("lattice.required-actions.verify-email", true));
+    Map<String, String> jane = signIn("jane", "jane").session().data();
+    route(app, withCsrf(post("/account/actions/verify-email", Map.of("next", "account"))).session(jane));
+    Matcher token = Pattern.compile("token=([A-Za-z0-9_-]+)").matcher(mail.get(mail.size() - 1));
+    assertTrue(token.find());
+
+    // The account's email changes before the link is opened: the new address was never proven.
+    UserStore users = app.injector().instanceOf(UserStore.class);
+    User before = users.byLoginId("jane").orElseThrow();
+    Map<String, Object> claims = new java.util.HashMap<>(before.claims());
+    claims.put("email", "jane.new@example.com");
+    users.save(new User(before.getSubject(), before.loginId(), before.passwordHash(), claims, before.attributes(), before.verifiedClaims()));
+
+    assertEquals(400, route(app, get("/account/verify-email?token=" + token.group(1))).status());
+    assertFalse(Boolean.TRUE.equals(users.byLoginId("jane").orElseThrow().getClaim("email_verified", null)));
+    assertTrue("still asked to verify", contentAsString(route(app, get("/account/actions?next=account").session(jane))).contains("Verify your email"));
+  }
+
 
   @Test
   public void aFlaggedAccountChoosesANewPassword() {

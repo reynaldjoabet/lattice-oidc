@@ -147,6 +147,23 @@ public class AccountRecoveryTest {
   }
 
   @Test
+  public void aLinkStopsWorkingWhenTheAccountsEmailChanges() {
+    requestLink("john");
+    String token = token();
+    com.lattice.oidc.stores.UserStore users = app.injector().instanceOf(com.lattice.oidc.stores.UserStore.class);
+    com.lattice.oidc.models.User john = users.byLoginId("john").orElseThrow();
+    java.util.Map<String, Object> claims = new java.util.HashMap<>(john.claims());
+    claims.put("email", "john.new@example.com");
+    users.save(new com.lattice.oidc.models.User(john.getSubject(), john.loginId(), john.passwordHash(), claims, john.attributes(), john.verifiedClaims()));
+
+    Result opened = route(app, get("/account/reset?token=" + token));
+    assertEquals("the link was sent to the old address", 400, opened.status());
+    assertEquals(400, reset(token, NEW_PASSWORD, NEW_PASSWORD, false).status());
+    LoginService login = app.injector().instanceOf(LoginService.class);
+    assertEquals("the password is unchanged", LoginService.Outcome.SUCCESS, login.authenticate("john", "john").outcome());
+  }
+
+  @Test
   public void onlyTheNewestLinkWorks() {
     requestLink("john");
     String first = token();

@@ -48,6 +48,13 @@ for name in scenarios.split():
         print("\nFailover: one server was killed half way through; requests that failed because of it:\n")
         print("\n".join(f"- {count} x {message}" for message, count in errors.items()) or "- none")
 
+print("\nStatus codes per scenario (a redirect counts as success above, so check these):\n")
+for name in scenarios.split():
+    path = os.path.join(directory, f"{name}.json")
+    if os.path.exists(path) and os.path.getsize(path):
+        codes = json.load(open(path)).get("statusCodeDistribution", {})
+        print(f"- {name}: " + (", ".join(f"{code}: {count:,}" for code, count in sorted(codes.items())) or "none"))
+
 distribution = os.path.join(directory, "distribution.txt")
 if os.path.exists(distribution) and os.path.getsize(distribution):
     print("\nRequests each server handled (health checks and the warm-up included):\n\n```")
@@ -56,7 +63,7 @@ if os.path.exists(distribution) and os.path.getsize(distribution):
 
 metrics = os.path.join(directory, "metrics.txt")
 if os.path.exists(metrics):
-    wanted = ("lattice_authlete_circuit_open", "lattice_authlete_executor_tasks", "lattice_sessions_active", "jvm_memory_used_bytes{area=\"heap\"", "jvm_gc_pause_seconds_count")
+    wanted = ("lattice_authlete_circuit_open", "lattice_read_cache_lookups_total", "lattice_authlete_executor_tasks", "lattice_sessions_active", "jvm_memory_used_bytes{area=\"heap\"", "jvm_gc_pause_seconds_count")
     lines = [l for l in open(metrics) if l.startswith(wanted)]
     if lines:
         print("\nServer state after the run:\n\n```")

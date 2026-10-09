@@ -26,6 +26,10 @@ import org.slf4j.LoggerFactory;
  * max-requests-per-ip} requests are accepted per IP address, per {@code window}. Callers show the
  * same page whether or not an account matched, so the form reveals nothing. Links and counters are
  * shared by every server, so a link works whichever server opens it.
+ *
+ * <p>A link is stored with the address it was sent to, and stops working if the account's email
+ * changes before it's used: the email may have changed because the old mailbox was lost or taken
+ * over, and a link sitting in that mailbox mustn't still reset the password.
  */
 @Singleton
 public final class RecoveryService {
@@ -33,8 +37,11 @@ public final class RecoveryService {
   private static final Logger LOG = LoggerFactory.getLogger(RecoveryService.class);
   private static final SecureRandom RANDOM = new SecureRandom();
 
-  /** A link waiting to be used: whose password it resets, and where to continue afterwards. */
-  public record Pending(String subject, String next) {}
+  /**
+   * A link waiting to be used: whose password it resets, where to continue afterwards, and the
+   * address it was sent to (null only for links sent before addresses were recorded).
+   */
+  public record Pending(String subject, String next, String email) {}
 
   private static final String TOKENS = "reset-token";
 
@@ -86,7 +93,7 @@ public final class RecoveryService {
     // Only the newest link works: earlier ones for this account are deleted.
     String token = randomToken();
     store.deleteBySubject(TOKENS, subject);
-    store.put(TOKENS, sha256(token), null, subject, Jsons.write(new Pending(subject, next)), config.linkLifetime());
+    store.put(TOKENS, sha256(token), null, subject, Jsons.write(new Pending(subject, next, user.get().email().get())), config.linkLifetime());
 
     long minutes = config.linkLifetime().toMinutes();
     mailer.send(
@@ -100,11 +107,19 @@ public final class RecoveryService {
     return true;
   }
 
-  /** The account a link resets, without using it up (to show the form). */
+  /** The account a link resets, without using it up (to show the form); empty if it no longer applies. */
   public Optional<Pending> peek(String token) {
     return token == null || token.isEmpty()
         ? Optional.empty()
-        : store.get(TOKENS, sha256(token)).map(entry -> Jsons.read(entry.json(), Pending.class));
+        : store
+            .get(TOKENS, sha256(token))
+            .map(entry -> Jsons.read(entry.json(), Pending.class))
+            .filter(pending -> users.bySubject(pending.subject()).filter(user -> stillApplies(pending, user)).isPresent());
+  }
+
+  /** Whether the account still has the address the link was sent to. */
+  static boolean stillApplies(Pending pending, User user) {
+    return EmailVerification.sameAddress(user.email(), pending.email());
   }
 
   /** Sets the new password and uses the link up. Empty if the link has expired or was used. */
@@ -118,7 +133,7 @@ public final class RecoveryService {
     if (pending.isEmpty()) {
       return Optional.empty();
     }
-    Optional<User> user = users.bySubject(pending.get().subject());
+    Optional<User> user = users.bySubject(pending.get().subject()).filter(account -> stillApplies(pending.get(), account));
     if (user.isEmpty()) {
       return Optional.empty();
     }

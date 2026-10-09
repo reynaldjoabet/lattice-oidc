@@ -1,5 +1,6 @@
 package com.lattice.oidc.security;
 
+import com.lattice.oidc.common.Jsons;
 import com.lattice.oidc.common.Mailer;
 import com.lattice.oidc.models.User;
 import com.lattice.oidc.stores.CounterStore;
@@ -21,6 +22,10 @@ import jakarta.inject.Singleton;
  * token, only its hash is stored, it works once within a day, and only the newest link works. An
  * account can request 3 links per 15 minutes. Opening the link verifies the email whether or not the
  * browser is signed in, so it works from a mail app on another device.
+ *
+ * <p>A link proves control of one address: the one it was sent to. It is stored with that address
+ * and verifies nothing if the account's email has changed since (an LDAP sync, a brokered sign-in or
+ * an edit), because the new address was never proven.
  */
 @Singleton
 public final class EmailVerification {
@@ -62,7 +67,7 @@ public final class EmailVerification {
     RANDOM.nextBytes(bytes);
     String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     store.deleteBySubject(TOKENS, user.getSubject());
-    store.put(TOKENS, sha256(token), null, user.getSubject(), "{}", LINK_LIFETIME);
+    store.put(TOKENS, sha256(token), null, user.getSubject(), Jsons.write(new Sent(email.get())), LINK_LIFETIME);
     mailer.send(
         email.get(),
         "Verify your email",
@@ -73,15 +78,32 @@ public final class EmailVerification {
     return true;
   }
 
-  /** Verifies the email of the link's account and uses the link up; empty if it's unknown or used. */
+  /** The address a link was sent to. */
+  public record Sent(String email) {}
+
+  /**
+   * Verifies the email of the link's account and uses the link up; empty if the link is unknown or
+   * used, or if the account's email is no longer the address the link was sent to.
+   */
   public Optional<User> verify(String token) {
     if (token == null || token.isEmpty()) {
       return Optional.empty();
     }
+    Optional<EphemeralStore.Entry> entry = store.take(TOKENS, sha256(token));
+    if (entry.isEmpty()) {
+      return Optional.empty();
+    }
+    // Links sent before addresses were recorded hold "{}": they verify nothing, so a new one is needed.
+    String sentTo = Jsons.read(entry.get().json(), Sent.class).email();
     Optional<User> user =
-        store.take(TOKENS, sha256(token)).flatMap(entry -> users.bySubject(entry.subject()));
+        users.bySubject(entry.get().subject()).filter(account -> sameAddress(account.email(), sentTo));
     user.ifPresent(actions::markEmailVerified);
     return user;
+  }
+
+  /** Whether the account's current email is still {@code sentTo} (addresses compare case-insensitively). */
+  static boolean sameAddress(Optional<String> current, String sentTo) {
+    return sentTo != null && current.map(email -> email.trim().equalsIgnoreCase(sentTo.trim())).orElse(false);
   }
 
   private static String sha256(String value) {

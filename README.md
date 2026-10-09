@@ -524,6 +524,14 @@ PostgreSQL and Redis are both checked at startup, so a wrong address stops the s
 - **Silent sign-in** (`prompt=none`) is issued only for what was approved; anything else fails with `consent_required`.
 - **Forgotten:** when the user removes the app on their account page, or an operator deletes the app.
 
+**Links are tied to the address they were sent to.** Password-reset and email-verification links are stored with the email address they were mailed to.
+- **A changed email cancels them:** if the account's email changes before a link is used, through an LDAP sync, a brokered sign-in or an edit, the link no longer works.
+- **Verification:** a link proves control of one mailbox, so it mustn't mark a different, unproven address as verified.
+- **Reset:** an email often changes because the old mailbox was lost or taken over, and a link left in that mailbox mustn't still reset the password.
+- **Links sent before this change** have no stored address and are refused; the user asks for a new one.
+
+**A limit on concurrent password hashing** (`lattice.login.hashing-concurrency`, `PASSWORD_HASHING_CONCURRENCY`; 0 means the number of CPU cores). Every Argon2 check and hash waits for one of a fixed number of slots. Argon2 is memory-hard, and its throughput stops rising after a few threads (see [perf/README.md](perf/README.md)). Without a limit, a burst of sign-ins or wrong passwords would run one hash per request thread at once, raising memory use with every thread and slowing every check. With a limit, memory stays bounded and requests queue instead.
+
 **Required actions** (`lattice.required-actions`). Steps a user must complete before using apps or their account: verify their email (a link is emailed), accept a new version of the terms, choose a new password, or set up an authenticator app or a passkey. Each is pending while its condition holds, so it clears itself once met. They're enforced everywhere a signed-in user goes:
 - **Consent pages** wait for them.
 - **Account, approval, console, device and credential-offer pages** redirect to them.

@@ -58,7 +58,14 @@ public final class LoginService {
   private final LdapDirectory directory;
 
   @Inject
-  public LoginService(UserStore users, CounterStore counters, LatticeConfig config, LdapDirectory directory) {
+  public LoginService(
+      UserStore users,
+      CounterStore counters,
+      LatticeConfig config,
+      LdapDirectory directory,
+      com.typesafe.config.Config rawConfig) {
+    int concurrency = rawConfig.getInt("lattice.login.hashing-concurrency");
+    PasswordHasher.configure(concurrency > 0 ? concurrency : PasswordHasher.defaultConcurrency());
     this.users = users;
     this.counters = counters;
     this.config = config;
@@ -117,7 +124,7 @@ public final class LoginService {
       }
     } else {
       String hash = user.map(User::passwordHash).orElse(null);
-      boolean ok = Password.check(password, hash != null ? hash : DUMMY_HASH).withArgon2();
+      boolean ok = PasswordHasher.check(password, hash != null ? hash : DUMMY_HASH);
       authenticated = ok && hash != null ? user : Optional.empty();
     }
     if (authenticated.isPresent()) {

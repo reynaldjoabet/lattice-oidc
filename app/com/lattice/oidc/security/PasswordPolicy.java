@@ -1,7 +1,6 @@
 package com.lattice.oidc.security;
 
 import com.lattice.oidc.models.User;
-import com.password4j.Password;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -39,7 +38,7 @@ public final class PasswordPolicy {
         || (user.loginId() != null && lower.contains(user.loginId().toLowerCase(Locale.ROOT)) && lower.length() < user.loginId().length() + 6)) {
       problems.add("Choose a password that is less common.");
     }
-    if (user.passwordHash() != null && Password.check(password, user.passwordHash()).withArgon2()) {
+    if (user.passwordHash() != null && PasswordHasher.check(password, user.passwordHash())) {
       problems.add("Choose a password different from your current one.");
     }
     return problems;
@@ -47,6 +46,6 @@ public final class PasswordPolicy {
 
   /** The Argon2 hash to store. */
   public static String hash(String password) {
-    return Password.hash(password).addRandomSalt().withArgon2().getResult();
+    return PasswordHasher.hash(password);
   }
 }

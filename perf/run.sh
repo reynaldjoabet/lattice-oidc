@@ -5,6 +5,7 @@
 #   INSTANCES=3 perf/run.sh                      # three servers behind HAProxy, sharing PostgreSQL and Redis
 #   INSTANCES=3 PROXY=nginx BALANCE=roundrobin perf/run.sh
 #   INSTANCES=3 SHARED_STATE=none perf/run.sh    # in-memory state per server: no database, so no database cost
+#   PROXY=haproxy CACHE=local perf/run.sh        # one server, in-memory storage, Caffeine read cache (CACHE=redis uses Redis for it)
 #   INSTANCES=3 SCENARIOS="signin-page failover" perf/run.sh   # stops a server half way through
 #   PROXY=haproxy perf/run.sh                    # one server behind the proxy, to measure the proxy hop
 #   DURATION=30s CONNECTIONS=128 perf/run.sh
@@ -24,7 +25,8 @@ LOGIN_CONNECTIONS="${LOGIN_CONNECTIONS:-$(sysctl -n hw.ncpu 2>/dev/null || nproc
 INSTANCES="${INSTANCES:-1}"
 START_SERVER="${START_SERVER:-yes}"
 BALANCE="${BALANCE:-leastconn}"          # leastconn | roundrobin
-CACHE="${CACHE:-redis}"                   # read cache with several servers: none | local | redis
+CACHE_REQUESTED="${CACHE:-}"
+CACHE="${CACHE:-redis}"                   # read cache with a shared database: none | local | redis
 PUBLIC_PORT="${PUBLIC_PORT:-9000}"
 # 127.0.0.1, not localhost: the proxy listens on IPv4, and a load tool may try IPv6 first.
 BASE_URL="${BASE_URL:-http://127.0.0.1:$PUBLIC_PORT}"
@@ -51,7 +53,8 @@ INSTANCE_PORTS=()
 cleanup() {
   for pid in "${PIDS[@]:-}"; do [ -n "$pid" ] && kill "$pid" 2>/dev/null || true; done
   if [ -d "$WORK/pg" ]; then pg_ctl -D "$WORK/pg" stop -m immediate >/dev/null 2>&1 || true; fi
-  rm -rf "$WORK" "$TMP"
+  if [ "${KEEP_LOGS:-no}" = "yes" ]; then echo "Server logs kept in $WORK/inst-*/out.log" >&2; else rm -rf "$WORK"; fi
+  rm -rf "$TMP"
 }
 trap cleanup EXIT
 
@@ -65,9 +68,22 @@ if [ "$START_SERVER" = "yes" ]; then
   echo "Resolving the classpath..."
   CP="$(perf/classpath.sh)"
   [ -n "$CP" ] || { echo "No classpath; does 'sbt --client benchmarks/compile' work?" >&2; exit 1; }
+  # Extra classpath entries (directories or jars) in front, for experiments.
+  [ -z "${EXTRA_CLASSPATH:-}" ] || CP="$EXTRA_CLASSPATH:$CP"
 
   STATE_ENV=()
-  if [ "$INSTANCES" -gt 1 ] && [ "${SHARED_STATE:-database}" = "database" ] && [ "${EXTERNAL_STATE:-no}" != "yes" ]; then
+  if [ "$INSTANCES" -gt 1 ] && [ "${SHARED_STATE:-database}" = "database" ] && [ -n "${SHARED_DATABASE_URL:-}" ]; then
+    # An existing PostgreSQL: nothing is started for it. SHARED_DATABASE_URL, SHARED_DATABASE_USER.
+    if [ -z "${REDIS_URL:-}" ]; then
+      command -v redis-server >/dev/null || { echo "redis-server is needed (or set REDIS_URL)" >&2; exit 1; }
+      redis-server --port 56379 --bind 127.0.0.1 --save "" --appendonly no --dir "$WORK" > "$WORK/redis.log" 2>&1 &
+      PIDS+=($!)
+      REDIS_URL="redis://127.0.0.1:56379"
+    fi
+    echo "Using the existing PostgreSQL at $SHARED_DATABASE_URL and Redis at $REDIS_URL..."
+    STATE_ENV=(LATTICE_STORAGE=postgres DATABASE_URL="$SHARED_DATABASE_URL" DATABASE_USERNAME="${SHARED_DATABASE_USER:-lattice}"
+               LATTICE_SHORT_LIVED_STATE=redis REDIS_URL="$REDIS_URL" LATTICE_CACHE="$CACHE")
+  elif [ "$INSTANCES" -gt 1 ] && [ "${SHARED_STATE:-database}" = "database" ] && [ "${EXTERNAL_STATE:-no}" != "yes" ]; then
     # Several servers only work if they share their state: sign-ins, sessions and counters.
     for tool in postgres initdb pg_ctl createdb redis-server; do
       command -v "$tool" >/dev/null || { echo "$tool is needed for INSTANCES > 1 (brew install postgresql@18 redis)" >&2; exit 1; }
@@ -88,6 +104,22 @@ if [ "$START_SERVER" = "yes" ]; then
     PIDS+=($!)
     STATE_ENV=(LATTICE_STORAGE=postgres DATABASE_URL=jdbc:postgresql://127.0.0.1:55432/lattice DATABASE_USERNAME=lattice
                LATTICE_SHORT_LIVED_STATE=redis REDIS_URL=redis://127.0.0.1:56379 LATTICE_CACHE="$CACHE")
+  fi
+
+  # In-memory storage (one server, or SHARED_STATE=none): no database, but the read cache can still be
+  # tried. "local" is in-process (Caffeine); "redis" needs a Redis, which only holds cache entries. With
+  # several servers the stores themselves aren't shared, so signed-in requests only work on one server.
+  MEMORY_CACHE=""
+  if [ ${#STATE_ENV[@]} -eq 0 ]; then
+    MEMORY_CACHE="${CACHE_REQUESTED:-none}"
+    if [ "$MEMORY_CACHE" = "redis" ]; then
+      command -v redis-server >/dev/null || { echo "redis-server is needed for CACHE=redis" >&2; exit 1; }
+      redis-server --port 56379 --bind 127.0.0.1 --save "" --appendonly no --dir "$WORK" > "$WORK/redis.log" 2>&1 &
+      PIDS+=($!)
+      STATE_ENV=(LATTICE_CACHE=redis REDIS_URL=redis://127.0.0.1:56379)
+    elif [ "$MEMORY_CACHE" != "none" ]; then
+      STATE_ENV=(LATTICE_CACHE="$MEMORY_CACHE")
+    fi
   fi
 
   start_instance() { # number  port
@@ -155,6 +187,13 @@ CSRF="$(curl -s -c "$JAR" -b "$JAR" "$BASE_URL/account" | grep -o 'name="csrfTok
 [ -n "$CSRF" ] || { echo "No CSRF token on the sign-in page" >&2; exit 1; }
 COOKIE="$(awk 'NR>4 && $6 != "" {printf "%s=%s; ", $6, $7}' "$JAR" | sed 's/; $//')"
 
+# A signed-in session (for the account scenario): every request then reads the session and the user.
+curl -s -o /dev/null -c "$JAR" -b "$JAR" -X POST "$BASE_URL/account/login" \
+  --data-urlencode "csrfToken=$CSRF" -d "loginId=john&password=john&next=account"
+SESSION_COOKIE="$(awk 'NR>4 && $6 != "" {printf "%s=%s; ", $6, $7}' "$JAR" | sed 's/; $//')"
+SESSION_STATUS="$(curl -s -o /dev/null -w '%{http_code}' -H "Cookie: $SESSION_COOKIE" "$BASE_URL/account")"
+[ "$SESSION_STATUS" = "200" ] || { echo "Signing in for the account scenario failed (HTTP $SESSION_STATUS)" >&2; exit 1; }
+
 # Warm up: JIT, the template engine, connection pools, and every server behind the proxy.
 oha -z 8s -c 32 --no-tui "$BASE_URL/account" > /dev/null 2>&1 || true
 
@@ -174,6 +213,7 @@ for scenario in $ORDERED $FAILOVER; do
     health)             run health "$CONNECTIONS" "$BASE_URL/health/live" ;;
     discovery)          run discovery "$CONNECTIONS" "$BASE_URL/.well-known/openid-configuration" ;;
     signin-page)        run signin-page "$CONNECTIONS" "$BASE_URL/account" ;;
+    account)            run account "$CONNECTIONS" -H "Cookie: $SESSION_COOKIE" "$BASE_URL/account" ;;
     authorization-page) run authorization-page "$CONNECTIONS" "$BASE_URL/api/authorization?response_type=code&client_id=42&scope=openid" ;;
     login)              run login "$LOGIN_CONNECTIONS" -m POST -H "Cookie: $COOKIE" -H "Content-Type: application/x-www-form-urlencoded" \
                           -d "csrfToken=$CSRF&loginId=john&password=john&next=account" "$BASE_URL/account/login" ;;
@@ -210,8 +250,9 @@ else
 fi
 
 if [ "$PROXY" = "none" ]; then TOPOLOGY="$INSTANCES server, no proxy"; else TOPOLOGY="$INSTANCES server(s) behind $PROXY ($BALANCE)"; fi
-if [ "$INSTANCES" -gt 1 ] && [ "$START_SERVER" = "yes" ]; then
-  if [ "${SHARED_STATE:-database}" = "none" ]; then TOPOLOGY="$TOPOLOGY, in-memory state per server (no database)"; else TOPOLOGY="$TOPOLOGY, shared PostgreSQL and Redis (cache: $CACHE)"; fi
+if [ "$START_SERVER" = "yes" ]; then
+  if [ -n "${MEMORY_CACHE:-}" ]; then TOPOLOGY="$TOPOLOGY, in-memory storage (no database), read cache: $MEMORY_CACHE"
+  elif [ "$INSTANCES" -gt 1 ]; then TOPOLOGY="$TOPOLOGY, shared PostgreSQL and Redis (cache: $CACHE)"; fi
 fi
 [ "$START_SERVER" = "yes" ] || TOPOLOGY="an existing deployment at $BASE_URL"
 python3 perf/summarize.py "$TMP" "$ORDERED $FAILOVER" "$DURATION" "$CONNECTIONS" "${AUTHLETE_LATENCY_MS:-0}" "${RESILIENCE:-on}" "$TOPOLOGY" > "$OUT"
