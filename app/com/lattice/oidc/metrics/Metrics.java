@@ -159,6 +159,19 @@ public final class Metrics {
         .increment();
   }
 
+  /**
+   * Counts what the Authlete resilience layer did for a call: cache_hit, stale, retry or rejected
+   * ({@code lattice_authlete_resilience_total{operation,event}}).
+   */
+  public void authleteResilience(String operation, String event) {
+    Counter.builder("lattice.authlete.resilience")
+        .description("Authlete calls answered from the cache, served stale, retried or refused")
+        .tag("operation", operation)
+        .tag("event", event)
+        .register(registry)
+        .increment();
+  }
+
   /** Records a call to the Authlete API, by client method and outcome. */
   public void authleteCall(String operation, boolean success, Duration duration) {
     Timer.builder("lattice.authlete.calls")

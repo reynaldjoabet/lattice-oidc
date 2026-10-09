@@ -5,8 +5,7 @@ import java.util.List;
 
 /**
  * Contents of the identity providers JSON file: a top-level {@code identityProviders} array. The
- * entries use the format of java-oauth-server's {@code federations.json}, whose top-level
- * {@code federations} member is still accepted.
+ * older top-level {@code federations} member is still accepted.
  */
 public record IdentityProviderConfig(@JsonAlias("federations") List<Entry> identityProviders) {
 

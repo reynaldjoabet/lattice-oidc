@@ -57,6 +57,31 @@ Each Lattice endpoint forwards the client's request as is, and Authlete's answer
 
 The [Tickets](#tickets-a-handle-for-pending-requests) section explains the ticket that links steps 1 and 2.
 
+### When Authlete is slow or down
+
+Every flow needs Authlete, so its calls go through a resilience layer (`com.lattice.oidc.client.resilience`). Settings are under `authlete.resilience` in `application.conf`.
+
+| Practice | What it does |
+| --- | --- |
+| **Caching safe reads** | Discovery, the JWK Set, clients and credential-issuer metadata are answered from memory for 5–10 minutes. |
+| **Stale fallback** | When Authlete fails, an expired cached answer (up to 30 minutes old) is served instead of an error, so discovery and the keys apps use to verify tokens keep working. |
+| **Conditional retry** | Only transient failures are retried: a 429, a 5xx, or no response at all. Permanent 4xx answers never are. |
+| **Exponential backoff with jitter** | Retries wait 500 ms, then 1 s, plus up to 200 ms at random, so replicas don't retry in lockstep. A 429's `RateLimit-Reset` is honoured. |
+| **A circuit breaker per Authlete method** | After 5 transient failures within 30 seconds, that method fails fast for 60 seconds, then one trial call decides whether to close it again. A failing method, such as client management, doesn't block another, such as introspection. |
+
+**Choices made for Lattice:**
+- **Writes are retried only when Authlete certainly didn't process them:** a 429, or no connection at all. A retry after a read timeout or a 5xx, when the request was already sent, could redeem an authorization code twice for `authorizationIssue` or `token`. Reads are retried on any transient failure.
+- **A short retry budget:** 3 attempts within 5 seconds. A user's page waits on the call, and it holds one of the Authlete threads.
+- **Introspection isn't cached by default (TTL 0).** Otherwise a revoked token could still introspect as active on another replica. Set `cache.ttl.introspection` to trade that delay for fewer Authlete calls.
+- **Cached clients are evicted when a client changes,** because Lattice's console edits clients.
+
+**When nothing is cached and the breaker is open,** a call fails at once. Users get the "temporarily unavailable" page (503 with `Retry-After`), and API clients get the JSON error.
+
+**Metrics:**
+- `lattice_authlete_calls_seconds{operation, outcome}`: real HTTP calls to Authlete, each retry included.
+- `lattice_authlete_resilience_total{operation, event}`: `cache_hit`, `stale`, `retry` or `rejected`.
+- `lattice_authlete_circuit_open`: how many methods' breakers are open.
+
 ### Authlete compared with Duende IdentityServer
 
 The two put the boundary in different places.
@@ -538,6 +563,7 @@ The console's event tables show these fields in a **Details** column.
 - **Outbound:** webhook deliveries per endpoint (delivered, retry, failed) and retries waiting; LDAP searches and binds by outcome, and its pool; sign-ins through each upstream identity provider; emails sent or failed.
 - **Two-step:** accounts with an authenticator app, and what is still under a previous encryption key.
 - **JVM and process:** memory, heap pressure, garbage collection, threads, CPU, open files, uptime, JVM version, and log events by level.
+- **Authlete resilience:** `lattice_authlete_resilience_total{operation, event}` (cache hits, stale answers, retries, refused calls) and `lattice_authlete_circuit_open`. See [When Authlete is slow or down](#when-authlete-is-slow-or-down).
 - **Dependencies:** `lattice_dependency_up{dependency}`, 1 or 0, for Authlete, plus PostgreSQL and Redis when configured. Checked before a scrape, at most every 30 seconds, and served at `/health/dependencies`.
 - **Build:** `lattice_build_info{version, revision}`, always 1, naming the running version and commit. The same values come from `com.lattice.oidc.BuildInfo`, which the build generates. They also appear in the startup log line and the console's Overview header.
 
@@ -612,7 +638,7 @@ Each instance is the relying-party client for a single OpenID Provider (one entr
 
 Code: `handlers/IdentityProviders.java`. A `@Singleton` that holds every configured provider:
 
-- At startup: reads the JSON file named by `lattice.identity-providers.file` (`IDENTITY_PROVIDERS_FILE`; `FEDERATIONS_FILE` is still accepted), skips incomplete entries with a warning, and creates one `IdentityProvider` per valid entry. The file has a top-level `identityProviders` array; entries use the format of java-oauth-server's `federations.json`, and its top-level `federations` key is still accepted.
+- At startup: reads the JSON file named by `lattice.identity-providers.file` (`IDENTITY_PROVIDERS_FILE`; `FEDERATIONS_FILE` is still accepted), skips incomplete entries with a warning, and creates one `IdentityProvider` per valid entry. The file has a top-level `identityProviders` array; the older top-level `federations` key is still accepted.
 - A ready-made example with Okta, Microsoft, Google, Keycloak and PingFederate entries is in `conf/identity-providers.example.json`. Copy it, fill in your values, and point `IDENTITY_PROVIDERS_FILE` at it. Each `redirectUri` must be `<base URL>/api/federation/callback/<id>` and registered at the provider.
 - `get(id)`: looks up the `IdentityProvider` for an ID such as "okta". `IdentityBrokerController` uses it in `/api/federation/initiation/:id` and `/api/federation/callback/:id`.
 - `links()`: returns (id, name) pairs so the consent page can show "Or sign in with: Okta, …".
