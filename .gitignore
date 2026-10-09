@@ -48,3 +48,6 @@ metals.sbt
 .mcp.json
 # semanticdb output anywhere in the tree, e.g. build.sbt.semanticdb at the root
 *.semanticdb
+
+# Performance test output (perf/run.sh, JMH)
+perf/results/

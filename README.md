@@ -432,6 +432,10 @@ com.lattice.oidc
 └── modules/       AuthleteModule
 ```
 
+Outside the application code:
+- `deploy/`: Docker Compose and Kubernetes setups ([deploy/README.md](deploy/README.md)).
+- `benchmarks/` and `perf/`: JMH micro-benchmarks and HTTP load tests ([perf/README.md](perf/README.md)). They aren't part of `test` or the image.
+
 ## Design and screens
 
 Designs for all 15 end-user and operator screens (sign-in, consent, device flow, CIBA, logout, account, wallets, open banking and the operator console) are in [docs/screens](docs/screens/README.md), with the design language, the flow each screen belongs to, and whether it is built yet.

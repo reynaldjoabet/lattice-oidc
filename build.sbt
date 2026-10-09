@@ -240,3 +240,14 @@ def git(args: String*): Option[String] =
     )
     .toOption
     .filter(_.nonEmpty)
+
+// Performance tests: JMH micro-benchmarks (`sbt --client "benchmarks/Jmh/run"`) and the server the HTTP
+// load tests run against (PerfServer). Not part of `test`, `stage` or the Docker image. See perf/README.md.
+lazy val benchmarks = (project in file("benchmarks"))
+  .enablePlugins(JmhPlugin)
+  // The test classes bring the scripted Authlete (FakeAuthleteApi) and Play's test server.
+  .dependsOn(root % "compile->compile;compile->test")
+  .settings(
+    name           := "lattice-oidc-benchmarks",
+    publish / skip := true
+  )
