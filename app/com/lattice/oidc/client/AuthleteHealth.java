@@ -38,7 +38,7 @@ public final class AuthleteHealth {
       authlete.getServiceConfiguration(false);
       return Map.of("status", "UP");
     } catch (RuntimeException e) {
-      LOG.warn("Authlete readiness check failed: {}", e.getMessage());
+      LOG.warn("Authlete check failed: {}", e.getMessage());
       return Map.of("status", "DOWN", "reason", "unreachable");
     }
   }

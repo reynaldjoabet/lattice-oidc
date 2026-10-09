@@ -4,6 +4,10 @@ metadata:
   name: lattice
 spec:
   type: ClusterIP
+  # Prefer endpoints in the caller's zone, for in-cluster callers such as APIs calling
+  # /api/introspection: lower latency, no cross-zone traffic charges. Falls back to other zones
+  # when the caller's has none. A hint: the gateway may route on its own.
+  trafficDistribution: PreferClose
   selector:
     app.kubernetes.io/component: server
   ports:

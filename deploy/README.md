@@ -94,13 +94,15 @@ GET /health/live   Host: 10.244.1.17:9000
 
 Prometheus has the same problem: it scrapes `/metrics` on each pod by IP. The pod IPs can't go on the allowed list, because they change every time a pod restarts. Allowing every host (`"."`) would switch off the protection for the whole site.
 
-**The fix.** Play lets individual routes opt out of the filter with a route modifier. In [conf/routes](../conf/routes), these three routes carry `+ anyhost`:
+**The fix.** Play lets individual routes opt out of the filter with a route modifier. In [conf/routes](../conf/routes), these four routes carry `+ anyhost`:
 
 ```
 + anyhost
 GET     /health/live    ...
 + anyhost
 GET     /health/ready   ...
++ anyhost
+GET     /health/dependencies   ...
 + anyhost
 GET     /metrics        ...
 ```
@@ -151,14 +153,17 @@ kubectl apply -k .
 - **Probes:**
   - A startup probe gives the JVM and Flyway's migrations three minutes.
   - Liveness uses `/health/live`.
-  - Readiness uses `/health/ready`, which also checks that Authlete answers.
+  - Readiness uses `/health/ready`, which is up once the app has started. It deliberately doesn't check Authlete, PostgreSQL or Redis. They're shared by every replica, so an outage would make all of them unready at once, and users would get the gateway's error instead of Lattice's "temporarily unavailable" page (a 503 with `Retry-After`).
+  - `/health/dependencies` reports each dependency, with a 503 if any is down. It's for monitoring, not for probes. Alert on the metric `lattice_dependency_up{dependency}` (1 or 0), for example `min_over_time(lattice_dependency_up[2m]) == 0`.
 - **Availability:**
   - 3 to 10 replicas, autoscaled at 70% of the CPU request, scaling down slowly.
   - Rollouts never go below the current capacity.
   - Replicas spread across nodes, and across zones when the cluster has them.
   - A PodDisruptionBudget lets drains take one replica at a time.
   - A 10-second `preStop` pause lets endpoint removal reach the gateway before shutdown.
-- **Resources:** 500m CPU and 1 GiB memory requested, and a 1 GiB memory limit. There is no CPU limit, because throttling a JVM stalls its garbage collector.
+- **Resources:** 500m CPU and 1 GiB memory requested, and a 1 GiB memory limit. There is no CPU limit, because throttling a JVM stalls its garbage collector. With in-place resizing (Kubernetes 1.35+), a CPU change applies live, but a memory change restarts the container (`resizePolicy`), because the JVM sizes its heap from the memory limit only at startup.
+- **Diagnostics:** `terminationMessagePolicy: FallbackToLogsOnError`, so if the container exits on a startup error, such as a missing setting, `kubectl describe pod` shows the end of its log.
+- **Zone-local traffic:** the Service has `trafficDistribution: PreferClose`. Callers inside the cluster, such as APIs calling `/api/introspection`, reach a replica in their own zone when there is one. It's a hint: the gateway may route on its own.
 - **NetworkPolicy:** traffic in only from the gateway and monitoring namespaces (change the two namespace names to yours). Traffic out only for DNS, PostgreSQL, Redis and HTTPS, plus LDAPS and mail submission.
 - **Config changes:** generated ConfigMaps and Secrets have a hash in their name, so changing `production.conf`, a setting or a secret rolls the Deployment.
 
@@ -166,12 +171,16 @@ kubectl apply -k .
 
 **Secrets:** `secretGenerator` reads `secrets.env`, which suits a start. For production, prefer the External Secrets Operator, Sealed Secrets or a CSI secrets driver, creating a Secret named `lattice-secrets`, and delete the generator.
 
+**Optional hardening and tuning** (commented out in the base, because they depend on the cluster):
+- **`hostUsers: false`** (Deployment): runs the pod in a user namespace, so UID 1001 inside maps to an unprivileged UID on the node. On by default since Kubernetes 1.33 and GA in 1.36, but it also needs a container runtime and kernel with ID-mapped mounts. Without them, pods don't start.
+- **`tolerance`** (autoscaler `scaleUp`): scale up on smaller increases than the default 10% tolerance. On by default since Kubernetes 1.35.
+
 **Monitoring:** with the Prometheus Operator installed, uncomment `servicemonitor.yaml` in the overlay. It scrapes `/metrics` with the token from `lattice-secrets`. The HTTPRoute rewrites public requests for `/metrics` to a path that returns 404.
 
 ## Checks run on these files
 
 - `docker compose config` with placeholder values: valid, and it fails with a clear message when a required value is missing.
 - `kubectl kustomize` on the overlay: renders, with every ConfigMap and Secret reference resolved to its hashed name.
-- `kubeconform -strict` against Kubernetes 1.34, including the Gateway API and Prometheus Operator schemas: all 12 resources valid.
+- `kubeconform -strict` against Kubernetes 1.34 and 1.35, with the Gateway API schema: all 11 rendered resources valid, and still valid with `hostUsers: false` and `tolerance` switched on. An earlier run that included the ServiceMonitor, against Kubernetes 1.34 with the Prometheus Operator schema, found all 12 resources valid.
 
 Not yet run: starting either setup against real Authlete credentials.

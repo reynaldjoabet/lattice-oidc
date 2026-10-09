@@ -93,6 +93,8 @@ public final class StorageModule extends AbstractModule {
     }
     bind(SessionGauge.class).asEagerSingleton();
     bind(com.lattice.oidc.metrics.StorageGauges.class).asEagerSingleton();
+    // Registers lattice_dependency_up at startup, so the series exist before the first check.
+    bind(com.lattice.oidc.common.DependencyChecks.class).asEagerSingleton();
     bind(com.lattice.oidc.security.SecondFactorKeyRotation.class).asEagerSingleton();
     if (config.getBoolean("lattice.ldap.enabled")) {
       // Connect at startup, so a wrong directory address or bind password fails the deployment.

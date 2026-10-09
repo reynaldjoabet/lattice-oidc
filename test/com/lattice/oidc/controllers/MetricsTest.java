@@ -75,6 +75,7 @@ public class MetricsTest {
     assertTrue("Caffeine's own figures", text.contains("cache_size{cache=\"read_cache\"}"));
     assertTrue(text.contains("logback_events_total{level=\"warn\"}"));
     assertTrue(text.contains("jvm_info{"));
+    assertTrue("dependency status, for alerts", text.contains("lattice_dependency_up{dependency=\"authlete\"}"));
     assertTrue("which build is running", text.contains("lattice_build_info{revision=\"" + com.lattice.oidc.metrics.Metrics.shortRevision() + "\",version=\"" + com.lattice.oidc.BuildInfo.version + "\"} 1"));
     assertTrue(text.contains("jvm_memory_usage_after_gc"));
     assertFalse("no user data in tags", text.contains("jane@example.com"));

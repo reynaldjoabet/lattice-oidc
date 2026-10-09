@@ -21,6 +21,10 @@ spec:
     # Scale up quickly, down slowly: a new JVM takes time to warm up.
     scaleUp:
       stabilizationWindowSeconds: 0
+      # React to smaller increases than the default 10% tolerance, e.g. scale up from 75% CPU
+      # instead of 77% (HPAConfigurableTolerance: on by default since Kubernetes 1.35, GA in 1.37;
+      # 1.33 and 1.34 ignore it unless the gate is enabled; older API servers reject the field).
+      # tolerance: "0.05"
       policies:
         - type: Pods
           value: 2

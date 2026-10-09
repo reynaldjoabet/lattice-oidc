@@ -538,6 +538,7 @@ The console's event tables show these fields in a **Details** column.
 - **Outbound:** webhook deliveries per endpoint (delivered, retry, failed) and retries waiting; LDAP searches and binds by outcome, and its pool; sign-ins through each upstream identity provider; emails sent or failed.
 - **Two-step:** accounts with an authenticator app, and what is still under a previous encryption key.
 - **JVM and process:** memory, heap pressure, garbage collection, threads, CPU, open files, uptime, JVM version, and log events by level.
+- **Dependencies:** `lattice_dependency_up{dependency}`, 1 or 0, for Authlete, plus PostgreSQL and Redis when configured. Checked before a scrape, at most every 30 seconds, and served at `/health/dependencies`.
 - **Build:** `lattice_build_info{version, revision}`, always 1, naming the running version and commit. The same values come from `com.lattice.oidc.BuildInfo`, which the build generates. They also appear in the startup log line and the console's Overview header.
 
 Figures read from storage are refreshed at most every 30 seconds, however often Prometheus scrapes. Webhook endpoints are tagged by position and host, never by path, which may hold a secret.

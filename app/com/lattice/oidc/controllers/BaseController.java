@@ -87,8 +87,13 @@ public abstract class BaseController extends Controller {
           e.getStatusCode(),
           e.getMessage(),
           Redaction.redact(e.getResponseBody()));
-      return Responses.serverError(
-          Responses.error("server_error", "The authorization server is temporarily unavailable."));
+      // 503 with Retry-After: a temporary condition. Browsers get the HTML page instead
+      // (UnavailablePageFilter); API clients keep this JSON.
+      return Responses.json(
+              503,
+              Responses.error("server_error", "The authorization server is temporarily unavailable."),
+              java.util.Map.of("Retry-After", "30"))
+          .addAttr(com.lattice.oidc.filters.UnavailablePageFilter.UNAVAILABLE, true);
     } catch (RuntimeException e) {
       LOG.error("Unexpected error while processing request", e);
       return Responses.serverError(Responses.error("server_error", null));

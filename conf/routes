@@ -14,6 +14,8 @@ GET     /assets/*file               controllers.Assets.versioned(path="/public",
 GET     /health/live                com.lattice.oidc.controllers.HealthController.live()
 + anyhost
 GET     /health/ready               com.lattice.oidc.controllers.HealthController.ready()
++ anyhost
+GET     /health/dependencies        com.lattice.oidc.controllers.HealthController.dependencies()
 
 # Prometheus metrics (lattice.metrics.enabled; optional bearer token lattice.metrics.token)
 + anyhost

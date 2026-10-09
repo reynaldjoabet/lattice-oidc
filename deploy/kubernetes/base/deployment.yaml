@@ -24,6 +24,11 @@ spec:
       enableServiceLinks: false
       # preStop (10 s) plus Play's coordinated shutdown, which drains in-flight requests.
       terminationGracePeriodSeconds: 60
+      # Stronger isolation, where the nodes support it (user namespaces: on by default since
+      # Kubernetes 1.33, GA in 1.36; also needs a container runtime and kernel with ID-mapped
+      # mounts): UID 1001 in the pod maps to an unprivileged UID on the node, so a container escape
+      # has no rights there. Pods fail to start on nodes without support.
+      # hostUsers: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 1001 # the image's USER 1001:0, which owns the app's read-only files
@@ -52,6 +57,9 @@ spec:
         - name: lattice
           image: lattice-oidc # set by the overlay's `images`
           imagePullPolicy: IfNotPresent
+          # If the container exits before writing a termination message (a startup error such as a
+          # missing setting), show the end of its log in `kubectl describe pod`.
+          terminationMessagePolicy: FallbackToLogsOnError
           # Arguments to the start script: load the production overrides.
           args:
             - -Dconfig.file=/etc/lattice/production.conf
@@ -64,6 +72,13 @@ spec:
                 name: lattice-env # non-secret settings, from the overlay
             - secretRef:
                 name: lattice-secrets # from the overlay
+          # In-place resizing (Kubernetes 1.35+). The JVM sizes its heap from the memory limit at
+          # startup, so a new memory size only takes effect after a restart; CPU applies live.
+          resizePolicy:
+            - resourceName: cpu
+              restartPolicy: NotRequired
+            - resourceName: memory
+              restartPolicy: RestartContainer
           resources:
             requests:
               cpu: 500m
@@ -87,13 +102,16 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 3
-          # Ready only when Authlete answers (HealthController): without it no flow can work.
+          # Ready once the app has started. Deliberately not tied to Authlete or the database: they
+          # are shared, so an outage would take every replica out of the Service at once and users
+          # would get the gateway's error instead of Lattice's "temporarily unavailable" page.
+          # Watch lattice_dependency_up (or /health/dependencies) for those instead.
           readinessProbe:
             httpGet:
               path: /health/ready
               port: http
             periodSeconds: 10
-            timeoutSeconds: 6 # the check itself gives up after 5 s
+            timeoutSeconds: 3
             failureThreshold: 3
           lifecycle:
             # Keep serving while the endpoint removal reaches the Service and the gateway, so
