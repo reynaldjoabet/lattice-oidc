@@ -1,6 +1,6 @@
 package com.lattice.oidc.controllers;
 
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.common.Requests;
 import com.lattice.oidc.common.Responses;
 import com.lattice.oidc.common.UserAgents;
@@ -168,7 +168,7 @@ public final class PasskeyController extends BaseController {
     String browserId = sessions.browserId(request);
     interactions.put(KIND, id, browserId, Ceremony.registration(next, current.get().user().getSubject(), options));
     return sessions.withBrowserId(
-        json(Map.of("ceremony", id, "options", Jsons.readMap(toJson(options)))), request, browserId);
+        json(Map.of("ceremony", id, "options", JsonHelpers.readMap(toJson(options)))), request, browserId);
   }
 
   @BodyParser.Of(BodyParser.Json.class)
@@ -261,7 +261,7 @@ public final class PasskeyController extends BaseController {
     String browserId = sessions.browserId(request);
     interactions.put(KIND, id, browserId, Ceremony.assertion(purpose, next, subject, approvalId, assertion));
     return sessions.withBrowserId(
-        json(Map.of("ceremony", id, "options", Jsons.readMap(toJson(assertion)))), request, browserId);
+        json(Map.of("ceremony", id, "options", JsonHelpers.readMap(toJson(assertion)))), request, browserId);
   }
 
   @BodyParser.Of(BodyParser.Json.class)
@@ -432,7 +432,7 @@ public final class PasskeyController extends BaseController {
   }
 
   private static Result json(Map<String, Object> body) {
-    return Responses.json(200, Jsons.write(body)).withHeader(CACHE_CONTROL, "no-store");
+    return Responses.json(200, JsonHelpers.write(body)).withHeader(CACHE_CONTROL, "no-store");
   }
 
   /** A JSON failure with where the "didn't work" page should send the user afterwards. */
@@ -440,6 +440,6 @@ public final class PasskeyController extends BaseController {
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("error", message);
     body.put("redirect", failedUrl(next));
-    return Responses.json(status, Jsons.write(body)).withHeader(CACHE_CONTROL, "no-store");
+    return Responses.json(status, JsonHelpers.write(body)).withHeader(CACHE_CONTROL, "no-store");
   }
 }

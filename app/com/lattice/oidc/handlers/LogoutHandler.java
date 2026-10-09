@@ -6,7 +6,7 @@ import com.authlete.common.dto.BackchannelLogoutTokenResponse;
 import com.authlete.common.dto.Client;
 import com.authlete.common.dto.NativeSsoLogoutRequest;
 import com.lattice.oidc.client.AuthleteExecutionContext;
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.common.Requests;
 import com.lattice.oidc.models.LogoutRequest;
@@ -237,7 +237,7 @@ public final class LogoutHandler {
     }
     List<String> allowed = new ArrayList<>();
     if (client.getCustomMetadata() != null) {
-      Object v = Jsons.readMap(client.getCustomMetadata()).get("post_logout_redirect_uris");
+      Object v = JsonHelpers.readMap(client.getCustomMetadata()).get("post_logout_redirect_uris");
       if (v instanceof List<?> l) {
         l.forEach(o -> allowed.add(String.valueOf(o)));
       }

@@ -1,7 +1,7 @@
 package com.lattice.oidc.security;
 
 import com.google.inject.ImplementedBy;
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.filters.RequestIdFilter;
 import com.lattice.oidc.metrics.Metrics;
 import com.lattice.oidc.stores.AuditEventStore;
@@ -85,7 +85,7 @@ public final class AuditService {
 
     @Override
     public void write(Map<String, Object> record) {
-      AUDIT.info(Jsons.write(record));
+      AUDIT.info(JsonHelpers.write(record));
     }
   }
 

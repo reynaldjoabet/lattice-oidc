@@ -1,6 +1,6 @@
 package com.lattice.oidc.stores;
 
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.models.User;
 import com.password4j.Password;
@@ -43,12 +43,12 @@ public final class InMemoryUserStore implements UserStore {
   @SuppressWarnings("unchecked")
   public static List<User> demoUsers(Environment environment) {
     List<User> users = new ArrayList<>();
-    Map<String, Object> root = Jsons.readMap(resource(environment, "demo-users.json"));
+    Map<String, Object> root = JsonHelpers.readMap(resource(environment, "demo-users.json"));
     for (Object entry : (List<Object>) root.get("users")) {
       Map<String, Object> account = (Map<String, Object>) entry;
       List<Map<String, Object>> datasets = new ArrayList<>();
       for (Object file : (List<Object>) account.getOrDefault("verifiedClaims", List.of())) {
-        Map<String, Object> doc = Jsons.readMap(resource(environment, (String) file));
+        Map<String, Object> doc = JsonHelpers.readMap(resource(environment, (String) file));
         datasets.add((Map<String, Object>) doc.get("verified_claims"));
       }
       users.add(

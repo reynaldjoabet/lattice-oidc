@@ -428,7 +428,7 @@ com.lattice.oidc
 ├── stores/        UserStore, InMemoryUserStore, ConsentStore
 ├── client/        Authlete Play WS client, ServerMetadata
 ├── filters/       RequestIdFilter, HstsFilter, AccessLogFilter
-├── common/        Requests, Responses, Jsons, WebException, ErrorHandler, Redaction, LatticeConfig
+├── common/        Requests, Responses, JsonHelpers, WebException, ErrorHandler, Redaction, LatticeConfig
 └── modules/       AuthleteModule
 ```
 

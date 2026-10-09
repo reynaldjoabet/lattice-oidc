@@ -1,6 +1,6 @@
 package com.lattice.oidc.handlers;
 
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.models.IdentityProviderConfig;
 import java.io.IOException;
@@ -38,7 +38,7 @@ public final class IdentityProviders {
   private void load(String file) {
     IdentityProviderConfig parsed;
     try {
-      parsed = Jsons.read(Files.readString(Path.of(file)), IdentityProviderConfig.class);
+      parsed = JsonHelpers.read(Files.readString(Path.of(file)), IdentityProviderConfig.class);
     } catch (IOException | RuntimeException e) {
       throw new IllegalStateException("Cannot load identity providers file " + file, e);
     }

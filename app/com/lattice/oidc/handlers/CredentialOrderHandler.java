@@ -3,7 +3,7 @@ package com.lattice.oidc.handlers;
 import com.authlete.common.dto.CredentialIssuanceOrder;
 import com.authlete.common.dto.CredentialRequestInfo;
 import com.authlete.common.dto.IntrospectionResponse;
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.models.User;
 import com.lattice.oidc.stores.UserStore;
 import java.time.ZoneOffset;
@@ -76,7 +76,7 @@ public final class CredentialOrderHandler {
     List<Map<String, Object>> issuable = issuable(token);
     Map<String, Object> claims =
         sdJwt ? sdJwtClaims(issuable, info, user) : mdocClaims(issuable, info, user);
-    String payload = claims == null ? null : Jsons.write(claims);
+    String payload = claims == null ? null : JsonHelpers.write(claims);
     return new CredentialIssuanceOrder()
         .setRequestIdentifier(info.getIdentifier())
         .setCredentialPayload(payload)
@@ -91,7 +91,7 @@ public final class CredentialOrderHandler {
     if (json == null) {
       throw CredentialRequestException.invalidRequest("No credential can be issued with the access token.");
     }
-    return (List<Map<String, Object>>) (List<?>) Jsons.readList(json);
+    return (List<Map<String, Object>>) (List<?>) JsonHelpers.readList(json);
   }
 
   private static boolean isDraft(CredentialRequestInfo info) {
@@ -121,7 +121,7 @@ public final class CredentialOrderHandler {
       throws CredentialRequestException {
     String vct;
     if (isDraft(info)) {
-      Object requested = Jsons.readMap(info.getDetails()).get("vct");
+      Object requested = JsonHelpers.readMap(info.getDetails()).get("vct");
       if (!(requested instanceof String v)) {
         throw CredentialRequestException.invalidRequest("The credential request does not contain 'vct'.");
       }
@@ -159,7 +159,7 @@ public final class CredentialOrderHandler {
     String docType;
     Map<String, Object> requested;
     if (isDraft(info)) {
-      Map<String, Object> details = Jsons.readMap(info.getDetails());
+      Map<String, Object> details = JsonHelpers.readMap(info.getDetails());
       if (!(details.get("doctype") instanceof String d)) {
         throw CredentialRequestException.invalidRequest("The credential request does not contain 'doctype'.");
       }

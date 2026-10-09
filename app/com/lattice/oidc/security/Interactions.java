@@ -1,6 +1,6 @@
 package com.lattice.oidc.security;
 
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.stores.EphemeralStore;
 import java.util.Optional;
@@ -25,7 +25,7 @@ public final class Interactions {
   }
 
   public void put(String kind, String key, String browserId, Object value) {
-    store.put(namespace(kind), key, browserId, null, Jsons.write(value), config.interactionTtl());
+    store.put(namespace(kind), key, browserId, null, JsonHelpers.write(value), config.interactionTtl());
   }
 
   public <T> Optional<T> get(String kind, String key, String browserId, Class<T> type) {
@@ -34,7 +34,7 @@ public final class Interactions {
     }
     return store.get(namespace(kind), key)
         .filter(entry -> browserId.equals(entry.owner()))
-        .map(entry -> Jsons.read(entry.json(), type));
+        .map(entry -> JsonHelpers.read(entry.json(), type));
   }
 
   /** Reads and removes the interaction (single use: of two concurrent callers, only one gets it). */
@@ -44,7 +44,7 @@ public final class Interactions {
     }
     return store.take(namespace(kind), key)
         .filter(entry -> browserId.equals(entry.owner()))
-        .map(entry -> Jsons.read(entry.json(), type));
+        .map(entry -> JsonHelpers.read(entry.json(), type));
   }
 
   private static String namespace(String kind) {

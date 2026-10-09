@@ -7,7 +7,7 @@ import static org.junit.Assert.fail;
 import static play.test.Helpers.contentAsString;
 
 import com.lattice.oidc.client.TestSettings;
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.common.WebException;
 import com.nimbusds.jose.JWSAlgorithm;
@@ -39,7 +39,7 @@ public class ObbDcrHandlerTest {
     statementChange.accept(claims);
     Map<String, Object> request = new java.util.LinkedHashMap<>(FakeObbDirectory.request(directory.sign(claims)));
     requestChange.accept(request);
-    rejected(expectedError, Jsons.write(request));
+    rejected(expectedError, JsonHelpers.write(request));
   }
 
   private void rejected(String expectedError, String body) {
@@ -62,7 +62,7 @@ public class ObbDcrHandlerTest {
 
   @Test
   public void validRequestIsMergedWithTheFapiProfile() {
-    Map<String, Object> merged = Jsons.readMap(handler.process(directory.validRequestBody()));
+    Map<String, Object> merged = JsonHelpers.readMap(handler.process(directory.validRequestBody()));
     assertEquals("PS256", merged.get("id_token_signed_response_alg"));
     assertEquals(Boolean.TRUE, merged.get("tls_client_certificate_bound_access_tokens"));
     assertEquals(Boolean.TRUE, merged.get("require_signed_request_object"));
@@ -86,15 +86,15 @@ public class ObbDcrHandlerTest {
     Map<String, Object> claims = FakeObbDirectory.claims();
     rejected(
         "invalid_software_statement",
-        Jsons.write(FakeObbDirectory.request(directory.sign(claims, JWSAlgorithm.RS256, new Date()))));
+        JsonHelpers.write(FakeObbDirectory.request(directory.sign(claims, JWSAlgorithm.RS256, new Date()))));
     Date stale = new Date(System.currentTimeMillis() - 10 * 60_000);
     rejected(
         "invalid_software_statement",
-        Jsons.write(FakeObbDirectory.request(directory.sign(claims, JWSAlgorithm.PS256, stale))));
+        JsonHelpers.write(FakeObbDirectory.request(directory.sign(claims, JWSAlgorithm.PS256, stale))));
     Date future = new Date(System.currentTimeMillis() + 10 * 60_000);
     rejected(
         "invalid_software_statement",
-        Jsons.write(FakeObbDirectory.request(directory.sign(claims, JWSAlgorithm.PS256, future))));
+        JsonHelpers.write(FakeObbDirectory.request(directory.sign(claims, JWSAlgorithm.PS256, future))));
   }
 
   @Test

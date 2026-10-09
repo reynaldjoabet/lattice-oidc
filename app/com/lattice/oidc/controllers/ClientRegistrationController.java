@@ -4,7 +4,7 @@ import com.authlete.common.dto.Client;
 import com.authlete.common.dto.ClientRegistrationRequest;
 import com.authlete.common.dto.ClientRegistrationResponse;
 import com.authlete.common.web.BearerToken;
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.common.Requests;
 import com.lattice.oidc.common.Responses;
@@ -173,7 +173,7 @@ public final class ClientRegistrationController extends BaseController {
               request,
               AuditService.Event.CLIENT_REGISTERED,
               "client_id",
-              Jsons.readMap(r.getResponseContent()).get("client_id"));
+              JsonHelpers.readMap(r.getResponseContent()).get("client_id"));
       case UPDATED -> audit.record(request, AuditService.Event.CLIENT_UPDATED, "client_id", clientId);
       case DELETED -> audit.record(request, AuditService.Event.CLIENT_DELETED, "client_id", clientId);
       default -> {}

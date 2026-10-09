@@ -8,7 +8,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import com.lattice.oidc.client.FakeAuthleteApi;
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -82,7 +82,7 @@ public class WebhooksTest {
 
     Delivery delivery = received.poll(10, TimeUnit.SECONDS);
     assertTrue("a delivery arrived", delivery != null);
-    Map<String, Object> body = Jsons.readMap(delivery.body());
+    Map<String, Object> body = JsonHelpers.readMap(delivery.body());
     assertEquals("LOGIN_FAILED", body.get("type"));
     @SuppressWarnings("unchecked")
     Map<String, Object> data = (Map<String, Object>) body.get("data");

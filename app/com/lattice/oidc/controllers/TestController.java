@@ -1,6 +1,6 @@
 package com.lattice.oidc.controllers;
 
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.common.Requests;
 import com.lattice.oidc.security.ObbCertValidator;
@@ -45,7 +45,7 @@ public final class TestController extends Controller {
               List<String> shown = secret ? List.of("<redacted>") : values;
               out.put(name, shown.size() == 1 ? shown.get(0) : shown);
             });
-    return ok(Jsons.pretty(out)).as("application/json");
+    return ok(JsonHelpers.pretty(out)).as("application/json");
   }
 
   /**
@@ -62,9 +62,9 @@ public final class TestController extends Controller {
     }
     try {
       obbCerts.validate(requests.clientCertificateChain(request));
-      return ok(Jsons.pretty(Map.of("result", "succeeded"))).as("application/json");
+      return ok(JsonHelpers.pretty(Map.of("result", "succeeded"))).as("application/json");
     } catch (GeneralSecurityException e) {
-      return ok(Jsons.pretty(Map.of("result", "failed", "error_message", String.valueOf(e.getMessage()))))
+      return ok(JsonHelpers.pretty(Map.of("result", "failed", "error_message", String.valueOf(e.getMessage()))))
           .as("application/json");
     }
   }

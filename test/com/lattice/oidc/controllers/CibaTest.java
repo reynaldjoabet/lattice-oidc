@@ -18,7 +18,7 @@ import com.authlete.common.dto.BackchannelAuthenticationResponse;
 import com.authlete.common.dto.Scope;
 import com.authlete.common.types.UserIdentificationHintType;
 import com.lattice.oidc.client.FakeAuthleteApi;
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -55,7 +55,7 @@ public class CibaTest {
         ex -> {
           Map<String, Object> body =
               new HashMap<>(
-                  Jsons.readMap(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8)));
+                  JsonHelpers.readMap(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8)));
           body.put("path", ex.getRequestURI().getPath());
           deviceRequests.add(body);
           String response =

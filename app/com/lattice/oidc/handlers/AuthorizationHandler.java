@@ -202,7 +202,7 @@ public final class AuthorizationHandler {
       Object entry =
           interaction.idTokenClaims() == null
               ? null
-              : com.lattice.oidc.common.Jsons.readMap(interaction.idTokenClaims()).get("openbanking_intent_id");
+              : com.lattice.oidc.common.JsonHelpers.readMap(interaction.idTokenClaims()).get("openbanking_intent_id");
       Object value = entry instanceof Map<?, ?> m ? ((Map<String, Object>) m).get("value") : null;
       if (!(value instanceof String intentId)) {
         throw invalidRequest("The value of 'openbanking_intent_id' is not available.");

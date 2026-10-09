@@ -1,6 +1,6 @@
 package com.lattice.oidc.cache;
 
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.metrics.Metrics;
 import com.lattice.oidc.stores.SessionStore;
 import java.time.Duration;
@@ -44,19 +44,19 @@ public final class CachingSessionStore implements SessionStore {
     if (id == null) {
       return Optional.empty();
     }
-    Optional<Session> cached = cache.get(REGION, id).map(json -> Jsons.read(json, Session.class));
+    Optional<Session> cached = cache.get(REGION, id).map(json -> JsonHelpers.read(json, Session.class));
     metrics.cacheLookup(REGION, cached.isPresent());
     if (cached.isPresent()) {
       return cached.filter(session -> session.expiresAt().isAfter(Instant.now()));
     }
     Optional<Session> session = store.find(id);
-    session.ifPresent(found -> cache.put(REGION, id, Jsons.write(found)));
+    session.ifPresent(found -> cache.put(REGION, id, JsonHelpers.write(found)));
     return session;
   }
 
   @Override
   public void touch(String id, Instant now, Duration interval) {
-    Optional<Session> cached = cache.get(REGION, id).map(json -> Jsons.read(json, Session.class));
+    Optional<Session> cached = cache.get(REGION, id).map(json -> JsonHelpers.read(json, Session.class));
     if (cached.isPresent() && !cached.get().lastSeenAt().plus(interval).isBefore(now)) {
       return; // Recent enough: the store wouldn't write either.
     }

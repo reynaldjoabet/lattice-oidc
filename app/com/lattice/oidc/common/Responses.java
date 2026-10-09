@@ -110,7 +110,7 @@ public final class Responses {
   }
 
   public static String error(String error, String description) {
-    return Jsons.write(
+    return JsonHelpers.write(
         description == null
             ? Map.of("error", error)
             : Map.of("error", error, "error_description", description));

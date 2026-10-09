@@ -5,7 +5,7 @@ import com.authlete.common.dto.AuthzDetails;
 import com.authlete.common.dto.Client;
 import com.authlete.common.dto.DynamicScope;
 import com.authlete.common.dto.Scope;
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.handlers.IdentityProviders;
 import java.net.URI;
 import java.util.ArrayList;
@@ -185,7 +185,7 @@ public record AuthorizationPage(
     if (details == null || details.getElements() == null || details.getElements().length == 0) {
       return Optional.empty();
     }
-    return Optional.of(Jsons.pretty(Jsons.readList(details.toJson())));
+    return Optional.of(JsonHelpers.pretty(JsonHelpers.readList(details.toJson())));
   }
 
   /** Claim names and purposes inside {@code verified_claims} of a claims request. */
@@ -194,7 +194,7 @@ public record AuthorizationPage(
     if (claimsRequest == null || claimsRequest.isEmpty()) {
       return List.of();
     }
-    Object verified = Jsons.readMap(claimsRequest).get("verified_claims");
+    Object verified = JsonHelpers.readMap(claimsRequest).get("verified_claims");
     List<Object> entries =
         verified instanceof List<?> l ? (List<Object>) l : verified == null ? List.of() : List.of(verified);
     List<ClaimPurpose> out = new ArrayList<>();

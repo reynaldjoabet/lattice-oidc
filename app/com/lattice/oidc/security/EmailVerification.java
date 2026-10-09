@@ -1,6 +1,6 @@
 package com.lattice.oidc.security;
 
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.common.Mailer;
 import com.lattice.oidc.models.User;
 import com.lattice.oidc.stores.CounterStore;
@@ -67,7 +67,7 @@ public final class EmailVerification {
     RANDOM.nextBytes(bytes);
     String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     store.deleteBySubject(TOKENS, user.getSubject());
-    store.put(TOKENS, sha256(token), null, user.getSubject(), Jsons.write(new Sent(email.get())), LINK_LIFETIME);
+    store.put(TOKENS, sha256(token), null, user.getSubject(), JsonHelpers.write(new Sent(email.get())), LINK_LIFETIME);
     mailer.send(
         email.get(),
         "Verify your email",
@@ -94,7 +94,7 @@ public final class EmailVerification {
       return Optional.empty();
     }
     // Links sent before addresses were recorded hold "{}": they verify nothing, so a new one is needed.
-    String sentTo = Jsons.read(entry.get().json(), Sent.class).email();
+    String sentTo = JsonHelpers.read(entry.get().json(), Sent.class).email();
     Optional<User> user =
         users.bySubject(entry.get().subject()).filter(account -> sameAddress(account.email(), sentTo));
     user.ifPresent(actions::markEmailVerified);

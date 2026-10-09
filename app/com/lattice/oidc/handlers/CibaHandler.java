@@ -12,7 +12,7 @@ import com.authlete.common.dto.BackchannelAuthenticationIssueResponse;
 import com.authlete.common.dto.BackchannelAuthenticationResponse;
 import com.authlete.common.dto.Scope;
 import com.lattice.oidc.client.AuthleteExecutionContext;
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.common.Responses;
 import com.lattice.oidc.common.WebException;
@@ -196,7 +196,7 @@ public final class CibaHandler {
                     requestId,
                     null,
                     null,
-                    Jsons.write(pending),
+                    JsonHelpers.write(pending),
                     Duration.ofSeconds(Math.max(issue.getExpiresIn(), 60)));
               }
               case POLL -> poll(pending, device.poll(user.getSubject(), message, timeout, authReqId));
@@ -235,14 +235,14 @@ public final class CibaHandler {
             Optional.ofNullable(backchannelResponse.getBindingMessage()),
             permissions,
             System.currentTimeMillis() / 1000L + issue.getExpiresIn(),
-            com.lattice.oidc.common.Jsons.readList(detailsJson),
+            com.lattice.oidc.common.JsonHelpers.readList(detailsJson),
             detailsJson);
     store.put(
         APPROVALS,
         id,
         null,
         user.getSubject(),
-        Jsons.write(new Waiting(approval, user.getSubject(), pending)),
+        JsonHelpers.write(new Waiting(approval, user.getSubject(), pending)),
         Duration.ofSeconds(ttl));
   }
 
@@ -250,7 +250,7 @@ public final class CibaHandler {
   public List<CibaApproval> pendingFor(String subject) {
     long now = System.currentTimeMillis() / 1000L;
     return store.bySubject(APPROVALS, subject).stream()
-        .map(entry -> Jsons.read(entry.json(), Waiting.class))
+        .map(entry -> JsonHelpers.read(entry.json(), Waiting.class))
         .map(Waiting::approval)
         .filter(approval -> !approval.expired(now))
         .toList();
@@ -271,7 +271,7 @@ public final class CibaHandler {
    */
   public Optional<CibaApproval> decide(String subject, String id, boolean approve, Optional<String> verifiedAcr) {
     Optional<Waiting> waiting =
-        id == null ? Optional.empty() : store.get(APPROVALS, id).map(entry -> Jsons.read(entry.json(), Waiting.class));
+        id == null ? Optional.empty() : store.get(APPROVALS, id).map(entry -> JsonHelpers.read(entry.json(), Waiting.class));
     if (waiting.isEmpty()
         || !waiting.get().subject().equals(subject)
         || waiting.get().approval().expired(System.currentTimeMillis() / 1000L)) {
@@ -291,7 +291,7 @@ public final class CibaHandler {
 
   /** Handles the device's asynchronous callback. Returns false for unknown request ids. */
   public boolean callback(String requestId, AuthenticationDevice.Outcome outcome) {
-    Optional<Pending> pending = store.take(CALLBACKS, requestId).map(entry -> Jsons.read(entry.json(), Pending.class));
+    Optional<Pending> pending = store.take(CALLBACKS, requestId).map(entry -> JsonHelpers.read(entry.json(), Pending.class));
     if (pending.isEmpty()) {
       return false;
     }

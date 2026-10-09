@@ -1,6 +1,6 @@
 package com.lattice.oidc.stores.postgres;
 
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.stores.AuditEventStore;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -32,7 +32,7 @@ public final class PostgresAuditEventStore implements AuditEventStore {
         Instant.parse(String.valueOf(record.get("ts"))),
         String.valueOf(record.get("event")),
         subject == null ? null : subject.toString(),
-        Jsons.write(record));
+        JsonHelpers.write(record));
   }
 
   @Override
@@ -58,7 +58,7 @@ public final class PostgresAuditEventStore implements AuditEventStore {
         row -> {
           Map<String, Object> record = new LinkedHashMap<>();
           record.put("id", row.getLong("id"));
-          record.putAll(Jsons.readMap(row.getString("record")));
+          record.putAll(JsonHelpers.readMap(row.getString("record")));
           return record;
         },
         parameters.toArray());

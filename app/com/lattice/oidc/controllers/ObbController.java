@@ -2,7 +2,7 @@ package com.lattice.oidc.controllers;
 
 import com.authlete.common.dto.IntrospectionRequest;
 import com.authlete.common.dto.IntrospectionResponse;
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.common.ObbSupport;
 import com.lattice.oidc.common.Requests;
@@ -201,7 +201,7 @@ public final class ObbController extends BaseController {
   @SuppressWarnings("unchecked")
   private static Map<String, Object> consentData(String body, String interactionId) {
     try {
-      Object data = Jsons.readMap(body).get("data");
+      Object data = JsonHelpers.readMap(body).get("data");
       if (data instanceof Map<?, ?> m) {
         return (Map<String, Object>) m;
       }

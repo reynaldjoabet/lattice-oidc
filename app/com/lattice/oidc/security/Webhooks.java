@@ -1,7 +1,7 @@
 package com.lattice.oidc.security;
 
 import com.lattice.oidc.client.AuthleteExecutionContext;
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.metrics.Metrics;
 import io.micrometer.core.instrument.Gauge;
 import com.typesafe.config.Config;
@@ -147,7 +147,7 @@ public final class Webhooks {
     body.put("type", event);
     body.put("timestamp", record.get("ts"));
     body.put("data", record);
-    String json = Jsons.write(body);
+    String json = JsonHelpers.write(body);
     for (Endpoint endpoint : endpoints) {
       if (endpoint.wants(event)) {
         send(endpoint, id, timestamp, json, 0);

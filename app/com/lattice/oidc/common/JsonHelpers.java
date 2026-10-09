@@ -9,7 +9,7 @@ import tools.jackson.databind.SerializationFeature;
 import tools.jackson.databind.json.JsonMapper;
 
 /** Jackson 3 helpers for the server's own JSON (not Authlete DTOs; see AuthleteJson). */
-public final class Jsons {
+public final class JsonHelpers {
 
   public static final JsonMapper MAPPER =
       JsonMapper.builder()
@@ -23,7 +23,7 @@ public final class Jsons {
   private static final JsonMapper PRETTY =
       MAPPER.rebuild().enable(SerializationFeature.INDENT_OUTPUT).build();
 
-  private Jsons() {}
+  private JsonHelpers() {}
 
   public static String write(Object value) {
     return MAPPER.writeValueAsString(value);

@@ -10,7 +10,7 @@ import static play.test.Helpers.contentAsString;
 import com.authlete.common.dto.IntrospectionRequest;
 import com.authlete.common.dto.IntrospectionResponse;
 import com.lattice.oidc.client.FakeAuthleteApi;
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import java.util.Map;
 import org.junit.After;
 import org.junit.Before;
@@ -75,7 +75,7 @@ public class ObbResourcesTest {
                 .header("Content-Type", "application/json"));
     assertEquals(201, r.status());
     @SuppressWarnings("unchecked")
-    Map<String, Object> data = (Map<String, Object>) Jsons.readMap(contentAsString(r)).get("data");
+    Map<String, Object> data = (Map<String, Object>) JsonHelpers.readMap(contentAsString(r)).get("data");
     return (String) data.get("consentId");
   }
 

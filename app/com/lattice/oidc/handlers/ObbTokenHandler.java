@@ -1,7 +1,7 @@
 package com.lattice.oidc.handlers;
 
 import com.authlete.common.api.AuthleteApi;
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.common.ObbSupport;
 import com.lattice.oidc.common.Responses;
@@ -41,7 +41,7 @@ public final class ObbTokenHandler {
     if (!config.obbEnabled() || "refresh_token".equals(grantType) || responseJson == null) {
       return;
     }
-    Map<String, Object> body = Jsons.readMap(responseJson);
+    Map<String, Object> body = JsonHelpers.readMap(responseJson);
     Object refreshToken = body.get("refresh_token");
     Object scope = body.get("scope");
     if (!(refreshToken instanceof String refreshTokenValue) || !(scope instanceof String scopeValue)) {

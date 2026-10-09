@@ -1,6 +1,6 @@
 package com.lattice.oidc.security;
 
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.common.Mailer;
 import com.lattice.oidc.models.User;
@@ -93,7 +93,7 @@ public final class RecoveryService {
     // Only the newest link works: earlier ones for this account are deleted.
     String token = randomToken();
     store.deleteBySubject(TOKENS, subject);
-    store.put(TOKENS, sha256(token), null, subject, Jsons.write(new Pending(subject, next, user.get().email().get())), config.linkLifetime());
+    store.put(TOKENS, sha256(token), null, subject, JsonHelpers.write(new Pending(subject, next, user.get().email().get())), config.linkLifetime());
 
     long minutes = config.linkLifetime().toMinutes();
     mailer.send(
@@ -113,7 +113,7 @@ public final class RecoveryService {
         ? Optional.empty()
         : store
             .get(TOKENS, sha256(token))
-            .map(entry -> Jsons.read(entry.json(), Pending.class))
+            .map(entry -> JsonHelpers.read(entry.json(), Pending.class))
             .filter(pending -> users.bySubject(pending.subject()).filter(user -> stillApplies(pending, user)).isPresent());
   }
 
@@ -129,7 +129,7 @@ public final class RecoveryService {
     }
     // Taking the link is the single-use step: of two concurrent resets, only one gets it.
     Optional<Pending> pending =
-        store.take(TOKENS, sha256(token)).map(entry -> Jsons.read(entry.json(), Pending.class));
+        store.take(TOKENS, sha256(token)).map(entry -> JsonHelpers.read(entry.json(), Pending.class));
     if (pending.isEmpty()) {
       return Optional.empty();
     }

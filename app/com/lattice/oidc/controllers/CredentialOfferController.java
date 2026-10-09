@@ -3,7 +3,7 @@ package com.lattice.oidc.controllers;
 import com.authlete.common.dto.CredentialOfferCreateRequest;
 import com.authlete.common.dto.CredentialOfferCreateResponse;
 import com.authlete.common.dto.CredentialOfferInfo;
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.common.QrCodes;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.common.Requests;
@@ -97,7 +97,7 @@ public final class CredentialOfferController extends BaseController {
 
           String[] ids;
           try {
-            ids = Jsons.readList(form.credentialConfigurationIds()).stream().map(String.class::cast).toArray(String[]::new);
+            ids = JsonHelpers.readList(form.credentialConfigurationIds()).stream().map(String.class::cast).toArray(String[]::new);
           } catch (RuntimeException e) {
             return page(request, 400, withError(form, shown, "Credential configuration IDs must be a JSON array of strings."));
           }
@@ -129,7 +129,7 @@ public final class CredentialOfferController extends BaseController {
                   form.endpoint() + "?credential_offer=" + urlEncode(info.getCredentialOffer()),
                   offerUri,
                   offerUriLink,
-                  Jsons.pretty(Jsons.readMap(info.getCredentialOffer())),
+                  JsonHelpers.pretty(JsonHelpers.readMap(info.getCredentialOffer())),
                   QrCodes.svg(offerUriLink, "QR code: credential offer for your wallet"),
                   Optional.ofNullable(info.getTxCode()).filter(code -> !code.isEmpty()),
                   java.util.List.of(ids));

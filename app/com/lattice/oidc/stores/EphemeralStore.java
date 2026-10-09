@@ -9,7 +9,7 @@ import java.util.Optional;
 /**
  * Short-lived state shared by every server: pending sign-ins, reset links, CIBA requests, native
  * SSO device secrets and sign-in alerts. Entries live in a {@code namespace}, expire on their own,
- * and carry their value as JSON (see {@code Jsons}). An entry may be bound to a browser ({@code
+ * and carry their value as JSON (see {@code JsonHelpers}). An entry may be bound to a browser ({@code
  * owner}) and indexed by account ({@code subject}).
  *
  * <p>Implementations: {@link InMemoryEphemeralStore} (one server, development and tests) and the

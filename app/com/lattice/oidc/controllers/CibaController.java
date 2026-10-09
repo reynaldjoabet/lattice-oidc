@@ -3,7 +3,7 @@ package com.lattice.oidc.controllers;
 import com.authlete.common.dto.BackchannelAuthenticationRequest;
 import com.authlete.common.dto.BackchannelAuthenticationResponse;
 import com.authlete.common.web.BasicCredentials;
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.common.Requests;
 import com.lattice.oidc.common.Responses;
 import com.lattice.oidc.handlers.AuthenticationDevice;
@@ -94,7 +94,7 @@ public final class CibaController extends BaseController {
         () -> {
           Map<String, Object> json;
           try {
-            json = Jsons.readMap(body);
+            json = JsonHelpers.readMap(body);
           } catch (RuntimeException e) {
             return Responses.badRequest(Responses.error("invalid_request", "The body must be JSON."));
           }

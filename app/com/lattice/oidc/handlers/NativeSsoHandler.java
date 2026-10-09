@@ -4,7 +4,7 @@ import com.authlete.common.api.AuthleteApi;
 import com.authlete.common.dto.NativeSsoRequest;
 import com.authlete.common.dto.NativeSsoResponse;
 import com.authlete.common.dto.TokenResponse;
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.common.Responses;
 import com.lattice.oidc.security.UserSessions;
@@ -103,7 +103,7 @@ public final class NativeSsoHandler {
       return register(sessionId);
     }
     Optional<Registered> known =
-        store.get(NAMESPACE, hash(presented)).map(entry -> Jsons.read(entry.json(), Registered.class));
+        store.get(NAMESPACE, hash(presented)).map(entry -> JsonHelpers.read(entry.json(), Registered.class));
     if (known.isPresent()
         && (presentedHash == null || Objects.equals(known.get().hash(), presentedHash))
         && Objects.equals(known.get().sessionId(), sessionId)) {
@@ -124,7 +124,7 @@ public final class NativeSsoHandler {
         deviceSecret.hash(),
         null,
         null,
-        Jsons.write(new Registered(deviceSecret.hash(), sessionId)),
+        JsonHelpers.write(new Registered(deviceSecret.hash(), sessionId)),
         config.sessionMaxLifespan());
     return deviceSecret;
   }

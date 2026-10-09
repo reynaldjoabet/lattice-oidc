@@ -10,7 +10,7 @@ import com.authlete.common.dto.Client;
 import com.authlete.common.dto.ClientRegistrationRequest;
 import com.authlete.common.dto.ClientRegistrationResponse;
 import com.lattice.oidc.client.FakeAuthleteApi;
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.handlers.FakeObbDirectory;
 import com.lattice.oidc.security.ObbTestPki;
 import java.net.URLEncoder;
@@ -121,7 +121,7 @@ public class ClientRegistrationTest {
         route(app, request("POST", "/api/register", directory.validRequestBody(), ObbTestPki.LEAF));
     assertEquals(201, r.status());
     ClientRegistrationRequest sent = fake.lastRequest("dynamicClientRegister");
-    Map<String, Object> json = Jsons.readMap(sent.getJson());
+    Map<String, Object> json = JsonHelpers.readMap(sent.getJson());
     assertEquals(Boolean.TRUE, json.get("tls_client_certificate_bound_access_tokens"));
     assertEquals("PS256", json.get("id_token_signed_response_alg"));
   }

@@ -109,7 +109,7 @@ public final class ErrorHandler extends DefaultHttpErrorHandler {
           null);
     }
     return Responses.json(
-        status, Jsons.write(Map.of("error", error, "error_description", description)));
+        status, JsonHelpers.write(Map.of("error", error, "error_description", description)));
   }
 
   /**

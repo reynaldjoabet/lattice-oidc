@@ -1,6 +1,6 @@
 package com.lattice.oidc.handlers;
 
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.common.LatticeConfig;
 import java.time.Duration;
 import java.util.LinkedHashMap;
@@ -113,14 +113,14 @@ public final class AuthenticationDevice {
           ws.url(config.baseUrl() + path)
               .setRequestTimeout(timeout)
               .setContentType("application/json")
-              .post(Jsons.write(body))
+              .post(JsonHelpers.write(body))
               .toCompletableFuture()
               .get(timeout.toMillis() + 5_000L, TimeUnit.MILLISECONDS);
       if (response.getStatus() / 100 != 2) {
         throw new IllegalStateException(
             "Authentication device responded " + response.getStatus() + " for " + path);
       }
-      return Jsons.readMap(response.getBody());
+      return JsonHelpers.readMap(response.getBody());
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new IllegalStateException("Interrupted while calling the authentication device", e);

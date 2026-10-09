@@ -1,6 +1,6 @@
 package com.lattice.oidc.stores.postgres;
 
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.models.Passkey;
 import com.lattice.oidc.stores.PasskeyStore;
 import java.security.SecureRandom;
@@ -32,7 +32,7 @@ public final class PostgresPasskeyStore implements PasskeyStore {
 
   private static Passkey passkey(ResultSet row) throws SQLException {
     LinkedHashSet<String> transports = new LinkedHashSet<>();
-    Jsons.readList(row.getString("transports")).forEach(transport -> transports.add(String.valueOf(transport)));
+    JsonHelpers.readList(row.getString("transports")).forEach(transport -> transports.add(String.valueOf(transport)));
     return new Passkey(
         row.getString("id"),
         row.getString("subject"),
@@ -79,7 +79,7 @@ public final class PostgresPasskeyStore implements PasskeyStore {
         passkey.createdAt(),
         passkey.lastUsedAt().orElse(null),
         passkey.backedUp(),
-        Jsons.write(passkey.transports()));
+        JsonHelpers.write(passkey.transports()));
   }
 
   @Override

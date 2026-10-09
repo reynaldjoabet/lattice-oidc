@@ -1,6 +1,6 @@
 package com.lattice.oidc.handlers;
 
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
@@ -98,7 +98,7 @@ public final class FakeObbDirectory implements AutoCloseable {
   }
 
   public String validRequestBody() {
-    return Jsons.write(request(sign(claims())));
+    return JsonHelpers.write(request(sign(claims())));
   }
 
   @Override

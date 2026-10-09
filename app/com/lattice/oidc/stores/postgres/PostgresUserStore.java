@@ -1,6 +1,6 @@
 package com.lattice.oidc.stores.postgres;
 
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.models.User;
 import com.lattice.oidc.stores.InMemoryUserStore;
@@ -46,9 +46,9 @@ public final class PostgresUserStore implements UserStore {
         row.getString("subject"),
         row.getString("login_id"),
         row.getString("password_hash"),
-        Jsons.readMap(row.getString("claims")),
-        Jsons.readMap(row.getString("attributes")),
-        (List<Map<String, Object>>) (List<?>) Jsons.readList(row.getString("verified_claims")));
+        JsonHelpers.readMap(row.getString("claims")),
+        JsonHelpers.readMap(row.getString("attributes")),
+        (List<Map<String, Object>>) (List<?>) JsonHelpers.readList(row.getString("verified_claims")));
   }
 
   @Override
@@ -99,9 +99,9 @@ public final class PostgresUserStore implements UserStore {
         user.getSubject(),
         user.loginId(),
         user.passwordHash(),
-        Jsons.write(user.claims()),
-        Jsons.write(user.attributes()),
-        Jsons.write(user.verifiedClaims()));
+        JsonHelpers.write(user.claims()),
+        JsonHelpers.write(user.attributes()),
+        JsonHelpers.write(user.verifiedClaims()));
   }
 
   @Override

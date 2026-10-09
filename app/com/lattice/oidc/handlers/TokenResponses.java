@@ -1,7 +1,7 @@
 package com.lattice.oidc.handlers;
 
 import com.authlete.common.dto.TokenCreateResponse;
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.common.Responses;
 import com.lattice.oidc.common.WebException;
 import java.util.LinkedHashMap;
@@ -29,7 +29,7 @@ final class TokenResponses {
     if (created.getRefreshToken() != null) {
       body.put("refresh_token", created.getRefreshToken());
     }
-    return Responses.ok(Jsons.write(body), headers);
+    return Responses.ok(JsonHelpers.write(body), headers);
   }
 
   static WebException error(int status, String error, String description, Map<String, String> headers) {

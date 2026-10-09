@@ -1,6 +1,6 @@
 package com.lattice.oidc.handlers;
 
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.common.Responses;
 import com.lattice.oidc.common.WebException;
@@ -114,7 +114,7 @@ public final class ObbDcrHandler {
   /** Whether the body carries a software statement whose JWKS is hosted by the OBB directory. */
   public static boolean isObbRequest(String body) {
     try {
-      Object statement = Jsons.readMap(body).get("software_statement");
+      Object statement = JsonHelpers.readMap(body).get("software_statement");
       if (!(statement instanceof String s)) {
         return false;
       }
@@ -129,7 +129,7 @@ public final class ObbDcrHandler {
   public String process(String body) {
     Map<String, Object> params;
     try {
-      params = Jsons.readMap(body);
+      params = JsonHelpers.readMap(body);
     } catch (RuntimeException e) {
       throw error("invalid_request", "The request body is not a JSON object.");
     }
@@ -141,7 +141,7 @@ public final class ObbDcrHandler {
       throw error("invalid_software_statement", "The software statement payload is malformed.");
     }
     validate(params, claims);
-    return Jsons.write(merge(params, claims));
+    return JsonHelpers.write(merge(params, claims));
   }
 
   private SignedJWT softwareStatement(Map<String, Object> params) {

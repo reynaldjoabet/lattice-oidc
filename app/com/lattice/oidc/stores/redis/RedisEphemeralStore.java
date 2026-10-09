@@ -1,6 +1,6 @@
 package com.lattice.oidc.stores.redis;
 
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.stores.EphemeralStore;
 import java.time.Duration;
 import java.time.Instant;
@@ -48,7 +48,7 @@ public final class RedisEphemeralStore implements EphemeralStore {
   }
 
   private static Entry entry(String namespace, String key, String value) {
-    Stored stored = Jsons.read(value, Stored.class);
+    Stored stored = JsonHelpers.read(value, Stored.class);
     return new Entry(namespace, key, stored.owner(), stored.subject(), stored.json(), stored.expiresAt());
   }
 
@@ -58,7 +58,7 @@ public final class RedisEphemeralStore implements EphemeralStore {
     redis.client()
         .set(
             entryKey(namespace, key),
-            Jsons.write(new Stored(owner, subject, json, expiresAt)),
+            JsonHelpers.write(new Stored(owner, subject, json, expiresAt)),
             SetParams.setParams().px(Math.max(1, ttl.toMillis())));
     if (subject != null) {
       String index = subjectKey(namespace, subject);

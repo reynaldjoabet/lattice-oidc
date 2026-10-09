@@ -8,7 +8,7 @@ import static org.junit.Assert.fail;
 import com.authlete.common.dto.CredentialIssuanceOrder;
 import com.authlete.common.dto.CredentialRequestInfo;
 import com.authlete.common.dto.IntrospectionResponse;
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.models.User;
 import com.lattice.oidc.stores.UserStore;
 import java.util.List;
@@ -60,7 +60,7 @@ public class CredentialOrderHandlerTest {
   private static IntrospectionResponse token(String subject, Object issuable) {
     IntrospectionResponse r = new IntrospectionResponse();
     r.setSubject(subject);
-    r.setIssuableCredentials(issuable == null ? null : Jsons.write(issuable));
+    r.setIssuableCredentials(issuable == null ? null : JsonHelpers.write(issuable));
     return r;
   }
 
@@ -79,7 +79,7 @@ public class CredentialOrderHandlerTest {
                           Map.of("path", List.of("org.iso.18013.5.1", "issue_date"))))));
 
   private Map<String, Object> payload(CredentialIssuanceOrder order) {
-    return Jsons.readMap(order.getCredentialPayload());
+    return JsonHelpers.readMap(order.getCredentialPayload());
   }
 
   private void rejected(String error, IntrospectionResponse token, CredentialRequestInfo info) {

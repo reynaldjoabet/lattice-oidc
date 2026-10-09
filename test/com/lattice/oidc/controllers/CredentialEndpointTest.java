@@ -16,7 +16,7 @@ import com.authlete.common.dto.CredentialSingleParseResponse;
 import com.authlete.common.dto.IntrospectionRequest;
 import com.authlete.common.dto.IntrospectionResponse;
 import com.lattice.oidc.client.FakeAuthleteApi;
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import java.util.List;
 import java.util.Map;
 import org.junit.After;
@@ -83,7 +83,7 @@ public class CredentialEndpointTest {
     r.setAction(action);
     r.setSubject("1001");
     r.setIssuableCredentials(
-        Jsons.write(List.of(Map.of("credential_configuration_id", "pid", "format", "dc+sd-jwt", "vct", PID))));
+        JsonHelpers.write(List.of(Map.of("credential_configuration_id", "pid", "format", "dc+sd-jwt", "vct", PID))));
     r.setResponseContent("Bearer error=\"invalid_token\"");
     return r;
   }
@@ -129,7 +129,7 @@ public class CredentialEndpointTest {
     assertEquals(200, r.status());
     CredentialSingleIssueRequest issue = fake.lastRequest("credentialSingleIssue");
     assertEquals("at-1", issue.getAccessToken());
-    Map<String, Object> payload = Jsons.readMap(issue.getOrder().getCredentialPayload());
+    Map<String, Object> payload = JsonHelpers.readMap(issue.getOrder().getCredentialPayload());
     assertEquals("1001", payload.get("sub"));
     assertEquals("Smith", payload.get("family_name"));
   }
@@ -167,7 +167,7 @@ public class CredentialEndpointTest {
     Result r = route(app, credentialRequest("/api/deferred_credential", "Bearer at-1"));
     assertEquals(200, r.status());
     CredentialDeferredIssueRequest issue = fake.lastRequest("credentialDeferredIssue");
-    assertEquals("1001", Jsons.readMap(issue.getOrder().getCredentialPayload()).get("sub"));
+    assertEquals("1001", JsonHelpers.readMap(issue.getOrder().getCredentialPayload()).get("sub"));
   }
 
   @Test

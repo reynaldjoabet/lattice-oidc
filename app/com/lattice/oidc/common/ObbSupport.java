@@ -33,7 +33,7 @@ public final class ObbSupport {
   }
 
   public static Result json(int status, String interactionId, Object body) {
-    Result r = body == null ? Results.status(status) : Results.status(status, Jsons.pretty(body)).as("application/json");
+    Result r = body == null ? Results.status(status) : Results.status(status, JsonHelpers.pretty(body)).as("application/json");
     return interactionId == null ? r : r.withHeader(X_FAPI_INTERACTION_ID, interactionId);
   }
 

@@ -1,6 +1,6 @@
 package com.lattice.oidc.cache;
 
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.metrics.Metrics;
 import com.lattice.oidc.models.User;
 import com.lattice.oidc.stores.UserStore;
@@ -62,10 +62,10 @@ public final class CachingUserStore implements UserStore {
     Optional<String> cached = cache.get(REGION, subject);
     metrics.cacheLookup(REGION, cached.isPresent());
     if (cached.isPresent()) {
-      return Optional.of(Jsons.read(cached.get(), Cached.class).user());
+      return Optional.of(JsonHelpers.read(cached.get(), Cached.class).user());
     }
     Optional<User> user = store.bySubject(subject);
-    user.ifPresent(found -> cache.put(REGION, subject, Jsons.write(Cached.of(found))));
+    user.ifPresent(found -> cache.put(REGION, subject, JsonHelpers.write(Cached.of(found))));
     return user;
   }
 

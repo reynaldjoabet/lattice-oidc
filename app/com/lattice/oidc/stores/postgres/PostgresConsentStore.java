@@ -1,6 +1,6 @@
 package com.lattice.oidc.stores.postgres;
 
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.models.Consent;
 import com.lattice.oidc.stores.ConsentStore;
 import java.time.Instant;
@@ -25,7 +25,7 @@ public final class PostgresConsentStore implements ConsentStore {
         ? Optional.empty()
         : database.queryOne(
             "SELECT consent::text FROM obb_consents WHERE consent_id = ? AND keep_until > ?",
-            row -> Jsons.read(row.getString(1), Consent.class),
+            row -> JsonHelpers.read(row.getString(1), Consent.class),
             consentId, Instant.now());
   }
 
@@ -37,7 +37,7 @@ public final class PostgresConsentStore implements ConsentStore {
         ON CONFLICT (consent_id) DO UPDATE SET consent = EXCLUDED.consent, keep_until = EXCLUDED.keep_until
         """,
         consent.consentId(),
-        Jsons.write(consent),
+        JsonHelpers.write(consent),
         ConsentStore.keepUntil(consent.expirationDateTime()));
   }
 

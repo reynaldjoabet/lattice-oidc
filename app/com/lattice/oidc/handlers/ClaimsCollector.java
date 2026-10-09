@@ -2,7 +2,7 @@ package com.lattice.oidc.handlers;
 
 import com.authlete.common.dto.StringArray;
 import com.authlete.common.ida.DatasetExtractor;
-import com.lattice.oidc.common.Jsons;
+import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.models.User;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -189,6 +189,6 @@ public final class ClaimsCollector {
     if (claimsRequest == null || claimsRequest.isEmpty()) {
       return null;
     }
-    return Jsons.readMap(claimsRequest).get(VERIFIED_CLAIMS);
+    return JsonHelpers.readMap(claimsRequest).get(VERIFIED_CLAIMS);
   }
 }
