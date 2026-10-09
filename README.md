@@ -538,6 +538,7 @@ The console's event tables show these fields in a **Details** column.
 - **Outbound:** webhook deliveries per endpoint (delivered, retry, failed) and retries waiting; LDAP searches and binds by outcome, and its pool; sign-ins through each upstream identity provider; emails sent or failed.
 - **Two-step:** accounts with an authenticator app, and what is still under a previous encryption key.
 - **JVM and process:** memory, heap pressure, garbage collection, threads, CPU, open files, uptime, JVM version, and log events by level.
+- **Build:** `lattice_build_info{version, revision}`, always 1, naming the running version and commit. The same values come from `com.lattice.oidc.BuildInfo`, which the build generates. They also appear in the startup log line and the console's Overview header.
 
 Figures read from storage are refreshed at most every 30 seconds, however often Prometheus scrapes. Webhook endpoints are tagged by position and host, never by path, which may hold a secret.
 
@@ -2033,6 +2034,9 @@ DOCKER_REGISTRY=ghcr.io DOCKER_USERNAME=reynaldjoabet sbt --client Docker/publis
 | `JDK_JAVA_OPTIONS` | Always applied (the JVM logs a `Picked up JDK_JAVA_OPTIONS` line at start). `-Dpidfile.path=/dev/null` stops Play writing `RUNNING_PID` into the read-only app directory (it would fail to start), and `-Dlogger.resource=logback-container.xml` logs to stdout only. |
 | `JAVA_OPTS` | Defaults an operator can replace: heap at 75% of the container's memory limit, and exit on `OutOfMemoryError` so the orchestrator restarts the container. |
 | Port 9000 | Play's default `http.port`. |
+| `LOG_FORMAT` (`logback-container.xml`) | Unset or `text`: one readable line per event. `json`: one JSON object per line, from Logback's built-in `JsonEncoder` (`timestamp`, `level`, `loggerName`, `threadName`, `mdc`, `formattedMessage`, `throwable`), for log platforms that search by field. No extra dependency. |
+| Logs never dropped | Logging is asynchronous, so requests don't wait on stdout. Logback's `AsyncAppender` normally drops `TRACE`, `DEBUG` and `INFO` events once its queue is 80% full, which would include the `audit` log under load. `discardingThreshold` is 0, so a full queue makes the caller wait instead. |
+| `org.flywaydb` at `INFO` | Logs which database migrations ran at startup. |
 | `tini` entrypoint | Recommended by the native-packager docs. The JVM isn't PID 1, so it responds to the signals used for thread and heap dumps, and `tini` forwards `SIGTERM` (Play then shuts down gracefully) and reaps orphaned processes. Installed from Ubuntu's packages, as root, before the user is created. See [Why `tini`](#why-tini-process-1-is-special-in-linux). |
 | `no_version_check=1` | The start script otherwise runs `java -version` first, an extra JVM on every start, just to reject Java older than 8. |
 | Tags | `<version>`, plus the 12-character commit in GitHub Actions. No `latest`: a deployment should name the exact image it runs. |

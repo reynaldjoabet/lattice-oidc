@@ -11,7 +11,7 @@
   <div class="console-head" id="overview">
     <div>
       <h1>Overview</h1>
-      <p class="muted">@for(issuer <- page.issuer().toScala) {Issuer @issuer · }Signed in as @page.adminName() · values for this node</p>
+      <p class="muted">@for(issuer <- page.issuer().toScala) {Issuer @issuer · }Signed in as @page.adminName() · values for this node · Lattice @com.lattice.oidc.BuildInfo.version (<span class="mono">@com.lattice.oidc.metrics.Metrics.shortRevision()</span>)</p>
     </div>
   </div>
 

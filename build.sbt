@@ -117,9 +117,35 @@ ThisBuild / javacOptions ++= Seq("--release", "21")
 
 lazy val root = (project in file("."))
   // PlayJava already brings JavaServerAppPackaging (the start script and `stage`/`dist`).
-  .enablePlugins(PlayJava, DockerPlugin)
+  .enablePlugins(PlayJava, DockerPlugin, BuildInfoPlugin)
   .settings(
     name := "lattice-oidc",
+
+    // Play routes Apache Commons Logging to SLF4J with jcl-over-slf4j. commons-validator,
+    // commons-beanutils and Spring also bring the real commons-logging, which has the same
+    // classes; whichever comes first on the classpath would win. Excluding it leaves only the
+    // bridge, so their logs always go through Logback.
+    excludeDependencies += ExclusionRule("commons-logging", "commons-logging"),
+
+    // com.lattice.oidc.BuildInfo: which build is running, for logs, metrics and the console.
+    // No build time on purpose: it would make every build's output differ (and Play's dev mode
+    // recompile on every reload) even when nothing changed.
+    buildInfoPackage       := "com.lattice.oidc",
+    buildInfoRenderFactory := sbtbuildinfo.JavaStaticFieldsRenderer.apply,
+    buildInfoKeys          := Seq[BuildInfoKey](
+      name,
+      version,
+      // GitHub Actions sets GITHUB_SHA; elsewhere ask git; outside a checkout (a source archive),
+      // "unknown" rather than a failed build.
+      BuildInfoKey.action("gitRevision") {
+        sys.env.getOrElse("GITHUB_SHA", git("rev-parse", "HEAD").getOrElse("unknown"))
+      },
+      // When the commit was made, in UTC: stable for a given commit, unlike the build time.
+      BuildInfoKey.action("gitCommitTime") {
+        git("show", "--quiet", "--date=format-local:%Y-%m-%dT%H:%M:%SZ", "--format=%cd", "HEAD")
+          .getOrElse("unknown")
+      }
+    ),
 
     // Nothing reads the Scaladoc/Javadoc jar, so don't build it for `stage`, `dist` or the image.
     Compile / doc / sources                := Seq.empty,
@@ -200,3 +226,17 @@ lazy val root = (project in file("."))
 
 addCommandAlias("fmt", "scalafmtAll; scalafmtSbt")
 addCommandAlias("fmtCheck", "scalafmtCheckAll; scalafmtSbtCheck")
+
+/**
+  * Runs git in the build directory with TZ=UTC; None if git or the checkout is missing.
+  */
+def git(args: String*): Option[String] =
+  scala.util
+    .Try(
+      scala.sys.process
+        .Process("git" +: args, None, "TZ" -> "UTC")
+        .!!(scala.sys.process.ProcessLogger(_ => ()))
+        .trim
+    )
+    .toOption
+    .filter(_.nonEmpty)

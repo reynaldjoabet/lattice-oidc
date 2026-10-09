@@ -1,6 +1,8 @@
 package com.lattice.oidc.metrics;
 
+import com.lattice.oidc.BuildInfo;
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.binder.jvm.ClassLoaderMetrics;
@@ -56,6 +58,13 @@ public final class Metrics {
 
   @Inject
   public Metrics(ApplicationLifecycle lifecycle) {
+    // Which build is running: lattice_build_info{version,revision} 1, the usual Prometheus pattern.
+    Gauge.builder("lattice.build.info", () -> 1)
+        .description("The running build; the value is always 1")
+        .tag("version", BuildInfo.version)
+        .tag("revision", shortRevision())
+        .register(registry);
+    LOG.info("Lattice {} (commit {}, {})", BuildInfo.version, shortRevision(), BuildInfo.gitCommitTime);
     new ClassLoaderMetrics().bindTo(registry);
     new JvmMemoryMetrics().bindTo(registry);
     new JvmThreadMetrics().bindTo(registry);
@@ -77,6 +86,12 @@ public final class Metrics {
           registry.close();
           return CompletableFuture.completedFuture(null);
         });
+  }
+
+  /** The commit, shortened to 12 characters as in the image tags. */
+  public static String shortRevision() {
+    String revision = BuildInfo.gitRevision;
+    return revision.length() > 12 ? revision.substring(0, 12) : revision;
   }
 
   public MeterRegistry registry() {

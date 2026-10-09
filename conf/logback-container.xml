@@ -2,24 +2,59 @@
 
 <!-- Logging inside the Docker image (-Dlogger.resource=logback-container.xml, set in build.sbt).
      The image's files are read-only and the container runtime collects stdout, so there is no file
-     appender and no colour codes. Logger levels match logback.xml. -->
+     appender and no colour codes. Logger levels match logback.xml.
+
+     LOG_FORMAT=json writes one JSON object per line (Logback's own JsonEncoder: level, logger,
+     thread, MDC, message, exception), for log platforms that search by field. Anything else,
+     or unset, writes plain text. -->
 
 <!DOCTYPE configuration>
 
 <configuration>
   <import class="ch.qos.logback.classic.encoder.PatternLayoutEncoder"/>
+  <import class="ch.qos.logback.classic.encoder.JsonEncoder"/>
   <import class="ch.qos.logback.classic.AsyncAppender"/>
   <import class="ch.qos.logback.core.ConsoleAppender"/>
+  <import class="ch.qos.logback.core.boolex.PropertyEqualityCondition"/>
 
-  <appender name="STDOUT" class="ConsoleAppender">
-    <encoder class="PatternLayoutEncoder">
-      <charset>UTF-8</charset>
-      <pattern>%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level %logger{36} %X{pekkoSource} %msg%n</pattern>
-    </encoder>
-  </appender>
+  <property name="logFormat" value="${LOG_FORMAT:-text}"/>
+
+  <!-- Logback 1.5.20+ evaluates a <condition> placed just before an <if> (no Janino needed);
+       <then> runs when it holds, <else> otherwise. Any value but "json" means text. -->
+  <condition class="PropertyEqualityCondition">
+    <key>logFormat</key>
+    <value>json</value>
+  </condition>
+  <if>
+    <then>
+      <appender name="STDOUT" class="ConsoleAppender">
+        <encoder class="JsonEncoder">
+          <!-- The formatted message ("formattedMessage") is enough; the raw template ("message")
+               and its arguments would repeat it. -->
+          <withFormattedMessage>true</withFormattedMessage>
+          <withMessage>false</withMessage>
+          <withArguments>false</withArguments>
+          <withSequenceNumber>false</withSequenceNumber>
+          <withNanoseconds>false</withNanoseconds>
+          <withContext>false</withContext>
+        </encoder>
+      </appender>
+    </then>
+    <else>
+      <appender name="STDOUT" class="ConsoleAppender">
+        <encoder class="PatternLayoutEncoder">
+          <charset>UTF-8</charset>
+          <pattern>%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level %logger{36} %X{pekkoSource} %msg%n</pattern>
+        </encoder>
+      </appender>
+    </else>
+  </if>
 
   <appender name="ASYNCSTDOUT" class="AsyncAppender">
     <appender-ref ref="STDOUT"/>
+    <!-- By default a nearly full queue silently drops TRACE, DEBUG and INFO events, which includes
+         the audit log. 0 never drops: a full queue makes the caller wait instead. -->
+    <discardingThreshold>0</discardingThreshold>
   </appender>
 
   <logger name="play" level="INFO"/>
@@ -27,6 +62,8 @@
   <logger name="com.lattice.oidc" level="INFO"/>
   <logger name="access" level="INFO"/>
   <logger name="audit" level="INFO"/>
+  <!-- Which database migrations ran at startup. -->
+  <logger name="org.flywaydb" level="INFO"/>
 
   <root level="WARN">
     <appender-ref ref="ASYNCSTDOUT"/>
