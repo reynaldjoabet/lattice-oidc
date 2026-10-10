@@ -117,8 +117,16 @@ public final class AccountSecurityController extends BaseController {
     return signedIn(
         request,
         state -> {
-          logout.endSessionsOf(state.user(), state.sessionId());
-          audit.record(request, AuditService.Event.SESSION_ENDED, "subject", state.user().getSubject(), "scope", "others");
+          LogoutHandler.SignedOut signedOut = logout.endSessionsOf(state.user(), state.sessionId());
+          audit.record(
+              request,
+              AuditService.Event.SESSION_ENDED,
+              "subject",
+              state.user().getSubject(),
+              "scope",
+              "others",
+              "tokens_revoked",
+              LogoutHandler.auditValue(signedOut));
           return Requests.form(request).containsKey("changePassword")
               ? Results.seeOther(com.lattice.oidc.controllers.routes.AccountSecurityController.passwordForm())
               : Results.seeOther(com.lattice.oidc.controllers.routes.AccountSecurityController.sessions());
@@ -177,8 +185,9 @@ public final class AccountSecurityController extends BaseController {
           User updated = user.withPasswordHash(PasswordPolicy.hash(password));
           users.save(updated);
           boolean signOutEverywhere = form.containsKey("signOutEverywhere");
+          Object tokensRevoked = null;
           if (signOutEverywhere) {
-            logout.endSessionsOf(updated, state.sessionId());
+            tokensRevoked = LogoutHandler.auditValue(logout.endSessionsOf(updated, state.sessionId()));
           }
           audit.record(
               request,
@@ -186,7 +195,9 @@ public final class AccountSecurityController extends BaseController {
               "subject",
               user.getSubject(),
               "signed_out_everywhere",
-              signOutEverywhere);
+              signOutEverywhere,
+              "tokens_revoked",
+              tokensRevoked);
           return Pages.success(
               request,
               "Password changed",

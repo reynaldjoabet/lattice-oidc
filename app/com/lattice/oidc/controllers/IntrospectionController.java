@@ -10,12 +10,16 @@ import com.lattice.oidc.common.LatticeConfig.ResourceServer;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.common.Requests;
 import com.lattice.oidc.common.Responses;
+import com.lattice.oidc.security.JoseAlgorithms;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Optional;
 import java.util.concurrent.CompletionStage;
+import java.util.stream.Stream;
 import jakarta.inject.Inject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import play.mvc.Http;
 import play.mvc.Result;
 
@@ -31,13 +35,51 @@ import play.mvc.Result;
  */
 public final class IntrospectionController extends BaseController {
 
+  private static final Logger LOG = LoggerFactory.getLogger(IntrospectionController.class);
   private static final String CHALLENGE = "Basic realm=\"introspection\"";
+
+  /** 256 bits of base64url: what a resource server's secret should carry at least. */
+  static final int RECOMMENDED_SECRET_LENGTH = 43;
 
   private final LatticeConfig config;
 
   @Inject
   public IntrospectionController(LatticeConfig config) {
     this.config = config;
+    config.resourceServers().forEach(IntrospectionController::check);
+  }
+
+  /**
+   * Checks a resource server's settings when the application starts. Settings that would weaken its
+   * JWT introspection responses fail the start (see {@link JoseAlgorithms}): signing with {@code
+   * none}, encrypting keys with {@code RSA1_5} or {@code PBES2-*}, or an HMAC key shorter than its
+   * hash. A short Basic secret only logs a warning, since the development default is one: the secret
+   * is the resource server's password, and it should be random and at least 256 bits.
+   */
+  static void check(ResourceServer server) {
+    String prefix = "lattice.resource-servers (id " + server.id() + "): ";
+    Optional<String> signAlg = server.introspectionSignAlg();
+    Stream.of(
+            signAlg.flatMap(alg -> JoseAlgorithms.signingProblem(prefix + "introspection-sign-alg", alg)),
+            server.introspectionEncryptionAlg()
+                .flatMap(alg -> JoseAlgorithms.keyEncryptionProblem(prefix + "introspection-encryption-alg", alg)),
+            signAlg.flatMap(
+                alg ->
+                    JoseAlgorithms.hmacKeyProblem(
+                        prefix + "shared-key-for-sign", alg, server.sharedKeyForSign().orElse(null))))
+        .flatMap(Optional::stream)
+        .findFirst()
+        .ifPresent(
+            problem -> {
+              throw new IllegalStateException(problem);
+            });
+    if (server.secret().length() < RECOMMENDED_SECRET_LENGTH) {
+      LOG.warn(
+          "Resource server '{}' has a {}-character secret; use a random one of at least {} characters (256 bits).",
+          server.id(),
+          server.secret().length(),
+          RECOMMENDED_SECRET_LENGTH);
+    }
   }
 
   /**

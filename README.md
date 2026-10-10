@@ -409,6 +409,15 @@ sequenceDiagram
 
 **Idle timeout.** A session ends after `lattice.session.idle-timeout` (default 30 minutes) without activity, and in any case after `lattice.session.max-lifespan` (10 hours). An app using the session through native SSO counts as activity.
 
+**Signing out everywhere includes apps** (`LogoutHandler.endSessionsOf`). A password reset, a password change, and "Sign out other sessions" (when "Sign out everywhere else, including apps" is ticked, the default) do three things:
+- end the other sessions;
+- send back-channel logout to the apps used in them;
+- revoke every access and refresh token issued for the account, with one call to Authlete's `/auth/token/revoke` by subject.
+
+The third step is what makes the promise true. Tokens live in Authlete, not in Lattice's sessions, and Authlete doesn't ask Lattice about the user when an app refreshes. Without the revocation, an app that doesn't support back-channel logout would stay signed in. Worse, after an account takeover, the attacker's refresh token would keep working through the reset until it expired.
+
+Consents are kept, so apps on the device that stays signed in get new tokens without a password or consent page. Ending a single other session doesn't revoke anything, since tokens aren't tied to a session. If Authlete can't be reached, the reset still completes; the failure is logged as an error and appears in the audit event as `"tokens_revoked": "failed"`.
+
 ### Client credentials and key thumbprints
 
 **Basic credentials are form-decoded** (`Requests.basicCredentials`). RFC 6749 §2.3.1 has clients form-encode the client ID and secret before base64, so `s+cr%t` is sent as `s%2Bcr%25t`. Lattice decodes both before passing them on to Authlete or comparing them with an introspection caller's secret. A client that follows the spec authenticates even with such characters in its secret. Secrets made only of letters, digits, `-`, `_`, `.` and `~`, which is all Authlete generates, decode to themselves, so they work the same way as before.
@@ -426,6 +435,7 @@ These standalone helpers aren't all used by the sign-in flows yet. Each one's Ja
 
 | Helper | What it does | Why it's written this way |
 |---|---|---|
+| `JoseAlgorithms` | **Used by dynamic client registration** (create and update, `invalid_client_metadata`) **and at startup for resource servers' introspection settings**. Refuses `RSA1_5` and `PBES2-*` for key encryption, HMAC keys shorter than the hash, and `none` for ID tokens, client assertions, introspection, JARM and CIBA requests. `none` stays allowed for UserInfo and request objects, as OIDC permits. | `RSA1_5` is open to Bleichenbacher's padding-oracle attack. `PBES2` is password-based, and a crafted `p2c` iteration count makes the server burn CPU. `none` is refused only where it removes a protection: an unsigned UserInfo JWT or request object is no weaker than the unsigned JSON or query parameters used by default. |
 | `RedirectUris` | Checks redirect URIs when they're registered (`problem`) and when a request names one (`matches`) | Matching is exact, with no wildcards. The one exception is RFC 8252's any-port rule for loopback, and only for the IP literals `127.0.0.1` and `[::1]`, not the name `localhost`. It refuses: `..` segments (encoded or double-encoded too), user info, OAuth response parameters already in the query (parameter pollution), fragments, `http` except on loopback, `javascript:`/`data:`/`file:`, and private-use schemes that aren't reverse domain names. |
 | `Secrets` | Random tokens and codes | Characters are drawn without modulo bias. `lengthFor(bits, alphabet)` sizes a secret by the entropy it must carry, using integer arithmetic so the edge cases come out right. Default is 128 bits. |
 | `EcdsaSignatures` | Converts between JOSE `R‖S` and DER signatures | Strict both ways. It refuses r or s = 0 (CVE-2022-21449, "psychic signatures"). Lengths must be exact, never padded or truncated. DER must be canonical, which prevents signature malleability. It handles P-521's long-form length. Tests compare against nimbus. |
@@ -663,12 +673,15 @@ Code: `handlers/IdentityProvider.java` (Keycloak: `OIDCIdentityProvider`).
 Each instance is the relying-party client for a single OpenID Provider (one entry in the identity providers file, for example `"okta"`). It does the actual protocol work with that provider:
 
 - **Discovery**: fetches and caches the provider's `/.well-known/openid-configuration` and checks that `issuer` matches.
-- `authenticationRequest(state, verifier, nonce)`: builds the redirect URL to the provider's authorization endpoint, using the code flow with PKCE, `state` and `nonce`.
+- `authenticationRequest(state, verifier, nonce)`: builds the redirect URL to the provider's authorization endpoint, using the code flow with PKCE, `state` and `nonce`. If the provider supports the `claims` parameter, it also asks for `auth_time` as an essential claim.
 - `complete(callbackUrl, state, verifier, nonce)`:
   1. Parses the callback and checks `state`.
   2. Exchanges the code at the provider's token endpoint.
   3. Validates the ID token (signature from the provider's JWKS, issuer, audience, nonce).
   4. Calls UserInfo and checks that its `sub` matches the ID token's.
+  5. Returns the user's claims and the ID token's `auth_time`.
+
+**`auth_time` is the provider's, not the time of the callback.** Lattice didn't authenticate the user here; it accepted the provider's word, and the provider may have reused its own session from hours earlier without asking the user anything. The Lattice session, and so the `auth_time` of the ID tokens Lattice issues, takes the provider's `auth_time`. Only if the provider doesn't send one (or sends one in the future) is the time of the callback used. Otherwise a client asking for `max_age=300` could be satisfied by a sign-in far older than five minutes. When the user links the upstream account by entering their Lattice password, that password check is the authentication, so its time is used.
 
 ### `IdentityProviders`: the registry
 

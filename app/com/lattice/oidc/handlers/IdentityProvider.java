@@ -27,11 +27,14 @@ import com.nimbusds.openid.connect.sdk.AuthenticationRequest;
 import com.nimbusds.openid.connect.sdk.AuthenticationResponse;
 import com.nimbusds.openid.connect.sdk.AuthenticationResponseParser;
 import com.nimbusds.openid.connect.sdk.Nonce;
+import com.nimbusds.openid.connect.sdk.OIDCClaimsRequest;
 import com.nimbusds.openid.connect.sdk.OIDCScopeValue;
 import com.nimbusds.openid.connect.sdk.OIDCTokenResponse;
 import com.nimbusds.openid.connect.sdk.OIDCTokenResponseParser;
 import com.nimbusds.openid.connect.sdk.UserInfoRequest;
 import com.nimbusds.openid.connect.sdk.UserInfoResponse;
+import com.nimbusds.openid.connect.sdk.claims.ClaimRequirement;
+import com.nimbusds.openid.connect.sdk.claims.ClaimsSetRequest;
 import com.nimbusds.openid.connect.sdk.claims.IDTokenClaimsSet;
 import com.nimbusds.openid.connect.sdk.claims.UserInfo;
 import com.nimbusds.openid.connect.sdk.op.OIDCProviderConfigurationRequest;
@@ -40,6 +43,7 @@ import com.nimbusds.openid.connect.sdk.validators.IDTokenValidator;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.Date;
 
 /**
  * An upstream OpenID Provider (Okta, Azure AD, Google, ...) that end-users can sign in with
@@ -104,7 +108,7 @@ public final class IdentityProvider {
 
   /** Builds the authentication request to redirect the browser to. */
   public URI authenticationRequest(String state, String verifier, String nonce) throws IOException {
-    return new AuthenticationRequest.Builder(
+    AuthenticationRequest.Builder builder = new AuthenticationRequest.Builder(
             new ResponseType("code"),
             new Scope(
                 OIDCScopeValue.OPENID,
@@ -117,13 +121,31 @@ public final class IdentityProvider {
         .endpointURI(metadata().getAuthorizationEndpointURI())
         .state(new State(state))
         .nonce(new Nonce(nonce))
-        .codeChallenge(new CodeVerifier(verifier), CodeChallengeMethod.S256)
-        .build()
-        .toURI();
+        .codeChallenge(new CodeVerifier(verifier), CodeChallengeMethod.S256);
+    // Ask for auth_time, so that Lattice can pass on when the user really authenticated (an
+    // essential claim must be returned; OIDC Core 5.5.1). Only where the provider supports the
+    // claims parameter: without it, auth_time is used if the provider sends it anyway.
+    if (metadata().supportsClaimsParam()) {
+      builder.claims(
+          new OIDCClaimsRequest()
+              .withIDTokenClaimsRequest(
+                  new ClaimsSetRequest().add(new ClaimsSetRequest.Entry("auth_time").withClaimRequirement(ClaimRequirement.ESSENTIAL))));
+    }
+    return builder.build().toURI();
   }
 
   /** Completes the flow from the callback URL and returns the verified UserInfo. */
-  public UserInfo complete(URI callback, String state, String verifier, String nonce)
+  /**
+   * A completed upstream sign-in.
+   *
+   * @param userInfo the user's claims, from the UserInfo endpoint
+   * @param authTime when the user authenticated at the provider ({@code auth_time} of the ID token,
+   *     seconds since the epoch), or null if the provider didn't say. This can be long before now:
+   *     the provider may have reused its own session without asking the user for anything.
+   */
+  public record Authentication(UserInfo userInfo, Long authTime) {}
+
+  public Authentication complete(URI callback, String state, String verifier, String nonce)
       throws IOException {
     AuthenticationResponse response;
     try {
@@ -146,7 +168,8 @@ public final class IdentityProvider {
     if (!idToken.getSubject().equals(userInfo.getSubject())) {
       throw new IOException("UserInfo subject does not match the ID token subject.");
     }
-    return userInfo;
+    Date authTime = idToken.getAuthenticationTime();
+    return new Authentication(userInfo, authTime == null ? null : authTime.getTime() / 1000L);
   }
 
   private OIDCTokenResponse token(AuthorizationCode code, String verifier) throws IOException {

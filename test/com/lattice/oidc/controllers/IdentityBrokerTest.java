@@ -133,6 +133,57 @@ public class IdentityBrokerTest {
     assertEquals("alice@upstream", issue.getSubject());
   }
 
+  // --- auth_time: when the user really authenticated, not when Lattice heard about it ---
+
+  /** The provider supports the claims parameter, so auth_time is asked for as essential. */
+  @Test
+  public void theUpstreamRequestAsksForAuthTime() {
+    Result page = consentPage();
+    Result r =
+        route(app, get("/api/federation/initiation/upstream?ticket=ticket-1").session(page.session().data()));
+    Map<String, String[]> query = Requests.decode(URI.create(r.redirectLocation().orElseThrow()).getRawQuery());
+    String claims = Requests.first(query, "claims");
+    assertTrue(claims, claims != null && claims.contains("\"auth_time\"") && claims.contains("\"essential\":true"));
+  }
+
+  /** A sign-in the provider did an hour ago (its own session) is reported as an hour ago. */
+  @Test
+  public void theProvidersAuthTimeIsPassedOn() {
+    long anHourAgo = System.currentTimeMillis() / 1000L - 3600;
+    upstream.authTime = anHourAgo;
+    Result page = consentPage();
+    Result back = callback(page, initiate(page));
+    authorize(back);
+    assertEquals(anHourAgo, ((AuthorizationIssueRequest) fake.lastRequest("authorizationIssue")).getAuthTime());
+  }
+
+  @Test
+  public void keepingAccountsSeparateKeepsTheProvidersAuthTime() {
+    long anHourAgo = System.currentTimeMillis() / 1000L - 3600;
+    upstream.authTime = anHourAgo;
+    upstream.email = "john@example.com";
+    Result page = consentPage();
+    Result asked = callback(page, initiate(page));
+    Result separate = answer(page, linkId(asked), Map.of("separate", "true"));
+    authorize(separate);
+    assertEquals(anHourAgo, ((AuthorizationIssueRequest) fake.lastRequest("authorizationIssue")).getAuthTime());
+  }
+
+  /** Without auth_time, or with one in the future, the time Lattice accepted the sign-in is used. */
+  @Test
+  public void aMissingOrFutureAuthTimeCountsAsNow() {
+    long now = 1_800_000_000L;
+    assertEquals(now, IdentityBrokerController.authTime(null, now));
+    assertEquals(now, IdentityBrokerController.authTime(now + 60, now));
+    assertEquals(now - 60, IdentityBrokerController.authTime(now - 60, now));
+
+    Result page = consentPage();
+    long before = System.currentTimeMillis() / 1000L;
+    authorize(callback(page, initiate(page)));
+    long reported = ((AuthorizationIssueRequest) fake.lastRequest("authorizationIssue")).getAuthTime();
+    assertTrue(reported >= before && reported <= System.currentTimeMillis() / 1000L);
+  }
+
   @Test
   public void callbackFromAnotherBrowserIsRejectedBeforeRedeemingTheCode() {
     Result page = consentPage();

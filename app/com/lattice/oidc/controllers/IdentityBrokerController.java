@@ -69,7 +69,8 @@ public final class IdentityBrokerController extends BaseController {
       String externalSubject,
       Map<String, Object> claims,
       String localSubject,
-      String ticket) {}
+      String ticket,
+      Long upstreamAuthTime) {}
 
   private final IdentityProviders providers;
   private final SignInFlow flow;
@@ -166,10 +167,10 @@ public final class IdentityBrokerController extends BaseController {
                 request, 400, "Request expired", "Please start again from the application.");
           }
 
-          UserInfo userInfo;
+          IdentityProvider.Authentication upstream;
           long started = System.nanoTime();
           try {
-            userInfo =
+            upstream =
                 provider
                     .get()
                     .complete(
@@ -188,6 +189,8 @@ public final class IdentityBrokerController extends BaseController {
             return Pages.authorization(request, page, 502);
           }
 
+          UserInfo userInfo = upstream.userInfo();
+          long authTime = authTime(upstream.authTime(), System.currentTimeMillis() / 1000L);
           String externalSubject = userInfo.getSubject().getValue();
           Map<String, Object> claims = new LinkedHashMap<>(userInfo.toJSONObject());
           claims.remove("sub");
@@ -196,7 +199,7 @@ public final class IdentityBrokerController extends BaseController {
           // Already linked: sign in to the local account.
           Optional<User> linked = links.localSubject(providerId, externalSubject).flatMap(users::bySubject);
           if (linked.isPresent()) {
-            return signIn(request, browserId, ticket, interaction.get(), linked.get(), providerId);
+            return signIn(request, browserId, ticket, interaction.get(), linked.get(), providerId, authTime);
           }
 
           // The email belongs to an existing password account: offer to link them.
@@ -208,12 +211,13 @@ public final class IdentityBrokerController extends BaseController {
             String linkId = UserSessions.randomId();
             PendingLink link =
                 new PendingLink(
-                    providerId, provider.get().name(), externalSubject, claims, existing.get().getSubject(), ticket);
+                    providerId, provider.get().name(), externalSubject, claims, existing.get().getSubject(), ticket, authTime);
             interactions.put(LINK, linkId, browserId, link);
             return linkPage(request, linkId, link, existing.get(), Optional.empty(), 200);
           }
 
-          return signIn(request, browserId, ticket, interaction.get(), provision(providerId, externalSubject, claims), providerId);
+          return signIn(
+              request, browserId, ticket, interaction.get(), provision(providerId, externalSubject, claims), providerId, authTime);
         });
   }
 
@@ -242,7 +246,9 @@ public final class IdentityBrokerController extends BaseController {
           if (!form.containsKey("link")) {
             interactions.take(LINK, linkId, browserId, PendingLink.class);
             User separate = provision(link.providerId(), link.externalSubject(), link.claims());
-            return signIn(request, browserId, link.ticket(), interaction.get(), separate, link.providerId());
+            long upstreamAuthTime =
+                authTime(link.upstreamAuthTime(), System.currentTimeMillis() / 1000L);
+            return signIn(request, browserId, link.ticket(), interaction.get(), separate, link.providerId(), upstreamAuthTime);
           }
 
           LoginService.Result result = login.authenticate(local.get().loginId(), Requests.first(form, "password"), request.remoteAddress());
@@ -270,8 +276,21 @@ public final class IdentityBrokerController extends BaseController {
               local.get().getSubject(),
               "identity_provider",
               link.providerId());
-          return signIn(request, browserId, link.ticket(), interaction.get(), local.get(), link.providerId());
+          // The password was checked just now: that is when the user authenticated.
+          return signIn(
+              request, browserId, link.ticket(), interaction.get(), local.get(), link.providerId(), System.currentTimeMillis() / 1000L);
         });
+  }
+
+  /**
+   * When the user authenticated, for {@code auth_time} in the ID tokens Lattice issues: the
+   * provider's {@code auth_time} if it gave one, otherwise now. Lattice didn't authenticate the user
+   * itself here, it accepted the provider's statement, and the provider may have reused a session
+   * from hours ago; passing "now" on would let a client's {@code max_age} be met by a sign-in far
+   * older than it allows. A time in the future (clock skew) counts as now.
+   */
+  static long authTime(Long upstream, long now) {
+    return upstream == null || upstream > now ? now : upstream;
   }
 
   /** Starts a session for the user and shows the consent page of the pending request. */
@@ -281,9 +300,10 @@ public final class IdentityBrokerController extends BaseController {
       String ticket,
       AuthorizationInteraction interaction,
       User user,
-      String providerId) {
+      String providerId,
+      long authTime) {
     Map<String, String> sessionOut = new HashMap<>();
-    sessions.login(user, System.currentTimeMillis() / 1000L, null, sessionOut, request, providers.get(providerId).map(provider -> provider.name()).orElse(providerId));
+    sessions.login(user, authTime, null, sessionOut, request, providers.get(providerId).map(provider -> provider.name()).orElse(providerId));
     audit.record(
         request,
         AuditService.Event.BROKERED_LOGIN,

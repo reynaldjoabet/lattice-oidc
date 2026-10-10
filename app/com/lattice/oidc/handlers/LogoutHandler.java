@@ -5,6 +5,8 @@ import com.authlete.common.dto.BackchannelLogoutTokenRequest;
 import com.authlete.common.dto.BackchannelLogoutTokenResponse;
 import com.authlete.common.dto.Client;
 import com.authlete.common.dto.NativeSsoLogoutRequest;
+import com.authlete.common.dto.TokenRevokeRequest;
+import com.authlete.common.dto.TokenRevokeResponse;
 import com.lattice.oidc.client.AuthleteExecutionContext;
 import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.common.LatticeConfig;
@@ -206,12 +208,32 @@ public final class LogoutHandler {
   }
 
   /**
-   * Ends every session of the account except {@code keepSessionId} (null ends them all), each with
-   * back-channel logout to its apps.
+   * What signing out everywhere did.
    *
-   * @return the client identifiers that were told to sign out
+   * @param clients the client identifiers that were sent a back-channel logout
+   * @param tokensRevoked how many access/refresh tokens Authlete revoked, or null if the revocation
+   *     failed (the sessions are ended either way)
    */
-  public java.util.Set<String> endSessionsOf(com.lattice.oidc.models.User user, String keepSessionId) {
+  public record SignedOut(java.util.Set<String> clients, Integer tokensRevoked) {}
+
+  /** For the audit log: the number of tokens revoked, or "failed". */
+  public static Object auditValue(SignedOut signedOut) {
+    return signedOut.tokensRevoked() == null ? "failed" : signedOut.tokensRevoked();
+  }
+
+  /**
+   * Signs the account out everywhere except the session {@code keepSessionId} (null: everywhere),
+   * including in apps.
+   *
+   * <p>Ending the sessions and sending back-channel logout is not enough on its own: the access and
+   * refresh tokens Authlete issued to apps are not tied to Lattice's sessions, and Authlete never
+   * asks Lattice about the user when an app refreshes. An app without back-channel logout, or an
+   * attacker holding a copied refresh token, would stay signed in until the token expired, even after
+   * a password reset. So every token issued for the account is revoked too, with one call to
+   * Authlete's {@code /auth/token/revoke} by subject. Consents are kept, so apps on the device kept
+   * signed in get new tokens without a password or consent page.
+   */
+  public SignedOut endSessionsOf(com.lattice.oidc.models.User user, String keepSessionId) {
     java.util.Set<String> clients = new java.util.TreeSet<>();
     for (UserSessions.SessionInfo session : sessions.sessionsOf(user.getSubject())) {
       if (session.sessionId().equals(keepSessionId)) {
@@ -221,7 +243,22 @@ public final class LogoutHandler {
       endSession(new LoginState(user, session.sessionId(), 0L, null));
       sessions.end(session.sessionId());
     }
-    return clients;
+    return new SignedOut(clients, revokeTokensOf(user.getSubject()));
+  }
+
+  /**
+   * Revokes every access and refresh token issued for {@code subject}, in every app; null if
+   * Authlete couldn't be reached or refused (logged as an error, since the user was told their apps
+   * are signed out).
+   */
+  private Integer revokeTokensOf(String subject) {
+    try {
+      TokenRevokeResponse response = api.get().tokenRevoke(new TokenRevokeRequest().setSubject(subject));
+      return response.getCount();
+    } catch (RuntimeException e) {
+      LOG.error("Could not revoke the tokens of subject {}; apps may stay signed in until their tokens expire", subject, e);
+      return null;
+    }
   }
 
   /** Exact match against post_logout_redirect_uris (custom client metadata), else redirect_uris. */

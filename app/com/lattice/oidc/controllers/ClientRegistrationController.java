@@ -11,8 +11,10 @@ import com.lattice.oidc.common.Responses;
 import com.lattice.oidc.common.WebException;
 import com.lattice.oidc.handlers.ObbDcrHandler;
 import com.lattice.oidc.security.AuditService;
+import com.lattice.oidc.security.JoseAlgorithms;
 import com.lattice.oidc.security.ObbCertValidator;
 import java.security.GeneralSecurityException;
+import java.util.Map;
 import java.util.concurrent.CompletionStage;
 import jakarta.inject.Inject;
 import play.mvc.BodyParser;
@@ -125,6 +127,7 @@ public final class ClientRegistrationController extends BaseController {
   }
 
   private String preprocess(Http.Request request, String body) {
+    rejectUnsafeAlgorithms(body);
     if (!config.obbEnabled()) {
       return body;
     }
@@ -135,6 +138,24 @@ public final class ClientRegistrationController extends BaseController {
     }
     validateCertificate(chain);
     return obbDcr.process(body);
+  }
+
+  /** Refuses metadata asking for {@code none}, {@code RSA1_5} or {@code PBES2-*} (see {@link JoseAlgorithms}). */
+  private static void rejectUnsafeAlgorithms(String body) {
+    Map<String, Object> metadata;
+    try {
+      metadata = JsonHelpers.readMap(body);
+    } catch (RuntimeException e) {
+      return; // Not JSON: Authlete's registration API reports that itself.
+    }
+    if (metadata == null) {
+      return;
+    }
+    JoseAlgorithms.problem(metadata)
+        .ifPresent(
+            problem -> {
+              throw new WebException(Responses.badRequest(Responses.error("invalid_client_metadata", problem)));
+            });
   }
 
   private void requireObbCertIfObbClient(Http.Request request, String clientId) {

@@ -32,7 +32,8 @@ public class AccountSecurityTest {
 
   @Before
   public void start() {
-    fake.answer("nativeSsoLogout", args -> null);
+    fake.answer("nativeSsoLogout", args -> null)
+        .answer("tokenRevoke", args -> new com.authlete.common.dto.TokenRevokeResponse().setCount(1));
     app = app(fake);
     Helpers.start(app);
   }
@@ -84,6 +85,8 @@ public class AccountSecurityTest {
     assertEquals(303, ended.status());
     assertFalse(signedIn(windows));
     assertTrue(signedIn(mac));
+    // Tokens aren't tied to a session: revoking them would sign the user out of their apps everywhere.
+    assertEquals(0, fake.count("tokenRevoke"));
   }
 
   @Test
@@ -142,6 +145,9 @@ public class AccountSecurityTest {
     assertEquals(303, done.status());
     assertFalse(signedIn(windows));
     assertTrue(signedIn(mac));
+    // Apps too: the account's tokens are revoked, not just the other sessions ended.
+    assertEquals(1, fake.count("tokenRevoke"));
+    assertEquals("1001", ((com.authlete.common.dto.TokenRevokeRequest) fake.lastRequest("tokenRevoke")).getSubject());
   }
 
   @Test
@@ -170,6 +176,7 @@ public class AccountSecurityTest {
     assertEquals(LoginService.Outcome.SUCCESS, login.authenticate("john", strong).outcome());
     assertFalse("other sessions are signed out", signedIn(windows));
     assertTrue("this one stays", signedIn(mac));
+    assertEquals("and the apps", 1, fake.count("tokenRevoke"));
   }
 
   @Test

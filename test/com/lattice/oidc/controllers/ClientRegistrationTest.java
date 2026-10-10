@@ -99,6 +99,38 @@ public class ClientRegistrationTest {
     assertEquals("rat-123", sent.getToken());
   }
 
+  /** RSA1_5, PBES2-* and "none" are refused before anything reaches Authlete. */
+  @Test
+  public void unsafeJoseAlgorithmsAreRefused() {
+    for (String metadata :
+        List.of(
+            "\"id_token_encrypted_response_alg\":\"RSA1_5\"",
+            "\"userinfo_encrypted_response_alg\":\"PBES2-HS256+A128KW\"",
+            "\"id_token_signed_response_alg\":\"none\"")) {
+      String body = "{\"redirect_uris\":[\"https://client.example/cb\"]," + metadata + "}";
+      Result r = route(app, request("POST", "/api/register", body, null));
+      assertEquals(metadata, 400, r.status());
+      assertTrue(contentAsString(r).contains("invalid_client_metadata"));
+      assertEquals(400, route(app, request("PUT", "/api/register/7", body, null)).status());
+    }
+    assertEquals(0, fake.count("dynamicClientRegister"));
+    assertEquals(0, fake.count("dynamicClientUpdate"));
+
+    String safe = "{\"redirect_uris\":[\"https://client.example/cb\"],\"id_token_encrypted_response_alg\":\"RSA-OAEP-256\"}";
+    assertEquals(201, route(app, request("POST", "/api/register", safe, null)).status());
+  }
+
+  /** OIDC allows unsigned UserInfo and request objects; they are no weaker than the unsigned defaults. */
+  @Test
+  public void noneIsAllowedWhereOpenIdConnectAllowsIt() {
+    for (String member : List.of("userinfo_signed_response_alg", "request_object_signing_alg")) {
+      String body = "{\"redirect_uris\":[\"https://client.example/cb\"],\"" + member + "\":\"none\"}";
+      assertEquals(member, 201, route(app, request("POST", "/api/register", body, null)).status());
+    }
+    String clientAuth = "{\"redirect_uris\":[\"https://client.example/cb\"],\"token_endpoint_auth_signing_alg\":\"none\"}";
+    assertEquals(400, route(app, request("POST", "/api/register", clientAuth, null)).status());
+  }
+
   @Test
   public void obbRegistrationWithoutCertificateIsRejected() {
     Result r = route(app, request("POST", "/api/register", directory.validRequestBody(), null));

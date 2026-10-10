@@ -38,6 +38,8 @@ public final class FakeUpstreamProvider implements AutoCloseable {
   public volatile String idTokenSubject = "alice";
   public volatile String userInfoSubject = "alice";
   public volatile String email = "alice@upstream.example";
+  /** The ID token's auth_time (seconds since the epoch), or null to leave it out. */
+  public volatile Long authTime;
 
   public FakeUpstreamProvider() throws IOException, JOSEException {
     key = new RSAKeyGenerator(2048).keyID("k1").generate();
@@ -82,6 +84,7 @@ public final class FakeUpstreamProvider implements AutoCloseable {
         + "\"jwks_uri\":\"" + issuer + "/jwks\","
         + "\"response_types_supported\":[\"code\"],"
         + "\"subject_types_supported\":[\"public\"],"
+        + "\"claims_parameter_supported\":true,"
         + "\"id_token_signing_alg_values_supported\":[\"RS256\"]}";
   }
 
@@ -100,6 +103,7 @@ public final class FakeUpstreamProvider implements AutoCloseable {
                   .issueTime(now)
                   .expirationTime(new Date(now.getTime() + 300_000))
                   .claim("nonce", nonce)
+                  .claim("auth_time", authTime)
                   .build());
       idToken.sign(new RSASSASigner(key));
       json(

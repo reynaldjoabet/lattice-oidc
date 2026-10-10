@@ -98,8 +98,9 @@ public final class RecoveryController extends BaseController {
             return expired(request);
           }
           boolean signOutEverywhere = form.containsKey("signOutEverywhere");
+          Object tokensRevoked = null;
           if (signOutEverywhere) {
-            logout.endSessionsOf(updated.get(), null);
+            tokensRevoked = LogoutHandler.auditValue(logout.endSessionsOf(updated.get(), null));
           }
           audit.record(
               request,
@@ -107,7 +108,9 @@ public final class RecoveryController extends BaseController {
               "subject",
               updated.get().getSubject(),
               "signed_out_everywhere",
-              signOutEverywhere);
+              signOutEverywhere,
+              "tokens_revoked",
+              tokensRevoked);
           return page(
               200,
               views.html.oidc.resetDone

@@ -6,11 +6,14 @@ import static com.lattice.oidc.OidcTestSupport.route;
 import static com.lattice.oidc.OidcTestSupport.withCsrf;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static play.inject.Bindings.bind;
 import static play.test.Helpers.contentAsString;
 
 import com.authlete.common.api.AuthleteApi;
+import com.authlete.common.dto.TokenRevokeRequest;
+import com.authlete.common.dto.TokenRevokeResponse;
 import com.lattice.oidc.client.FakeAuthleteApi;
 import com.lattice.oidc.common.Mailer;
 import com.lattice.oidc.security.LoginService;
@@ -41,7 +44,8 @@ public class AccountRecoveryTest {
 
   @Before
   public void start() {
-    fake.answer("nativeSsoLogout", args -> null);
+    fake.answer("nativeSsoLogout", args -> null)
+        .answer("tokenRevoke", args -> new TokenRevokeResponse().setCount(2));
     app =
         new GuiceApplicationBuilder()
             .overrides(
@@ -185,6 +189,42 @@ public class AccountRecoveryTest {
     String after = contentAsString(route(app, get("/account").session(session)));
     assertFalse(after.contains("John Flibble Smith"));
     assertTrue(after.contains("to manage your account"));
+  }
+
+  /**
+   * Account takeover: someone who signed in with the stolen password may hold a refresh token.
+   * Ending the sessions doesn't reach it (tokens live in Authlete, not in Lattice's sessions), so
+   * the reset revokes every token issued for the account.
+   */
+  @Test
+  public void resettingRevokesTheAccountsTokensInEveryApp() {
+    requestLink("john");
+    reset(token(), NEW_PASSWORD, NEW_PASSWORD, true);
+    assertEquals(1, fake.count("tokenRevoke"));
+    TokenRevokeRequest revoke = fake.lastRequest("tokenRevoke");
+    assertEquals("1001", revoke.getSubject());
+    assertNull("by subject: every app's tokens, not one client's", revoke.getClientIdentifier());
+  }
+
+  @Test
+  public void keepingOtherSessionsKeepsTheTokens() {
+    requestLink("john");
+    reset(token(), NEW_PASSWORD, NEW_PASSWORD, false);
+    assertEquals(0, fake.count("tokenRevoke"));
+  }
+
+  /** The password is changed and the sessions ended even if Authlete can't revoke the tokens. */
+  @Test
+  public void aFailedRevocationDoesNotUndoTheReset() {
+    fake.answer("tokenRevoke", args -> { throw new IllegalStateException("Authlete unavailable"); });
+    Result signedIn =
+        route(app, withCsrf(post("/account/login", Map.of("loginId", "john", "password", "john", "next", "account"))));
+    requestLink("john");
+    Result done = reset(token(), NEW_PASSWORD, NEW_PASSWORD, true);
+    assertEquals(200, done.status());
+    assertFalse(contentAsString(route(app, get("/account").session(signedIn.session().data()))).contains("John Flibble Smith"));
+    LoginService login = app.injector().instanceOf(LoginService.class);
+    assertEquals(LoginService.Outcome.SUCCESS, login.authenticate("john", NEW_PASSWORD).outcome());
   }
 
   @Test
