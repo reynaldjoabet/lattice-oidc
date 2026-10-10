@@ -95,8 +95,34 @@ public final class Requests {
     return header(request, "Authorization");
   }
 
+  /**
+   * The client ID and secret from {@code Authorization: Basic}, form-decoded as RFC 6749, section
+   * 2.3.1 requires: a client sends both {@code application/x-www-form-urlencoded} before base64, so a
+   * secret with {@code +}, {@code %} or {@code :} arrives as {@code %2B}, {@code %25} or {@code %3A}.
+   * Without decoding, such a client could never authenticate. Secrets made of letters, digits, {@code
+   * -}, {@code _}, {@code .} and {@code ~} (as Authlete generates) decode to themselves.
+   */
   public static BasicCredentials basicCredentials(Http.Request request) {
-    return BasicCredentials.parse(authorization(request));
+    BasicCredentials raw = BasicCredentials.parse(authorization(request));
+    if (raw == null) {
+      return null;
+    }
+    return new BasicCredentials(formDecoded(raw.getUserId()), formDecoded(raw.getPassword()));
+  }
+
+  /**
+   * {@code value} form-decoded, or as it is when it isn't valid form encoding (a lone {@code %}): the
+   * server then rejects it as a wrong credential rather than as a malformed request.
+   */
+  static String formDecoded(String value) {
+    if (value == null) {
+      return null;
+    }
+    try {
+      return URLDecoder.decode(value, StandardCharsets.UTF_8);
+    } catch (IllegalArgumentException e) {
+      return value;
+    }
   }
 
   /** Access token from {@code Authorization: DPoP|Bearer ...}, else the given fallback. */

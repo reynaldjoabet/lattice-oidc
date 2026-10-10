@@ -4,14 +4,13 @@ import com.authlete.common.api.AuthleteApi;
 import com.authlete.common.dto.NativeSsoRequest;
 import com.authlete.common.dto.NativeSsoResponse;
 import com.authlete.common.dto.TokenResponse;
+import com.lattice.oidc.common.Digests;
 import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.common.Responses;
 import com.lattice.oidc.security.UserSessions;
 import com.lattice.oidc.stores.EphemeralStore;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
 import java.util.Map;
 import java.util.Objects;
@@ -103,7 +102,7 @@ public final class NativeSsoHandler {
       return register(sessionId);
     }
     Optional<Registered> known =
-        store.get(NAMESPACE, hash(presented)).map(entry -> JsonHelpers.read(entry.json(), Registered.class));
+        store.get(NAMESPACE, Digests.sha256Base64Url(presented)).map(entry -> JsonHelpers.read(entry.json(), Registered.class));
     if (known.isPresent()
         && (presentedHash == null || Objects.equals(known.get().hash(), presentedHash))
         && Objects.equals(known.get().sessionId(), sessionId)) {
@@ -118,7 +117,7 @@ public final class NativeSsoHandler {
 
   private DeviceSecret register(String sessionId) {
     String value = UserSessions.randomId();
-    DeviceSecret deviceSecret = new DeviceSecret(value, hash(value), sessionId);
+    DeviceSecret deviceSecret = new DeviceSecret(value, Digests.sha256Base64Url(value), sessionId);
     store.put(
         NAMESPACE,
         deviceSecret.hash(),
@@ -127,15 +126,5 @@ public final class NativeSsoHandler {
         JsonHelpers.write(new Registered(deviceSecret.hash(), sessionId)),
         config.sessionMaxLifespan());
     return deviceSecret;
-  }
-
-  static String hash(String value) {
-    try {
-      byte[] digest =
-          MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
-      return Base64.getUrlEncoder().withoutPadding().encodeToString(digest);
-    } catch (NoSuchAlgorithmException e) {
-      throw new IllegalStateException(e);
-    }
   }
 }

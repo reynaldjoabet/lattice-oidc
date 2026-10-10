@@ -1,5 +1,6 @@
 package com.lattice.oidc.security;
 
+import com.lattice.oidc.common.Digests;
 import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.common.Mailer;
@@ -8,8 +9,6 @@ import com.lattice.oidc.stores.CounterStore;
 import com.lattice.oidc.stores.EphemeralStore;
 import com.lattice.oidc.stores.UserStore;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.Optional;
@@ -93,7 +92,7 @@ public final class RecoveryService {
     // Only the newest link works: earlier ones for this account are deleted.
     String token = randomToken();
     store.deleteBySubject(TOKENS, subject);
-    store.put(TOKENS, sha256(token), null, subject, JsonHelpers.write(new Pending(subject, next, user.get().email().get())), config.linkLifetime());
+    store.put(TOKENS, Digests.sha256Base64Url(token), null, subject, JsonHelpers.write(new Pending(subject, next, user.get().email().get())), config.linkLifetime());
 
     long minutes = config.linkLifetime().toMinutes();
     mailer.send(
@@ -112,7 +111,7 @@ public final class RecoveryService {
     return token == null || token.isEmpty()
         ? Optional.empty()
         : store
-            .get(TOKENS, sha256(token))
+            .get(TOKENS, Digests.sha256Base64Url(token))
             .map(entry -> JsonHelpers.read(entry.json(), Pending.class))
             .filter(pending -> users.bySubject(pending.subject()).filter(user -> stillApplies(pending, user)).isPresent());
   }
@@ -129,7 +128,7 @@ public final class RecoveryService {
     }
     // Taking the link is the single-use step: of two concurrent resets, only one gets it.
     Optional<Pending> pending =
-        store.take(TOKENS, sha256(token)).map(entry -> JsonHelpers.read(entry.json(), Pending.class));
+        store.take(TOKENS, Digests.sha256Base64Url(token)).map(entry -> JsonHelpers.read(entry.json(), Pending.class));
     if (pending.isEmpty()) {
       return Optional.empty();
     }
@@ -151,14 +150,5 @@ public final class RecoveryService {
     byte[] bytes = new byte[32];
     RANDOM.nextBytes(bytes);
     return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-  }
-
-  private static String sha256(String value) {
-    try {
-      byte[] digest = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
-      return Base64.getUrlEncoder().withoutPadding().encodeToString(digest);
-    } catch (NoSuchAlgorithmException e) {
-      throw new IllegalStateException(e);
-    }
   }
 }

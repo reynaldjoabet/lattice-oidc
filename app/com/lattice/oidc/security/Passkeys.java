@@ -1,5 +1,6 @@
 package com.lattice.oidc.security;
 
+import com.lattice.oidc.common.Digests;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.models.Passkey;
 import com.lattice.oidc.models.UiSettings;
@@ -31,8 +32,6 @@ import com.yubico.webauthn.exception.AssertionFailedException;
 import com.yubico.webauthn.exception.RegistrationFailedException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.HashSet;
@@ -196,7 +195,7 @@ public final class Passkeys {
   public AssertionRequest startApproval(String subject, String details) {
     byte[] random = new byte[32];
     RANDOM.nextBytes(random);
-    byte[] challenge = sha256(random, details.getBytes(StandardCharsets.UTF_8));
+    byte[] challenge = Digests.sha256(random, details.getBytes(StandardCharsets.UTF_8));
     List<PublicKeyCredentialDescriptor> allowed =
         store.forSubject(subject).stream()
             .map(passkey -> PublicKeyCredentialDescriptor.builder().id(bytes(passkey.id())).build())
@@ -245,18 +244,6 @@ public final class Passkeys {
     try {
       return ByteArray.fromBase64Url(base64Url);
     } catch (Base64UrlException e) {
-      throw new IllegalStateException(e);
-    }
-  }
-
-  private static byte[] sha256(byte[]... parts) {
-    try {
-      MessageDigest digest = MessageDigest.getInstance("SHA-256");
-      for (byte[] part : parts) {
-        digest.update(part);
-      }
-      return digest.digest();
-    } catch (NoSuchAlgorithmException e) {
       throw new IllegalStateException(e);
     }
   }

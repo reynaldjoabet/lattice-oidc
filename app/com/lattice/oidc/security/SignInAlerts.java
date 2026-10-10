@@ -1,10 +1,9 @@
 package com.lattice.oidc.security;
 
+import com.lattice.oidc.common.Digests;
 import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.stores.EphemeralStore;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -50,7 +49,7 @@ public final class SignInAlerts {
   }
 
   void onSignIn(String subject, String browserId, String sessionId, String device, String ip, String method) {
-    String browserKey = subject + "|" + hash(browserId);
+    String browserKey = subject + "|" + Digests.sha256Base64Url(browserId);
     boolean firstSignIn = store.bySubject(BROWSERS, subject).isEmpty();
     boolean newBrowser = store.get(BROWSERS, browserKey).isEmpty();
     store.put(BROWSERS, browserKey, null, subject, "{}", TTL);
@@ -75,14 +74,5 @@ public final class SignInAlerts {
       return Optional.empty();
     }
     return store.take(ALERTS, alertId).map(entry -> JsonHelpers.read(entry.json(), Alert.class));
-  }
-
-  private static String hash(String value) {
-    try {
-      byte[] digest = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
-      return Base64.getUrlEncoder().withoutPadding().encodeToString(digest);
-    } catch (NoSuchAlgorithmException e) {
-      throw new IllegalStateException(e);
-    }
   }
 }

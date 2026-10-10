@@ -1,5 +1,6 @@
 package com.lattice.oidc.security;
 
+import com.lattice.oidc.common.Digests;
 import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.common.Mailer;
 import com.lattice.oidc.models.User;
@@ -7,8 +8,6 @@ import com.lattice.oidc.stores.CounterStore;
 import com.lattice.oidc.stores.EphemeralStore;
 import com.lattice.oidc.stores.UserStore;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Base64;
@@ -67,7 +66,7 @@ public final class EmailVerification {
     RANDOM.nextBytes(bytes);
     String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     store.deleteBySubject(TOKENS, user.getSubject());
-    store.put(TOKENS, sha256(token), null, user.getSubject(), JsonHelpers.write(new Sent(email.get())), LINK_LIFETIME);
+    store.put(TOKENS, Digests.sha256Base64Url(token), null, user.getSubject(), JsonHelpers.write(new Sent(email.get())), LINK_LIFETIME);
     mailer.send(
         email.get(),
         "Verify your email",
@@ -89,7 +88,7 @@ public final class EmailVerification {
     if (token == null || token.isEmpty()) {
       return Optional.empty();
     }
-    Optional<EphemeralStore.Entry> entry = store.take(TOKENS, sha256(token));
+    Optional<EphemeralStore.Entry> entry = store.take(TOKENS, Digests.sha256Base64Url(token));
     if (entry.isEmpty()) {
       return Optional.empty();
     }
@@ -104,14 +103,5 @@ public final class EmailVerification {
   /** Whether the account's current email is still {@code sentTo} (addresses compare case-insensitively). */
   static boolean sameAddress(Optional<String> current, String sentTo) {
     return sentTo != null && current.map(email -> email.trim().equalsIgnoreCase(sentTo.trim())).orElse(false);
-  }
-
-  private static String sha256(String value) {
-    try {
-      byte[] digest = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
-      return Base64.getUrlEncoder().withoutPadding().encodeToString(digest);
-    } catch (NoSuchAlgorithmException e) {
-      throw new IllegalStateException(e);
-    }
   }
 }

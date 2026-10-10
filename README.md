@@ -409,6 +409,30 @@ sequenceDiagram
 
 **Idle timeout.** A session ends after `lattice.session.idle-timeout` (default 30 minutes) without activity, and in any case after `lattice.session.max-lifespan` (10 hours). An app using the session through native SSO counts as activity.
 
+### Client credentials and key thumbprints
+
+**Basic credentials are form-decoded** (`Requests.basicCredentials`). RFC 6749 §2.3.1 has clients form-encode the client ID and secret before base64, so `s+cr%t` is sent as `s%2Bcr%25t`. Lattice decodes both before passing them on to Authlete or comparing them with an introspection caller's secret. A client that follows the spec authenticates even with such characters in its secret. Secrets made only of letters, digits, `-`, `_`, `.` and `~`, which is all Authlete generates, decode to themselves, so they work the same way as before.
+
+**Thumbprints** (`Thumbprints`):
+- `of(PublicKey)` and `ofJwk(Map)` compute the RFC 7638 JWK thumbprint. This is DPoP's `jkt` and a stable `kid` for a key that has none.
+- `ofCertificate` computes the RFC 8705 `x5t#S256`.
+- `matches` compares two thumbprints in constant time.
+
+The thumbprint covers only the required public members, in canonical form. The same key therefore always gets the same value, whatever its `kid` or member order, and a private JWK gets the thumbprint of its public half. RSA values are encoded unsigned and minimal. EC coordinates are padded to the curve's size. These are the two details that hand-written versions most often get wrong. OKP keys are read from their X.509 encoding, so JDK and Bouncy Castle keys both work. Symmetric keys are refused, because a published thumbprint of a secret key would be a hash of the secret. The tests check the RFC 7638 and RFC 8037 vectors and compare against nimbus-jose-jwt for every key type.
+
+### Security building blocks
+
+These standalone helpers aren't all used by the sign-in flows yet. Each one's Javadoc explains the attacks it handles.
+
+| Helper | What it does | Why it's written this way |
+|---|---|---|
+| `RedirectUris` | Checks redirect URIs when they're registered (`problem`) and when a request names one (`matches`) | Matching is exact, with no wildcards. The one exception is RFC 8252's any-port rule for loopback, and only for the IP literals `127.0.0.1` and `[::1]`, not the name `localhost`. It refuses: `..` segments (encoded or double-encoded too), user info, OAuth response parameters already in the query (parameter pollution), fragments, `http` except on loopback, `javascript:`/`data:`/`file:`, and private-use schemes that aren't reverse domain names. |
+| `Secrets` | Random tokens and codes | Characters are drawn without modulo bias. `lengthFor(bits, alphabet)` sizes a secret by the entropy it must carry, using integer arithmetic so the edge cases come out right. Default is 128 bits. |
+| `EcdsaSignatures` | Converts between JOSE `R‖S` and DER signatures | Strict both ways. It refuses r or s = 0 (CVE-2022-21449, "psychic signatures"). Lengths must be exact, never padded or truncated. DER must be canonical, which prevents signature malleability. It handles P-521's long-form length. Tests compare against nimbus. |
+| `SecureContexts` | Whether a page is a browser secure context, which WebAuthn and `Secure` cookies need | `https`, or loopback. Loopback is recognised by the host's form only, never by DNS. An `https` frame inside an `http` page is detected with `Sec-Fetch-Dest` and `Referer`. |
+| `LockoutBackoff` | Incremental lockout as a pure function of the stored state and the time | Waits grow per failure up to a cap. Machine-speed failures wait even below the threshold. Old failures expire. A permanent lock is optional. Keying the state on account and IP keeps it from becoming a lock-out-anyone tool. |
+| `EmailAddresses` | Checks email syntax | Splits at the last `@`. Applies the length limits for the local part, the domain and the whole address. The domain is converted with IDNA, then checked as a host name. Line breaks are refused, so the address can't inject mail headers. It uses small patterns instead of one large regular expression, which avoids ReDoS. |
+
 ## Project structure
 
 ```text
