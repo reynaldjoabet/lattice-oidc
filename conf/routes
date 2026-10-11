@@ -5,20 +5,27 @@
 # Start page of the sign-in service
 GET     /                           com.lattice.oidc.controllers.HomeController.index(request: Request)
 
+# "nocsrf" on a GET route skips the CSRF filter for it. The filter protects forms, and on a GET it only
+# creates a token (generating and signing one) for any request that doesn't say it refuses HTML, which
+# includes every request with no Accept header. Routes that return JSON or a static file never render a
+# form, so they carry it: health, metrics, assets, the discovery documents, JWKS and the API reads.
+# HTML pages (account, console, consent, device, logout) must not.
+
 # Map static resources from the /public folder to the /assets URL path
++ nocsrf
 GET     /assets/*file               controllers.Assets.versioned(path="/public", file: Asset)
 
 # Health probes. "anyhost" exempts them from the allowed-hosts filter: Kubernetes probes and
 # Prometheus address the pod by IP, and these responses don't depend on the Host header.
-+ anyhost
++ anyhost nocsrf
 GET     /health/live                com.lattice.oidc.controllers.HealthController.live()
-+ anyhost
++ anyhost nocsrf
 GET     /health/ready               com.lattice.oidc.controllers.HealthController.ready()
-+ anyhost
++ anyhost nocsrf
 GET     /health/dependencies        com.lattice.oidc.controllers.HealthController.dependencies()
 
 # Prometheus metrics (lattice.metrics.enabled; optional bearer token lattice.metrics.token)
-+ anyhost
++ anyhost nocsrf
 GET     /metrics                    com.lattice.oidc.controllers.MetricsController.scrape(request: Request)
 
 # End-user account, built-in CIBA approval and operator console
@@ -85,6 +92,7 @@ POST    /api/authorization/decision                 com.lattice.oidc.controllers
 GET     /api/authorization/continue                 com.lattice.oidc.controllers.AuthorizationController.continueAuthorization(request: Request, ticket: String)
 
 # OpenID Federation 1.0
++ nocsrf
 GET     /.well-known/openid-federation              com.lattice.oidc.controllers.FederationController.configuration()
 + nocsrf
 POST    /api/federation/register                    com.lattice.oidc.controllers.FederationController.register(request: Request)
@@ -99,12 +107,17 @@ POST    /api/federation/link                        com.lattice.oidc.controllers
 POST    /api/token                                  com.lattice.oidc.controllers.TokenController.token(request: Request)
 
 # Discovery and keys
++ nocsrf
 GET     /.well-known/openid-configuration           com.lattice.oidc.controllers.DiscoveryController.configuration(request: Request)
++ nocsrf
 GET     /.well-known/oauth-authorization-server     com.lattice.oidc.controllers.DiscoveryController.configuration(request: Request)
++ nocsrf
 GET     /api/jwks                                   com.lattice.oidc.controllers.DiscoveryController.jwks()
++ nocsrf
 GET     /.well-known/apple-app-site-association     com.lattice.oidc.controllers.DiscoveryController.appleAppSiteAssociation()
 
 # UserInfo, introspection, revocation, PAR, grant management, attestation
++ nocsrf
 GET     /api/userinfo                               com.lattice.oidc.controllers.UserInfoController.get(request: Request)
 + nocsrf
 POST    /api/userinfo                               com.lattice.oidc.controllers.UserInfoController.post(request: Request)
@@ -114,6 +127,7 @@ POST    /api/introspection                          com.lattice.oidc.controllers
 POST    /api/revocation                             com.lattice.oidc.controllers.RevocationController.revoke(request: Request)
 + nocsrf
 POST    /api/par                                    com.lattice.oidc.controllers.PushedAuthorizationController.push(request: Request)
++ nocsrf
 GET     /api/gm/:grantId                            com.lattice.oidc.controllers.GrantManagementController.query(request: Request, grantId: String)
 + nocsrf
 DELETE  /api/gm/:grantId                            com.lattice.oidc.controllers.GrantManagementController.revoke(request: Request, grantId: String)
@@ -123,6 +137,7 @@ POST    /api/challenge                              com.lattice.oidc.controllers
 # Dynamic client registration (RFC 7591 / 7592)
 + nocsrf
 POST    /api/register                               com.lattice.oidc.controllers.ClientRegistrationController.register(request: Request)
++ nocsrf
 GET     /api/register/:id                           com.lattice.oidc.controllers.ClientRegistrationController.read(request: Request, id: String)
 + nocsrf
 PUT     /api/register/:id                           com.lattice.oidc.controllers.ClientRegistrationController.update(request: Request, id: String)
@@ -132,15 +147,21 @@ DELETE  /api/register/:id                           com.lattice.oidc.controllers
 # Open Banking Brasil resource APIs
 + nocsrf
 POST    /api/obb/consents                           com.lattice.oidc.controllers.ObbController.createConsent(request: Request)
++ nocsrf
 GET     /api/obb/consents/:consentId                com.lattice.oidc.controllers.ObbController.readConsent(request: Request, consentId: String)
 + nocsrf
 DELETE  /api/obb/consents/:consentId                com.lattice.oidc.controllers.ObbController.deleteConsent(request: Request, consentId: String)
++ nocsrf
 GET     /api/obb/accounts                           com.lattice.oidc.controllers.ObbController.accounts(request: Request)
++ nocsrf
 GET     /api/obb/fapi2base-accounts                 com.lattice.oidc.controllers.ObbController.fapi2BaseAccounts(request: Request)
++ nocsrf
 GET     /api/obb/resources                          com.lattice.oidc.controllers.ObbController.resources(request: Request)
 
 # Diagnostics (lattice.test-endpoints.enabled)
++ nocsrf
 GET     /api/test/headers                           com.lattice.oidc.controllers.TestController.headers(request: Request)
++ nocsrf
 GET     /api/test/obb                               com.lattice.oidc.controllers.TestController.obb(request: Request)
 
 # CIBA (OpenID Connect Client-Initiated Backchannel Authentication)
@@ -157,9 +178,13 @@ POST    /api/device/verification                    com.lattice.oidc.controllers
 POST    /api/device/complete                        com.lattice.oidc.controllers.DeviceController.complete(request: Request)
 
 # OpenID for Verifiable Credential Issuance
++ nocsrf
 GET     /.well-known/openid-credential-issuer       com.lattice.oidc.controllers.CredentialController.metadata()
++ nocsrf
 GET     /.well-known/jwt-issuer                     com.lattice.oidc.controllers.CredentialController.jwtIssuer()
++ nocsrf
 GET     /.well-known/jwt-vc-issuer                  com.lattice.oidc.controllers.CredentialController.jwtIssuer()
++ nocsrf
 GET     /api/vci/jwks                               com.lattice.oidc.controllers.CredentialController.jwks()
 + nocsrf
 POST    /api/credential                             com.lattice.oidc.controllers.CredentialController.credential(request: Request)
@@ -171,6 +196,7 @@ POST    /api/deferred_credential                    com.lattice.oidc.controllers
 POST    /api/nonce                                  com.lattice.oidc.controllers.CredentialController.nonce()
 GET     /api/offer/issue                            com.lattice.oidc.controllers.CredentialOfferController.form(request: Request)
 POST    /api/offer/issue                            com.lattice.oidc.controllers.CredentialOfferController.create(request: Request)
++ nocsrf
 GET     /api/offer/:identifier                      com.lattice.oidc.controllers.CredentialController.offer(identifier: String)
 
 # RP-Initiated Logout 1.0 / Back-Channel Logout 1.0

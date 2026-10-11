@@ -149,32 +149,15 @@ lazy val root = (project in file("."))
       }
     ),
 
-    // An ".md5" next to every public asset (public/x.css gets public/x.css.md5 on the classpath).
-    // Play's Assets.versioned reads it to build a fingerprinted URL (x-<md5>.css, cacheable forever),
+    // An ".md5" next to every public asset in the packaged app (stage, dist, the Docker image).
+    // Play's Assets.versioned reads it to build a fingerprinted URL (<md5>-x.css, cacheable forever),
     // and it caches an asset's digest only when that file exists. Without it, every page render
     // searched every JAR on the classpath for five files that were never there: 62% of the CPU time
     // of a sign-in page, and a ceiling of about 7,000 pages per second.
-    Compile / resourceGenerators += Def.task {
-      import java.nio.file.{Files, Path}
-      import java.security.MessageDigest
-      val publicDir = baseDirectory.value / "public"
-      val outDir    = (Compile / resourceManaged).value / "public"
-      val files     = Files.walk(publicDir.toPath)
-      try {
-        files
-          .filter(path => Files.isRegularFile(path))
-          .map[java.io.File] { asset =>
-            val relative = publicDir.toPath.relativize(asset)
-            val digest   = MessageDigest.getInstance("MD5").digest(Files.readAllBytes(asset))
-            val out      = outDir.toPath.resolve(relative.toString + ".md5")
-            Files.createDirectories(out.getParent)
-            Files.writeString(out, digest.map("%02x".format(_)).mkString)
-            out.toFile
-          }
-          .toArray(new Array[java.io.File](_))
-          .toSeq
-      } finally files.close()
-    }.taskValue,
+    // sbt-gzip adds a .gz copy of each text asset, which Play serves to clients that accept gzip.
+    // Both are pipeline stages, so they run when packaging; `sbt run` and the tests use the
+    // unpackaged assets (Play doesn't cache digests in dev mode anyway).
+    pipelineStages := Seq(digest, gzip),
 
     // Nothing reads the Scaladoc/Javadoc jar, so don't build it for `stage`, `dist` or the image.
     Compile / doc / sources                := Seq.empty,

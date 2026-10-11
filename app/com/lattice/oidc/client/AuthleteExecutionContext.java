@@ -35,8 +35,12 @@ public final class AuthleteExecutionContext extends CustomExecutionContext {
   private final AtomicInteger queued = new AtomicInteger();
   private final AtomicInteger active = new AtomicInteger();
 
-  /** One permit per call in flight to Authlete (and per other blocking task: webhooks, cleanup). */
-  private final Semaphore permits;
+  /**
+   * One permit per call in flight to Authlete (and per other blocking task: webhooks, cleanup).
+   * Spelled "prmits" on purpose: the Scala 3 compiler reads Java sources too, and rejects the Java 17
+   * keyword "permits" as an identifier (the clean build fails, while an incremental one passes).
+   */
+  private final Semaphore prmits;
 
   @Inject
   public AuthleteExecutionContext(ActorSystem actorSystem, Config config, Metrics metrics) {
@@ -45,7 +49,7 @@ public final class AuthleteExecutionContext extends CustomExecutionContext {
     if (limit < 1) {
       throw new IllegalArgumentException(MAX_CONCURRENT + " must be at least 1: " + limit);
     }
-    this.permits = new Semaphore(limit, true);
+    this.prmits = new Semaphore(limit, true);
     Gauge.builder("lattice.authlete.executor.limit", () -> limit)
         .description("Calls to Authlete allowed at once (authlete.max-concurrent-calls)")
         .register(metrics.registry());
@@ -73,14 +77,14 @@ public final class AuthleteExecutionContext extends CustomExecutionContext {
           () -> {
             // Waits for a permit; on a virtual thread this costs almost nothing. Not interruptible: a
             // task that gave up here would never complete the request that is waiting for it.
-            permits.acquireUninterruptibly();
+            prmits.acquireUninterruptibly();
             queued.decrementAndGet();
             active.incrementAndGet();
             try {
               task.run();
             } finally {
               active.decrementAndGet();
-              permits.release();
+              prmits.release();
             }
           });
     } catch (RuntimeException e) {
