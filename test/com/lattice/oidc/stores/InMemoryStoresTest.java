@@ -21,9 +21,29 @@ public class InMemoryStoresTest {
     for (int i = 0; i < 100; i++) {
       store.put("interaction:authz", "flood-" + i, "attacker", null, "{}", Duration.ofMinutes(10));
     }
-    assertEquals("each kind is bounded", 10, store.count("interaction:authz"));
+    long kept = store.count("interaction:authz");
+    assertTrue("each kind is bounded, and trimmed to a little under its cap: " + kept, kept >= 9 && kept <= 10);
     assertTrue("the entry closest to expiry went first", store.get("interaction:authz", "first").isEmpty());
     assertTrue("other kinds are untouched", store.get("reset-token", "real").isPresent());
+  }
+
+  /**
+   * Once a namespace is full, a put must not scan all of it. Making room for one entry at a time
+   * did, under a lock shared by the whole JVM, so a flood of authorization requests slowed every
+   * request after it (the p99 of a load test was over a second). 40,000 puts into a store capped at
+   * 20,000 took many seconds that way and a fraction of one now.
+   */
+  @Test
+  public void aFullStoreIsNotScannedOnEveryPut() {
+    InMemoryEphemeralStore store = new InMemoryEphemeralStore(20_000);
+    long start = System.nanoTime();
+    for (int i = 0; i < 40_000; i++) {
+      store.put("interaction:authz", "flood-" + i, "attacker", null, "{}", Duration.ofMinutes(10));
+    }
+    long millis = (System.nanoTime() - start) / 1_000_000;
+    assertTrue("still bounded", store.count("interaction:authz") <= 20_000);
+    assertTrue("the newest entry is kept", store.get("interaction:authz", "flood-39999").isPresent());
+    assertTrue("40,000 puts took " + millis + " ms; a scan per put takes many seconds", millis < 3_000);
   }
 
   @Test

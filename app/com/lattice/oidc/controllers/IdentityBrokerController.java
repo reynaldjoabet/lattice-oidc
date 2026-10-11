@@ -311,8 +311,9 @@ public final class IdentityBrokerController extends BaseController {
         user.getSubject(),
         "identity_provider",
         providerId);
-    var page = interaction.page().withLoggedInAs(Optional.of(user.displayName())).withError(null);
-    interactions.put(AUTHZ, ticket, browserId, interaction.withPage(page).withShownSubject(user.getSubject()));
+    AuthorizationInteraction shown = interaction.shownTo(user, appConsents.find(user.getSubject(), interaction.clientId()));
+    var page = shown.page();
+    interactions.put(AUTHZ, ticket, browserId, shown);
     // Required actions come before the consent page, as for every other sign-in.
     Optional<Result> gated = flow.gate(user, "authz:" + ticket);
     if (gated.isPresent()) {

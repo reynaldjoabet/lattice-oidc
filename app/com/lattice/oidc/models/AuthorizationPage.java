@@ -13,6 +13,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /** Everything the consent page shows. Immutable; derived variants are created with {@code with*}. */
 public record AuthorizationPage(
@@ -37,7 +38,9 @@ public record AuthorizationPage(
     List<IdentityProviders.Link> identityProviders,
     Optional<String> error,
     Optional<ObbConsentView> obbConsent,
-    boolean identified) {
+    boolean identified,
+    Set<String> approvedScopes,
+    Set<String> approvedClaims) {
 
   /** A requested scope and its plain-language description. */
   public record ScopeItem(String name, String description) {}
@@ -81,7 +84,9 @@ public record AuthorizationPage(
         identityProviders,
         Optional.empty(),
         Optional.empty(),
-        info.getSubject() != null || info.getLoginHint() != null);
+        info.getSubject() != null || info.getLoginHint() != null,
+        Set.of(),
+        Set.of());
   }
 
   public AuthorizationPage withError(String message) {
@@ -89,7 +94,7 @@ public record AuthorizationPage(
         ticket, serviceName, clientName, description, logoUri, clientUri, policyUri, tosUri, scopes,
         claimsForIdToken, claimsForUserInfo, purpose, verifiedClaimsForIdToken,
         verifiedClaimsForUserInfo, authorizationDetails, loginId, loginIdReadOnly, loggedInAs,
-        identityProviders, Optional.ofNullable(message), obbConsent, identified);
+        identityProviders, Optional.ofNullable(message), obbConsent, identified, approvedScopes, approvedClaims);
   }
 
   public AuthorizationPage withLoggedInAs(Optional<String> user) {
@@ -97,7 +102,9 @@ public record AuthorizationPage(
         ticket, serviceName, clientName, description, logoUri, clientUri, policyUri, tosUri, scopes,
         claimsForIdToken, claimsForUserInfo, purpose, verifiedClaimsForIdToken,
         verifiedClaimsForUserInfo, authorizationDetails, loginId, loginIdReadOnly, user,
-        identityProviders, error, obbConsent, identified);
+        identityProviders, error, obbConsent, identified,
+        user.isPresent() ? approvedScopes : Set.of(),
+        user.isPresent() ? approvedClaims : Set.of());
   }
 
   /** The page for an Open Banking consent ({@code consent:...} scope). */
@@ -106,7 +113,7 @@ public record AuthorizationPage(
         ticket, serviceName, clientName, description, logoUri, clientUri, policyUri, tosUri, scopes,
         claimsForIdToken, claimsForUserInfo, purpose, verifiedClaimsForIdToken,
         verifiedClaimsForUserInfo, authorizationDetails, loginId, loginIdReadOnly, loggedInAs,
-        identityProviders, error, consent, identified);
+        identityProviders, error, consent, identified, approvedScopes, approvedClaims);
   }
 
   /**
@@ -118,7 +125,59 @@ public record AuthorizationPage(
         ticket, serviceName, clientName, description, logoUri, clientUri, policyUri, tosUri, scopes,
         claimsForIdToken, claimsForUserInfo, purpose, verifiedClaimsForIdToken,
         verifiedClaimsForUserInfo, authorizationDetails, identifier == null ? "" : identifier,
-        loginIdReadOnly, loggedInAs, identityProviders, error, obbConsent, identifier != null);
+        loginIdReadOnly, loggedInAs, identityProviders, error, obbConsent, identifier != null,
+        approvedScopes, approvedClaims);
+  }
+
+  /**
+   * What the signed-in user already approved for this app earlier (empty sets: nothing). With it,
+   * the page shows only what is new as a request, and lists the rest as already allowed: someone
+   * asked again for everything tends to click Allow without reading, and misses the one new
+   * permission.
+   */
+  public AuthorizationPage withApproved(Set<String> scopes, Set<String> claims) {
+    return new AuthorizationPage(
+        ticket, serviceName, clientName, description, logoUri, clientUri, policyUri, tosUri, this.scopes,
+        claimsForIdToken, claimsForUserInfo, purpose, verifiedClaimsForIdToken,
+        verifiedClaimsForUserInfo, authorizationDetails, loginId, loginIdReadOnly, loggedInAs,
+        identityProviders, error, obbConsent, identified, Set.copyOf(scopes), Set.copyOf(claims));
+  }
+
+  /** Whether the user approved something for this app before, so the page asks only for more. */
+  public boolean asksForMore() {
+    return !approvedScopes.isEmpty() || !approvedClaims.isEmpty();
+  }
+
+  /** The requested permissions the user hasn't approved for this app yet. */
+  public List<ScopeItem> newScopes() {
+    return displayScopes().stream().filter(s -> !approvedScopes.contains(s.name())).toList();
+  }
+
+  /** The requested permissions the user already approved for this app. */
+  public List<ScopeItem> alreadyApprovedScopes() {
+    return displayScopes().stream().filter(s -> approvedScopes.contains(s.name())).toList();
+  }
+
+  /**
+   * Information the app hasn't been allowed before. Verified claims are always new: an approval of
+   * them is never remembered.
+   */
+  public List<String> newSharedInformation() {
+    java.util.LinkedHashSet<String> labels = new java.util.LinkedHashSet<>();
+    claimsForIdToken.stream().filter(c -> !approvedClaims.contains(c)).forEach(c -> labels.add(ConsentLabels.claim(c)));
+    claimsForUserInfo.stream().filter(c -> !approvedClaims.contains(c)).forEach(c -> labels.add(ConsentLabels.claim(c)));
+    verifiedClaimsForIdToken.forEach(c -> labels.add("Verified: " + ConsentLabels.claim(c.claim())));
+    verifiedClaimsForUserInfo.forEach(c -> labels.add("Verified: " + ConsentLabels.claim(c.claim())));
+    return List.copyOf(labels);
+  }
+
+  /** Information the app was already allowed. */
+  public List<String> alreadySharedInformation() {
+    java.util.LinkedHashSet<String> labels = new java.util.LinkedHashSet<>();
+    claimsForIdToken.stream().filter(approvedClaims::contains).forEach(c -> labels.add(ConsentLabels.claim(c)));
+    claimsForUserInfo.stream().filter(approvedClaims::contains).forEach(c -> labels.add(ConsentLabels.claim(c)));
+    labels.removeAll(newSharedInformation());
+    return List.copyOf(labels);
   }
 
   /** Up to two initials of the client name, for the monogram shown when it has no logo. */

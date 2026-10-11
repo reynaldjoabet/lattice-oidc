@@ -126,6 +126,43 @@ public class RememberedConsentTest {
     assertEquals(1, fake.count("authorizationIssue"));
   }
 
+  /** Asked for more, the page shows only what's new as the question, and the rest as already allowed. */
+  @Test
+  public void askingForMoreShowsOnlyWhatIsNew() {
+    Map<String, String> session = approveAsJohn();
+    AuthorizationResponse more = AuthorizationFlowTest.interaction("ticket-2", null);
+    more.setScopes(new Scope[] {new Scope().setName("openid"), new Scope().setName("profile"), new Scope().setName("email")});
+    asks(more);
+    String html = contentAsString(authorize(session));
+    assertTrue(html, html.contains("more access?"));
+    int newPart = html.indexOf("also wants to");
+    int alreadyPart = html.indexOf("Already allowed");
+    assertTrue(html, newPart > 0 && alreadyPart > newPart);
+    String asked = html.substring(newPart, alreadyPart);
+    String allowed = html.substring(alreadyPart);
+    assertTrue(asked.contains("Your email address"));
+    assertFalse(asked.contains("Your basic profile"));
+    assertTrue(allowed.contains("Your basic profile"));
+    assertTrue(allowed.contains("Sign you in with your account"));
+  }
+
+  @Test
+  public void aFirstConsentListsEverythingAsTheQuestion() {
+    Result page = authorize(Map.of());
+    Result signedIn =
+        route(
+            app,
+            withCsrf(
+                    post(
+                        "/api/authorization/decision",
+                        Map.of("ticket", "ticket-1", "loginId", "john", "password", "john", "login", "true")))
+                .session(page.session().data()));
+    String consent = contentAsString(signedIn);
+    assertTrue(consent, consent.contains("will be able to"));
+    assertFalse(consent.contains("Already allowed"));
+    assertFalse(consent.contains("more access?"));
+  }
+
   @Test
   public void promptConsentAlwaysAsks() {
     Map<String, String> session = approveAsJohn();

@@ -453,3 +453,40 @@ How it's revoked: one call to Authlete's `/auth/token/revoke` with only `subject
 
 
 >> In Section 10.1 and Section 10.2, keys are derived from the client_secret value. Thus, when used with symmetric signing or encryption operations, client_secret values MUST contain sufficient entropy to generate cryptographically strong keys. Also, client_secret values MUST also contain at least the minimum of number of octets required for MAC keys for the particular algorithm used. So for instance, for HS256, the client_secret value MUST contain at least 32 octets (and almost certainly SHOULD contain more, since client_secret values are likely to use a restricted alphabet)
+
+
+## The authorization page: what Authlete gives Lattice, what Lattice shows
+
+> "The job of an authorization server is to issue access tokens to client applications. An access token represents that a user has granted permissions to a client application." Before issuing one, the server asks the user, on an authorization page.
+
+Authlete holds the OAuth/OIDC logic and the data that must persist (tokens, grants, client records). The page itself is Lattice's job: Authlete's `/auth/authorization` API returns everything the page needs, and Lattice renders it.
+
+| What the page must show | Where it comes from in Authlete's answer | Lattice |
+| --- | --- | --- |
+| Who is asking: name, logo, description | `Client.getClientName()`, `getLogoUri()`, `getDescription()` | Heading, logo (or a monogram of the initials), description |
+| Where to learn more about the app | `Client.getClientUri()`, `getPolicyUri()`, `getTosUri()` | Website, Privacy policy, Terms links |
+| What the app is asking for | `AuthorizationResponse.getScopes()` with each `Scope`'s description | "… will be able to" list, in plain language (`ConsentLabels`); a scope's own description wins if configured |
+| What user data it will receive | `getClaims()` (ID token), `getClaimsAtUserInfo()`, verified claims | "Information shared" chips |
+| Why (identity assurance) | `getPurpose()` | "Why this is requested" |
+| Fine-grained permissions (payments, Open Banking) | `getAuthorizationDetails()` | Technical details, or the Open Banking consent view |
+| Who the user is | the login session, `getSubject()` / `getLoginHint()` | "Signed in as … · Switch"; the login form is a separate step before the consent page |
+| The decision | — | Deny / Allow, posted with a CSRF token and bound to the browser that started the request |
+
+Two things worth keeping in mind:
+
+- **Sign-in and consent are separate steps in Lattice.** The reference server's authorization page (`authorization.jsp`) is one form: client name, scope list, Login ID and Password fields, and Authorize / Deny buttons. In Lattice the identifier comes first (`signIn.scala.html`, which also offers passkeys), then the password (`signInPassword.scala.html`), then consent (`authorization.scala.html`). A user who is already signed in sees only the consent step, and "Allow" is never the same click as typing a password. `login.scala.html` is the sign-in for pages outside an authorization request (account, CIBA approval, console).
+- **The consent page shows what the client registered about itself, so the client controls those words.** Name, logo and description are the client's own claims, and a malicious client can pick a name that looks like a bank's. Lattice shows the client's website and policy links so the user has something to check, and `RedirectUris` limits where a registered client can send the result. Authlete also provides the client's `developer` and `contacts`, and Lattice doesn't show either. Showing the app's website host prominently, or marking clients that registered themselves dynamically as unverified, would be the next step if third-party clients are allowed to register.
+
+![alt text](image-11.png)
+
+An authorization server implementation has to generate an authorization page like this and show it to the user.
+
+>>The authorization endpoint is used to interact with the resource owner and obtain an authorization grant. The authorization server MUST first verify the identity of the resource owner. The way in which the authorization server authenticates the resource owner (e.g., username and password login, session cookies) is beyond the scope of this specification.
+
+However, because user authentication is included as one step during the authorization process, an authorization server has to implement a mechanism for user authentication.
+
+![alt text](image-12.png)
+
+The primary advantage of this architecture is in that the backend service can focus on implementing OAuth 2.0 and OpenID Connect without caring about other components such as identity management, user authentication, login session management, API management and fraud detection. And, consequently, it leads to another major advantage which enables the backend service (implementation of OAuth 2.0 and OpenID Connect) to be combined with any solution of other components and thus gives flexibility to frontend server implementations.
+
+[new-architecture-of-oauth-2-0-and-openid-connect-implementation](https://darutk.medium.com/new-architecture-of-oauth-2-0-and-openid-connect-implementation-18f408f9338d)

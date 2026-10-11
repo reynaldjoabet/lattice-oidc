@@ -91,6 +91,15 @@ public final class CachingUserStore implements UserStore {
   }
 
   @Override
+  public boolean replacePasswordHash(String subject, String expectedHash, String newHash) {
+    boolean replaced = store.replacePasswordHash(subject, expectedHash, newHash);
+    if (replaced) {
+      cache.invalidate(REGION, subject);
+    }
+    return replaced;
+  }
+
+  @Override
   public long count() {
     return store.count();
   }

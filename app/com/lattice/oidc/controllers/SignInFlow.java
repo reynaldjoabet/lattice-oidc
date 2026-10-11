@@ -54,6 +54,9 @@ public final class SignInFlow {
   private final SecondFactors secondFactors;
   private final RequiredActions actions;
 
+  /** What each account already approved for each app, so a consent page asks only for more. */
+  @Inject private com.lattice.oidc.stores.AppConsentStore appConsents;
+
   @Inject
   public SignInFlow(
       UserSessions sessions, Interactions interactions, SecondFactors secondFactors, RequiredActions actions) {
@@ -127,9 +130,7 @@ public final class SignInFlow {
                     AuthorizationController.KIND,
                     ticket,
                     browserId,
-                    interaction
-                        .withPage(interaction.page().withLoggedInAs(Optional.of(user.displayName())).withError(null))
-                        .withShownSubject(user.getSubject())));
+                    interaction.shownTo(user, appConsents.find(user.getSubject(), interaction.clientId()))));
   }
 
   /** Where a signed-in user goes: their required actions first, otherwise {@code next}. */

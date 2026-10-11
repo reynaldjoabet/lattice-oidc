@@ -1,14 +1,14 @@
 package com.lattice.oidc.filters;
 
 import java.util.UUID;
-import java.util.concurrent.CompletionStage;
-import java.util.function.Function;
 import java.util.regex.Pattern;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
-import org.apache.pekko.stream.Materializer;
+import org.apache.pekko.util.ByteString;
 import play.libs.typedmap.TypedKey;
-import play.mvc.Filter;
+import play.libs.streams.Accumulator;
+import play.mvc.EssentialAction;
+import play.mvc.EssentialFilter;
 import play.mvc.Http;
 import play.mvc.Result;
 
@@ -21,7 +21,7 @@ import play.mvc.Result;
  * between thread pools (the Authlete dispatcher), where thread-bound context would be lost.
  */
 @Singleton
-public final class RequestIdFilter extends Filter {
+public final class RequestIdFilter extends EssentialFilter {
 
   public static final String HEADER = "X-Request-ID";
   public static final TypedKey<String> REQUEST_ID = TypedKey.create("requestId");
@@ -30,19 +30,20 @@ public final class RequestIdFilter extends Filter {
   private static final Pattern VALID = Pattern.compile("[A-Za-z0-9._:-]{1,64}");
 
   @Inject
-  public RequestIdFilter(Materializer materializer) {
-    super(materializer);
-  }
+  public RequestIdFilter() {}
 
   public static String of(Http.RequestHeader request) {
     return request.attrs().getOptional(REQUEST_ID).orElse("-");
   }
 
   @Override
-  public CompletionStage<Result> apply(
-      Function<Http.RequestHeader, CompletionStage<Result>> next, Http.RequestHeader request) {
-    String id =
-        request.header(HEADER).filter(v -> VALID.matcher(v).matches()).orElseGet(() -> UUID.randomUUID().toString());
-    return next.apply(request.addAttr(REQUEST_ID, id)).thenApply(r -> r.withHeader(HEADER, id));
+  public EssentialAction apply(EssentialAction next) {
+    return EssentialAction.of(
+        request -> {
+          String id =
+              request.header(HEADER).filter(v -> VALID.matcher(v).matches()).orElseGet(() -> UUID.randomUUID().toString());
+          Accumulator<ByteString, Result> action = next.apply(request.addAttr(REQUEST_ID, id));
+          return action.map(r -> r.withHeader(HEADER, id), FilterSupport.DIRECT);
+        });
   }
 }

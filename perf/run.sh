@@ -6,6 +6,7 @@
 #   INSTANCES=3 PROXY=nginx BALANCE=roundrobin perf/run.sh
 #   INSTANCES=3 SHARED_STATE=none perf/run.sh    # in-memory state per server: no database, so no database cost
 #   PROXY=haproxy CACHE=local perf/run.sh        # one server, in-memory storage, Caffeine read cache (CACHE=redis uses Redis for it)
+#   STORAGE=postgres CACHE=local perf/run.sh     # one server on its own throwaway PostgreSQL (and Redis for short-lived state)
 #   INSTANCES=3 SCENARIOS="signin-page failover" perf/run.sh   # stops a server half way through
 #   PROXY=haproxy perf/run.sh                    # one server behind the proxy, to measure the proxy hop
 #   DURATION=30s CONNECTIONS=128 perf/run.sh
@@ -30,11 +31,13 @@ CACHE="${CACHE:-redis}"                   # read cache with a shared database: n
 PUBLIC_PORT="${PUBLIC_PORT:-9000}"
 # 127.0.0.1, not localhost: the proxy listens on IPv4, and a load tool may try IPv6 first.
 BASE_URL="${BASE_URL:-http://127.0.0.1:$PUBLIC_PORT}"
-SCENARIOS="${SCENARIOS:-health discovery signin-page authorization-page login metrics}"
+SCENARIOS="${SCENARIOS:-health discovery signin-page authorization-page login metrics token introspection userinfo par revocation}"
 if [ -z "${PROXY:-}" ]; then
   if [ "$INSTANCES" -gt 1 ]; then PROXY=haproxy; else PROXY=none; fi
 fi
-JAVA_OPTS="${PERF_JAVA_OPTS:--Xms512m -Xmx1g}"
+# 2 GB: each sign-in fills 15 MiB of memory, and with a 1 GB heap the collector paused the server for
+# about 15% of a sign-in run (see "Sign-in capacity" in perf/README.md).
+JAVA_OPTS="${PERF_JAVA_OPTS:--Xms2g -Xmx2g}"
 WORK="perf/.work"
 RESULTS="perf/results"
 STAMP="$(date +%Y%m%d-%H%M%S)"
@@ -71,8 +74,12 @@ if [ "$START_SERVER" = "yes" ]; then
   # Extra classpath entries (directories or jars) in front, for experiments.
   [ -z "${EXTRA_CLASSPATH:-}" ] || CP="$EXTRA_CLASSPATH:$CP"
 
+  # Several servers need a shared database; one server uses one only when asked (STORAGE=postgres).
+  USE_DATABASE=no
+  if [ "$INSTANCES" -gt 1 ] || [ "${STORAGE:-}" = "postgres" ]; then USE_DATABASE=yes; fi
+
   STATE_ENV=()
-  if [ "$INSTANCES" -gt 1 ] && [ "${SHARED_STATE:-database}" = "database" ] && [ -n "${SHARED_DATABASE_URL:-}" ]; then
+  if [ "$USE_DATABASE" = "yes" ] && [ "${SHARED_STATE:-database}" = "database" ] && [ -n "${SHARED_DATABASE_URL:-}" ]; then
     # An existing PostgreSQL: nothing is started for it. SHARED_DATABASE_URL, SHARED_DATABASE_USER.
     if [ -z "${REDIS_URL:-}" ]; then
       command -v redis-server >/dev/null || { echo "redis-server is needed (or set REDIS_URL)" >&2; exit 1; }
@@ -83,7 +90,7 @@ if [ "$START_SERVER" = "yes" ]; then
     echo "Using the existing PostgreSQL at $SHARED_DATABASE_URL and Redis at $REDIS_URL..."
     STATE_ENV=(LATTICE_STORAGE=postgres DATABASE_URL="$SHARED_DATABASE_URL" DATABASE_USERNAME="${SHARED_DATABASE_USER:-lattice}"
                LATTICE_SHORT_LIVED_STATE=redis REDIS_URL="$REDIS_URL" LATTICE_CACHE="$CACHE")
-  elif [ "$INSTANCES" -gt 1 ] && [ "${SHARED_STATE:-database}" = "database" ] && [ "${EXTERNAL_STATE:-no}" != "yes" ]; then
+  elif [ "$USE_DATABASE" = "yes" ] && [ "${SHARED_STATE:-database}" = "database" ] && [ "${EXTERNAL_STATE:-no}" != "yes" ]; then
     # Several servers only work if they share their state: sign-ins, sessions and counters.
     for tool in postgres initdb pg_ctl createdb redis-server; do
       command -v "$tool" >/dev/null || { echo "$tool is needed for INSTANCES > 1 (brew install postgresql@18 redis)" >&2; exit 1; }
@@ -95,9 +102,10 @@ if [ "$START_SERVER" = "yes" ]; then
       exit 1
     }
     echo "Starting PostgreSQL and Redis..."
-    initdb -D "$WORK/pg" -U lattice --auth=trust -E UTF8 >/dev/null
+    # A locale is needed even when the caller's shell has none (a bare environment fails with "invalid locale settings").
+    LC_ALL=en_US.UTF-8 initdb -D "$WORK/pg" -U lattice --auth=trust -E UTF8 >/dev/null
     # Unix sockets off (their path would be too long here); defaults otherwise, so writes are durable.
-    pg_ctl -D "$WORK/pg" -o "-p 55432 -c unix_socket_directories= -c listen_addresses=127.0.0.1 -c max_connections=200" \
+    LC_ALL=en_US.UTF-8 pg_ctl -D "$WORK/pg" -o "-p 55432 -c unix_socket_directories= -c listen_addresses=127.0.0.1 -c max_connections=200" \
       -l "$WORK/pg.log" -w start >/dev/null
     createdb -h 127.0.0.1 -p 55432 -U lattice lattice
     redis-server --port 56379 --bind 127.0.0.1 --save "" --appendonly no --dir "$WORK" > "$WORK/redis.log" 2>&1 &
@@ -218,6 +226,14 @@ for scenario in $ORDERED $FAILOVER; do
     login)              run login "$LOGIN_CONNECTIONS" -m POST -H "Cookie: $COOKIE" -H "Content-Type: application/x-www-form-urlencoded" \
                           -d "csrfToken=$CSRF&loginId=john&password=john&next=account" "$BASE_URL/account/login" ;;
     metrics)            run metrics "$CONNECTIONS" "$BASE_URL/metrics" ;;
+    token)              run token "$CONNECTIONS" -m POST -H "Content-Type: application/x-www-form-urlencoded" \
+                          -d "grant_type=authorization_code&code=perf&client_id=42&redirect_uri=https://notes.example/cb" "$BASE_URL/api/token" ;;
+    introspection)      run introspection "$CONNECTIONS" -m POST -H "Authorization: Basic $(printf 'rs0:rs0-secret' | base64)" \
+                          -H "Content-Type: application/x-www-form-urlencoded" -d "token=perf-token" "$BASE_URL/api/introspection" ;;
+    userinfo)           run userinfo "$CONNECTIONS" -H "Authorization: Bearer perf-token" "$BASE_URL/api/userinfo" ;;
+    par)                run par "$CONNECTIONS" -m POST -H "Content-Type: application/x-www-form-urlencoded" \
+                          -d "response_type=code&client_id=42&redirect_uri=https://notes.example/cb&scope=openid" "$BASE_URL/api/par" ;;
+    revocation)         run revocation "$CONNECTIONS" -m POST -H "Content-Type: application/x-www-form-urlencoded" -d "token=perf-token&client_id=42" "$BASE_URL/api/revocation" ;;
     failover)
       if [ "$INSTANCES" -lt 2 ] || [ "$START_SERVER" != "yes" ]; then
         echo "  failover needs INSTANCES of 2 or more (started here); skipped"
@@ -252,7 +268,7 @@ fi
 if [ "$PROXY" = "none" ]; then TOPOLOGY="$INSTANCES server, no proxy"; else TOPOLOGY="$INSTANCES server(s) behind $PROXY ($BALANCE)"; fi
 if [ "$START_SERVER" = "yes" ]; then
   if [ -n "${MEMORY_CACHE:-}" ]; then TOPOLOGY="$TOPOLOGY, in-memory storage (no database), read cache: $MEMORY_CACHE"
-  elif [ "$INSTANCES" -gt 1 ]; then TOPOLOGY="$TOPOLOGY, shared PostgreSQL and Redis (cache: $CACHE)"; fi
+  elif [ "${USE_DATABASE:-no}" = "yes" ]; then TOPOLOGY="$TOPOLOGY, PostgreSQL and Redis (cache: $CACHE)"; fi
 fi
 [ "$START_SERVER" = "yes" ] || TOPOLOGY="an existing deployment at $BASE_URL"
 python3 perf/summarize.py "$TMP" "$ORDERED $FAILOVER" "$DURATION" "$CONNECTIONS" "${AUTHLETE_LATENCY_MS:-0}" "${RESILIENCE:-on}" "$TOPOLOGY" > "$OUT"

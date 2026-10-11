@@ -4,14 +4,12 @@ import com.lattice.oidc.security.RequiredActions;
 import com.lattice.oidc.security.UserSessions;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
-import java.util.function.Function;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
-import org.apache.pekko.stream.Materializer;
-import play.mvc.Filter;
-import play.mvc.Http;
+import org.apache.pekko.util.ByteString;
+import play.libs.streams.Accumulator;
+import play.mvc.EssentialAction;
+import play.mvc.EssentialFilter;
 import play.mvc.Result;
 import play.mvc.Results;
 
@@ -22,7 +20,7 @@ import play.mvc.Results;
  * which knows the pending request to return to.
  */
 @Singleton
-public final class RequiredActionsFilter extends Filter {
+public final class RequiredActionsFilter extends EssentialFilter {
 
   /** Gated path prefixes, and where the user continues afterwards. */
   private static final Map<String, String> GATED =
@@ -48,29 +46,30 @@ public final class RequiredActionsFilter extends Filter {
   private final RequiredActions actions;
 
   @Inject
-  public RequiredActionsFilter(Materializer materializer, UserSessions sessions, RequiredActions actions) {
-    super(materializer);
+  public RequiredActionsFilter(UserSessions sessions, RequiredActions actions) {
     this.sessions = sessions;
     this.actions = actions;
   }
 
   @Override
-  public CompletionStage<Result> apply(
-      Function<Http.RequestHeader, CompletionStage<Result>> next, Http.RequestHeader request) {
-    String path = request.path();
-    String destination = destination(path);
-    if (destination == null || ALLOWED.stream().anyMatch(path::startsWith)) {
-      return next.apply(request);
-    }
-    return sessions
-        .current(request)
-        .filter(state -> !actions.pending(state.user()).isEmpty())
-        .<CompletionStage<Result>>map(
-            state ->
-                CompletableFuture.completedFuture(
-                    Results.seeOther(
-                        com.lattice.oidc.controllers.routes.RequiredActionsController.page(destination).url())))
-        .orElseGet(() -> next.apply(request));
+  public EssentialAction apply(EssentialAction next) {
+    return EssentialAction.of(
+        request -> {
+          String path = request.path();
+          String destination = destination(path);
+          if (destination == null || ALLOWED.stream().anyMatch(path::startsWith)) {
+            return next.apply(request);
+          }
+          return sessions
+              .current(request)
+              .filter(state -> !actions.pending(state.user()).isEmpty())
+              .<Accumulator<ByteString, Result>>map(
+                  state ->
+                      Accumulator.done(
+                          Results.seeOther(
+                              com.lattice.oidc.controllers.routes.RequiredActionsController.page(destination).url())))
+              .orElseGet(() -> next.apply(request));
+        });
   }
 
   private static String destination(String path) {

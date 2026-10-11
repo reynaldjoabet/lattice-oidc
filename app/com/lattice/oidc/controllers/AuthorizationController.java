@@ -157,6 +157,12 @@ public final class AuthorizationController extends BaseController {
     Optional<String> shown = current.map(loginState -> loginState.user().displayName());
     AuthorizationPage page =
         AuthorizationPage.from(info, shown, identityProviders.links()).withObbConsent(obbConsent(info));
+    // Signed in: what the user approved for this app before, so the page asks only for what's new.
+    Optional<AppConsentStore.AppConsent> approved =
+        current.flatMap(state -> appConsents.find(state.user().getSubject(), info.getClient().getClientId()));
+    if (approved.isPresent()) {
+      page = page.withApproved(approved.get().scopes(), approved.get().claims());
+    }
     AuthorizationInteraction pending =
         AuthorizationInteraction.from(info, page, current.map(loginState -> loginState.user().getSubject()).orElse(null));
     // Signed in and the app asks for nothing new: no page at all.
@@ -353,8 +359,7 @@ public final class AuthorizationController extends BaseController {
       String sessionId =
           sessions.login(result.user().get(), authTime, null, sessionOut, request, "Password", form.containsKey("rememberMe"));
       AuthorizationInteraction signedIn =
-          interaction.withPage(interaction.page().withLoggedInAs(Optional.of(result.user().get().displayName())).withError(null))
-              .withShownSubject(result.user().get().getSubject());
+          interaction.shownTo(result.user().get(), appConsents.find(result.user().get().getSubject(), interaction.clientId()));
       interactions.put(KIND, ticket, browserId, signedIn);
       Optional<Result> gated = flow.gate(result.user().get(), "authz:" + ticket);
       if (gated.isPresent()) {

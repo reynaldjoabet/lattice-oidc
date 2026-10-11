@@ -1,6 +1,9 @@
 package com.lattice.oidc.security;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertTrue;
 
 import com.lattice.oidc.OidcTestSupport;
 import com.lattice.oidc.client.FakeAuthleteApi;
@@ -12,6 +15,63 @@ import play.Application;
 import play.test.Helpers;
 
 public class LoginServiceTest {
+
+  /** A hash from before the cost was raised (15 MiB), as the previous implementation wrote it. */
+  private static String hashFromBeforeTheUpgrade(String password) {
+    String hash = com.password4j.Password.hash(password).addRandomSalt().withArgon2().getResult();
+    assertTrue(hash, hash.contains("m=15360,"));
+    return hash;
+  }
+
+  @Test
+  public void aHashFromBeforeTheUpgradeIsReplacedWhenItsOwnerSignsIn() {
+    Application app = OidcTestSupport.app(new FakeAuthleteApi());
+    Helpers.running(
+        app,
+        () -> {
+          UserStore users = app.injector().instanceOf(UserStore.class);
+          LoginService login = app.injector().instanceOf(LoginService.class);
+          User max = users.byLoginId("max").orElseThrow();
+          String old = hashFromBeforeTheUpgrade("max");
+          users.save(max.withPasswordHash(old));
+
+          assertEquals(LoginService.Outcome.INVALID_CREDENTIALS, login.authenticate("max", "wrong").outcome());
+          assertEquals("a wrong password changes nothing", old, users.bySubject(max.getSubject()).orElseThrow().passwordHash());
+
+          assertEquals(LoginService.Outcome.SUCCESS, login.authenticate("max", "max").outcome());
+          String upgraded = users.bySubject(max.getSubject()).orElseThrow().passwordHash();
+          assertNotEquals("replaced", old, upgraded);
+          assertTrue(upgraded, upgraded.startsWith("$argon2id$v=19$m=19456,t=2,p=1$"));
+          assertTrue("and it is the same password", PasswordHasher.check("max", upgraded));
+          assertFalse(PasswordHasher.check("wrong", upgraded));
+
+          assertEquals(LoginService.Outcome.SUCCESS, login.authenticate("max", "max").outcome());
+          assertEquals("a current hash is not replaced again", upgraded, users.bySubject(max.getSubject()).orElseThrow().passwordHash());
+        });
+  }
+
+  /**
+   * The replacement is conditional: if the owner changed their password after the old one was verified
+   * but before the upgrade was written, the new password must survive.
+   */
+  @Test
+  public void aHashIsReplacedOnlyIfItIsStillTheOneThatWasVerified() {
+    Application app = OidcTestSupport.app(new FakeAuthleteApi());
+    Helpers.running(
+        app,
+        () -> {
+          UserStore users = app.injector().instanceOf(UserStore.class);
+          User max = users.byLoginId("max").orElseThrow();
+          users.save(max.withPasswordHash("hash-A"));
+
+          assertFalse("changed since it was checked", users.replacePasswordHash(max.getSubject(), "hash-OLD", "hash-B"));
+          assertEquals("hash-A", users.bySubject(max.getSubject()).orElseThrow().passwordHash());
+          assertTrue(users.replacePasswordHash(max.getSubject(), "hash-A", "hash-B"));
+          assertEquals("hash-B", users.bySubject(max.getSubject()).orElseThrow().passwordHash());
+          assertFalse("no such account", users.replacePasswordHash("nobody", "a", "b"));
+          assertFalse(users.replacePasswordHash(max.getSubject(), null, "c"));
+        });
+  }
 
   @Test
   public void locksAccountAfterRepeatedFailures() {

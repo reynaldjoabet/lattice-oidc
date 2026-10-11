@@ -1,13 +1,13 @@
 package com.lattice.oidc.filters;
 
 import com.lattice.oidc.controllers.Pages;
-import java.util.concurrent.CompletionStage;
-import java.util.function.Function;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
-import org.apache.pekko.stream.Materializer;
+import org.apache.pekko.util.ByteString;
 import play.libs.typedmap.TypedKey;
-import play.mvc.Filter;
+import play.libs.streams.Accumulator;
+import play.mvc.EssentialAction;
+import play.mvc.EssentialFilter;
 import play.mvc.Http;
 import play.mvc.Result;
 
@@ -18,33 +18,34 @@ import play.mvc.Result;
  * and the {@code Retry-After} header.
  */
 @Singleton
-public final class UnavailablePageFilter extends Filter {
+public final class UnavailablePageFilter extends EssentialFilter {
 
   /** Set on a response whose request failed because a service Lattice depends on didn't answer. */
   public static final TypedKey<Boolean> UNAVAILABLE = TypedKey.create("unavailable");
 
   @Inject
-  public UnavailablePageFilter(Materializer materializer) {
-    super(materializer);
-  }
+  public UnavailablePageFilter() {}
 
   @Override
-  public CompletionStage<Result> apply(
-      Function<Http.RequestHeader, CompletionStage<Result>> next, Http.RequestHeader request) {
-    return next.apply(request)
-        .thenApply(
-            result -> {
-              if (!result.attrs().containsKey(UNAVAILABLE) || !wantsHtml(request)) {
-                return result;
-              }
-              Result page =
-                  Pages.message(
-                      request.withBody(new Http.RequestBody(null)),
-                      result.status(),
-                      "Temporarily unavailable",
-                      "Signing in is temporarily unavailable. Please try again in a minute.");
-              return result.header("Retry-After").map(value -> page.withHeader("Retry-After", value)).orElse(page);
-            });
+  public EssentialAction apply(EssentialAction next) {
+    return EssentialAction.of(
+        request -> {
+          Accumulator<ByteString, Result> action = next.apply(request);
+          return action.map(
+              result -> {
+                if (!result.attrs().containsKey(UNAVAILABLE) || !wantsHtml(request)) {
+                  return result;
+                }
+                Result page =
+                    Pages.message(
+                        request.withBody(new Http.RequestBody(null)),
+                        result.status(),
+                        "Temporarily unavailable",
+                        "Signing in is temporarily unavailable. Please try again in a minute.");
+                return result.header("Retry-After").map(value -> page.withHeader("Retry-After", value)).orElse(page);
+              },
+              FilterSupport.DIRECT);
+        });
   }
 
   /** Browsers name text/html; API clients ask for JSON or send "* / *" (curl's default). */

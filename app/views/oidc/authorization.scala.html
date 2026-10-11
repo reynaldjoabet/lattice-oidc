@@ -29,6 +29,8 @@
     <div class="intro">
       @if(page.obbConsent().isPresent()) {
         <h1>Share your account data with @page.clientName()?</h1>
+      } else if(page.asksForMore()) {
+        <h1>Allow @page.clientName() more access?</h1>
       } else {
         <h1>Allow @page.clientName() to access your account?</h1>
       }
@@ -56,22 +58,55 @@
       @for(expires <- obb.expires().toScala) { <div class="kv"><span>Access until</span><strong>@expires</strong></div> }
     }
 
-    @if(!page.displayScopes().isEmpty()) {
-      <section>
-        <h2 class="section">@page.clientName() will be able to</h2>
-        <ul class="checklist">
-          @for(scope <- page.displayScopes().asScala) { <li>@scope.description()</li> }
-        </ul>
-      </section>
-    }
+    @if(page.asksForMore()) {
+      @* Approved before: only what's new is the question; the rest is listed below as already allowed. *@
+      @if(!page.newScopes().isEmpty()) {
+        <section>
+          <h2 class="section">New: @page.clientName() also wants to</h2>
+          <ul class="checklist">
+            @for(scope <- page.newScopes().asScala) { <li>@scope.description()</li> }
+          </ul>
+        </section>
+      }
+      @if(!page.newSharedInformation().isEmpty()) {
+        <section>
+          <h2 class="section">New information shared</h2>
+          <ul class="chips">
+            @for(label <- page.newSharedInformation().asScala) { <li>@label</li> }
+          </ul>
+        </section>
+      }
+      @if(!page.alreadyApprovedScopes().isEmpty() || !page.alreadySharedInformation().isEmpty()) {
+        <section>
+          <h2 class="section">Already allowed</h2>
+          <ul class="checklist">
+            @for(scope <- page.alreadyApprovedScopes().asScala) { <li>@scope.description()</li> }
+          </ul>
+          @if(!page.alreadySharedInformation().isEmpty()) {
+            <ul class="chips">
+              @for(label <- page.alreadySharedInformation().asScala) { <li>@label</li> }
+            </ul>
+          }
+        </section>
+      }
+    } else {
+      @if(!page.displayScopes().isEmpty()) {
+        <section>
+          <h2 class="section">@page.clientName() will be able to</h2>
+          <ul class="checklist">
+            @for(scope <- page.displayScopes().asScala) { <li>@scope.description()</li> }
+          </ul>
+        </section>
+      }
 
-    @if(!page.sharedInformation().isEmpty()) {
-      <section>
-        <h2 class="section">Information shared</h2>
-        <ul class="chips">
-          @for(label <- page.sharedInformation().asScala) { <li>@label</li> }
-        </ul>
-      </section>
+      @if(!page.sharedInformation().isEmpty()) {
+        <section>
+          <h2 class="section">Information shared</h2>
+          <ul class="chips">
+            @for(label <- page.sharedInformation().asScala) { <li>@label</li> }
+          </ul>
+        </section>
+      }
     }
 
     @for(purpose <- page.purpose().toScala) {

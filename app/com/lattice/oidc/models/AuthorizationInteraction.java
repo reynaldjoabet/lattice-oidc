@@ -88,6 +88,21 @@ public record AuthorizationInteraction(
         clientIdentifier, subjectType, sectorIdentifier, shownSubject, scopes, consentPrompted);
   }
 
+  /**
+   * The request as shown to {@code user} once signed in: their name on the page, and what they
+   * already approved for this app ({@code approved}, if anything), so the consent page asks only for
+   * what is new.
+   */
+  public AuthorizationInteraction shownTo(User user, java.util.Optional<com.lattice.oidc.stores.AppConsentStore.AppConsent> approved) {
+    AuthorizationPage shown =
+        page.withLoggedInAs(java.util.Optional.of(user.displayName()))
+            .withApproved(
+                approved.map(com.lattice.oidc.stores.AppConsentStore.AppConsent::scopes).orElse(Set.of()),
+                approved.map(com.lattice.oidc.stores.AppConsentStore.AppConsent::claims).orElse(Set.of()))
+            .withError(null);
+    return withPage(shown).withShownSubject(user.getSubject());
+  }
+
   public AuthorizationInteraction withShownSubject(String subject) {
     return new AuthorizationInteraction(
         ticket, page, claimNames, claimLocales, idTokenClaims, requestedClaimsForTx,

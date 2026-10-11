@@ -1,14 +1,12 @@
 package com.lattice.oidc.filters;
 
 import com.typesafe.config.Config;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
-import java.util.function.Function;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
-import org.apache.pekko.stream.Materializer;
-import play.mvc.Filter;
-import play.mvc.Http;
+import org.apache.pekko.util.ByteString;
+import play.libs.streams.Accumulator;
+import play.mvc.EssentialAction;
+import play.mvc.EssentialFilter;
 import play.mvc.Result;
 import play.mvc.Results;
 
@@ -20,32 +18,38 @@ import play.mvc.Results;
  * check the pod over plain HTTP.
  */
 @Singleton
-public final class HstsFilter extends Filter {
+public final class HstsFilter extends EssentialFilter {
 
   private final boolean enabled;
   private final String headerValue;
 
   @Inject
-  public HstsFilter(Materializer materializer, Config config) {
-    super(materializer);
+  public HstsFilter(Config config) {
     this.enabled = config.getBoolean("lattice.security.hsts.enabled");
     this.headerValue =
         "max-age=" + config.getDuration("lattice.security.hsts.max-age").toSeconds() + "; includeSubDomains";
   }
 
   @Override
-  public CompletionStage<Result> apply(
-      Function<Http.RequestHeader, CompletionStage<Result>> next, Http.RequestHeader request) {
-    if (!enabled || request.path().startsWith("/health/")) {
-      return next.apply(request);
+  public EssentialAction apply(EssentialAction next) {
+    if (!enabled) {
+      return next;
     }
-    if (!request.secure()) {
-      boolean safe = request.method().equals("GET") || request.method().equals("HEAD");
-      return CompletableFuture.completedFuture(
-          safe
-              ? Results.movedPermanently("https://" + request.host() + request.uri())
-              : Results.status(403, "HTTPS is required."));
-    }
-    return next.apply(request).thenApply(r -> r.withHeader("Strict-Transport-Security", headerValue));
+    return EssentialAction.of(
+        request -> {
+          if (request.path().startsWith("/health/")) {
+            return next.apply(request);
+          }
+          if (!request.secure()) {
+            boolean safe = request.method().equals("GET") || request.method().equals("HEAD");
+            // Answered without reading the body: a POST over plain HTTP is refused, not redirected.
+            return Accumulator.<ByteString, Result>done(
+                safe
+                    ? Results.movedPermanently("https://" + request.host() + request.uri())
+                    : Results.status(403, "HTTPS is required."));
+          }
+          Accumulator<ByteString, Result> action = next.apply(request);
+          return action.map(r -> r.withHeader("Strict-Transport-Security", headerValue), FilterSupport.DIRECT);
+        });
   }
 }

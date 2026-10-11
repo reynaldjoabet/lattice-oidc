@@ -44,6 +44,51 @@ flowchart LR
 
 Authlete never sees a password or any other credential. Lattice authenticates the user, then tells Authlete only the result: the subject, the claims to release and the ACR.
 
+### The semi-hosted pattern: what it gives Lattice
+
+Authlete needs only the *result* of user authentication, which is a user ID, and doesn't care how it was obtained. So the authorization flow is split into three parts:
+1. **Process the request:** Authlete, through `/auth/authorization`.
+2. **Authenticate the user:** Lattice, by any means.
+3. **Make the response:** Authlete, through `/auth/authorization/issue`, with the subject from step 2.
+
+The token endpoint works the same way for the grants that carry a user's credentials: Authlete hands control back (`PASSWORD`, `JWT_BEARER`, `TOKEN_EXCHANGE`), Lattice checks, then Authlete issues.
+
+Because the protocol engine knows nothing about users, each of these parts can be chosen independently:
+
+| Concern | Handled by | In Lattice |
+| --- | --- | --- |
+| User authentication | Lattice | Password (Argon2), passkeys, authenticator apps, LDAP, upstream providers. Adding a method needs no change in Authlete. |
+| Login sessions | Lattice | `UserSessions`: single sign-on, `max_age`, `prompt`, idle timeout, logout. |
+| The user pool | Lattice | `UserStore` (memory or PostgreSQL) and LDAP. |
+| API gateways | Authlete, or Lattice in front of it | A gateway that validates tokens through RFC 7662 introspection works unchanged, for example an AWS API Gateway Lambda authorizer or IBM API Connect. It calls Lattice's `POST /api/introspection` with resource-server credentials, or Authlete directly. |
+
+**Extensions beyond the specifications.** Authlete's API isn't bound by the OAuth specs, so it offers operations the specs don't define:
+
+| Authlete API | What it's for | In Lattice |
+| --- | --- | --- |
+| `/auth/token/create` | Issue a token outside the standard flows | Issues the token for JWT bearer assertions and token exchange, after Lattice has verified the assertion or subject token itself (`TokenGrantHandler`). |
+| `properties` on issue calls | Attach arbitrary data to a token (optionally hidden from the client) | Not used. |
+| `/client/authorization/get/list`, `/delete` | List the apps a user has authorized, and revoke one | The account page's connected apps, and "Remove access". |
+| `/client/granted_scopes/get`, `/delete` | Remember what a user granted an app, even after its tokens expire (dedicated Authlete servers only) | Not used. Lattice keeps that record itself (`AppConsentStore`, in memory or PostgreSQL), so it also works on Authlete's shared servers. It's used to skip the consent page when nothing new is asked, and to [ask only for what's new](#sign-in-and-account-security) when something is. |
+
+**Several authorization servers, one user pool.** In this pattern, each service can have its own authorization server (its own scopes, clients and release schedule) while sharing one user pool. In Lattice terms that means one Lattice deployment per Authlete service (`authlete.service-id`), each with its own storage, all authenticating against the same user pool. The shared pool should be an LDAP directory, or an upstream provider through identity brokering, not a shared Lattice database: one database holds sessions, consents and audit along with the users, and isn't designed to be shared between deployments. Each deployment has its own sessions, so signing in to one doesn't sign the user in to another. This setup hasn't been tested.
+
+### What an authorization server does
+
+The logic of OAuth 2.0 and OpenID Connect is implemented in Authlete, and access tokens and other data that should be stored in a persistent storage are managed in the database on Authlete side. Therefore, using Authlete makes it much easy to implement an authorization server.
+
+The job of an authorization server is to issue access tokens to client applications. An access token represents that a user has granted permissions to a client application.
+
+When an authorization server receives a request for an access token from a client application, the server asks the user whether to grant permissions to the client application before issuing an access token. For that purpose, the server shows an authorization page which has the structure like below.
+
+In Lattice that page is built from what Authlete returns for the request:
+- **Who is asking:** the client's name, logo and description, and links to its website, privacy policy and terms.
+- **What it asks for:** the scopes in plain language, the user data it will receive, and, where requested, the purpose and fine-grained authorization details.
+- **Who the user is:** the signed-in account, with a link to switch.
+- **The decision:** Deny or Allow.
+
+Sign-in comes first, as separate steps (identifier, then password or passkey), so "Allow" is never the same click as typing a password. Consent is `app/views/oidc/authorization.scala.html`.
+
 ### One authorization, step by step
 
 Each Lattice endpoint forwards the client's request as is, and Authlete's answer (its `action`) tells Lattice what to do next.
@@ -71,7 +116,7 @@ Every flow needs Authlete, so its calls go through a resilience layer (`com.latt
 
 **Choices made for Lattice:**
 - **Writes are retried only when Authlete certainly didn't process them:** a 429, or no connection at all. A retry after a read timeout or a 5xx, when the request was already sent, could redeem an authorization code twice for `authorizationIssue` or `token`. Reads are retried on any transient failure.
-- **A short retry budget:** 3 attempts within 5 seconds. A user's page waits on the call, and it holds one of the Authlete threads.
+- **A short retry budget:** 3 attempts within 5 seconds. A user's page waits on the call, and the call holds one of the `authlete.max-concurrent-calls` permits (default 1,000; each call runs on a virtual thread, so waiting costs almost nothing).
 - **Introspection isn't cached by default (TTL 0).** Otherwise a revoked token could still introspect as active on another replica. Set `cache.ttl.introspection` to trade that delay for fewer Authlete calls.
 - **Cached clients are evicted when a client changes,** because Lattice's console edits clients.
 
@@ -175,6 +220,19 @@ With standard OAuth 2.0 bearer tokens (RFC 6750), the API isn't authenticating t
 A stolen sender-constrained token is useless without the private key. Only then does the token authenticate the sender, as "the client that holds this key". FAPI 2.0 requires one of the two.
 
 **In Lattice:** the token endpoint passes the `DPoP` proof and the TLS client certificate to Authlete, which binds the token to them. The endpoints that accept access tokens pass them again, and Authlete checks that the request matches the binding. Those endpoints are UserInfo, the Open Banking resource APIs and the credential endpoint.
+
+### What an API does with a token, on every request
+
+An API protected by opaque tokens does four things each time. Lattice's own protected endpoints (UserInfo, the credential endpoint, grant management, the Open Banking APIs) follow this pattern. The credential and Open Banking endpoints call introspection themselves; UserInfo and grant management call Authlete APIs that check the token, including its DPoP binding, as part of the same request.
+
+1. **Extract the token.** RFC 6750 allows three places: the `Authorization` header, a form body parameter, and a query parameter. Lattice reads the header everywhere (with the `Bearer` or `DPoP` scheme), and the form body only on UserInfo `POST`, because OpenID Connect requires that. It never reads the query string: URLs end up in logs, browser history and `Referer` headers, and OAuth 2.1 drops that option.
+2. **Introspect it.** The API asks Authlete (`/auth/introspection`) with the token and the scopes this endpoint needs. For sender-constrained tokens it also passes the `DPoP` proof with the request's method and URL, or the client certificate, so a stolen token without its key is refused. An API can also require a specific subject, for example a user's own profile.
+3. **Turn the answer into the RFC 6750 error.** The error goes in the `WWW-Authenticate` header, with no body:
+   - no token or an invalid one: `400` or `401` with `error="invalid_token"`;
+   - a valid token that lacks a scope: `403` with `error="insufficient_scope"` and `scope="..."` listing what is needed.
+
+   Authlete builds the header value, so the format rules don't have to be reimplemented. Lattice sets it with `Responses.bearerError`. The Open Banking endpoints use that specification's JSON error body instead.
+4. **Check what the token doesn't say.** A scope proves the client may use the API, not that it may touch every record. For example, an Open Banking consent can be read only by the client that created it, even with a valid token for the right scope.
 
 ### Opaque or JWT: where the permission is written
 
@@ -554,6 +612,7 @@ PostgreSQL and Redis are both checked at startup, so a wrong address stops the s
 
 **Remembered consent.** Approving an app on the consent page records which scopes and claims were approved, for that account and app, in the same storage as everything else. The approval then applies in every browser and on every server.
 - **Not asked again:** a later request that asks for nothing more is issued straight away, after signing in if needed, and logged as `CONSENT_REUSED`. A request that asks for more shows the page again.
+- **Asked only for what's new:** when the page does come back, it asks "Allow … more access?". It lists only the new permissions and information as the question, and shows what was approved before under "Already allowed". Asked again for everything, people tend to click Allow without reading and miss the one new permission.
 - **Always asked:** when the app sends `prompt=consent`, for Open Banking consents, and for identity-verification (`verified_claims`) or transaction claims, which are approved each time.
 - **Silent sign-in** (`prompt=none`) is issued only for what was approved; anything else fails with `consent_required`.
 - **Forgotten:** when the user removes the app on their account page, or an operator deletes the app.
@@ -565,6 +624,14 @@ PostgreSQL and Redis are both checked at startup, so a wrong address stops the s
 - **Links sent before this change** have no stored address and are refused; the user asks for a new one.
 
 **A limit on concurrent password hashing** (`lattice.login.hashing-concurrency`, `PASSWORD_HASHING_CONCURRENCY`; 0 means the number of CPU cores). Every Argon2 check and hash waits for one of a fixed number of slots. Argon2 is memory-hard, and its throughput stops rising after a few threads (see [perf/README.md](perf/README.md)). Without a limit, a burst of sign-ins or wrong passwords would run one hash per request thread at once, raising memory use with every thread and slowing every check. With a limit, memory stays bounded and requests queue instead.
+
+**Argon2 implementation, cost and upgrades.** Password hashes are Argon2id (19 MiB, two passes: the minimum OWASP's guidance lists) in the standard `$argon2id$v=19$m=19456,t=2,p=1$salt$hash` format, computed with Bouncy Castle. A check uses the parameters stored in the hash, so hashes made with another cost or by another implementation still verify.
+- **Weaker hashes are upgraded at sign-in** (`PasswordHasher.needsRehash`, `LoginService`). A hash made with less memory or fewer passes than a new one gets (such as the 15 MiB ones from before this change) is replaced the next time its owner signs in, when the password is at hand: nobody has to reset anything. A hash that is stronger than today's is left alone, so raising the cost later is never undone.
+- **The upgrade can't overwrite a password change.** It is a conditional update (`UserStore.replacePasswordHash`): it applies only if the stored hash is still the one that was just verified. Without that, an old-password sign-in in flight while the owner changes their password could write the old hash back over the new one. A store that can't make the update conditional simply doesn't upgrade.
+- **A failed upgrade never fails the sign-in.** It is logged as a warning and tried again at the next sign-in.
+- **Rolling back to the previous implementation (password4j) needs one setting first.** Its plain check ignores the memory size in the hash and uses its own default (15 MiB), so accounts upgraded to 19 MiB would be locked out. Set `hash.argon2.memory=19456` in its `psw4j.properties` before rolling back. A test pins this behaviour.
+- **Cost.** A check takes about 23 ms on one thread (17 ms at the old 15 MiB), and a server does around 110 sign-ins per second over HTTP on an 8-core laptop: stronger than before, at about the throughput the old library had at the old cost. That cost is what protects a stolen database, so thousands per second per server isn't something to tune for; scale with servers, and keep sessions, passkeys and tokens off the Argon2 path.
+- **Memory.** Each concurrent check holds 19 MiB, so give the JVM headroom for sign-in-heavy deployments: with the image's `MaxRAMPercentage=75`, a 3 GB container limit gives about 2.25 GB of heap. In the [load tests](perf/README.md) a 1 GB heap cost sign-in about a third of its throughput.
 
 **Required actions** (`lattice.required-actions`). Steps a user must complete before using apps or their account: verify their email (a link is emailed), accept a new version of the terms, choose a new password, or set up an authenticator app or a passkey. Each is pending while its condition holds, so it clears itself once met. They're enforced everywhere a signed-in user goes:
 - **Consent pages** wait for them.

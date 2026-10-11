@@ -105,6 +105,20 @@ public final class PostgresUserStore implements UserStore {
   }
 
   @Override
+  public boolean replacePasswordHash(String subject, String expectedHash, String newHash) {
+    if (subject == null || expectedHash == null || newHash == null) {
+      return false;
+    }
+    // One statement: the row changes only if its hash is still the one that was verified.
+    return database.update(
+            "UPDATE users SET password_hash = ?, updated_at = now() WHERE subject = ? AND password_hash = ?",
+            newHash,
+            subject,
+            expectedHash)
+        == 1;
+  }
+
+  @Override
   public long count() {
     return database.queryOne("SELECT count(*) FROM users", row -> row.getLong(1)).orElse(0L);
   }

@@ -1,6 +1,6 @@
 package com.lattice.oidc.perf;
 
-import com.password4j.Password;
+import com.lattice.oidc.security.PasswordHasher;
 import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -33,21 +33,21 @@ public class PasswordHashingBenchmark {
 
   @Setup
   public void hash() {
-    hash = Password.hash("correct horse battery staple").addRandomSalt().withArgon2().getResult();
+    hash = PasswordHasher.hash("correct horse battery staple");
   }
 
   @Benchmark
   public boolean verifyCorrectPassword() {
-    return Password.check("correct horse battery staple", hash).withArgon2();
+    return PasswordHasher.check("correct horse battery staple", hash);
   }
 
   @Benchmark
   public boolean verifyWrongPassword() {
-    return Password.check("wrong password", hash).withArgon2();
+    return PasswordHasher.check("wrong password", hash);
   }
 
   @Benchmark
   public String hashNewPassword() {
-    return Password.hash("correct horse battery staple").addRandomSalt().withArgon2().getResult();
+    return PasswordHasher.hash("correct horse battery staple");
   }
 }

@@ -4,7 +4,6 @@ import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.models.User;
 import com.lattice.oidc.stores.CounterStore;
 import com.lattice.oidc.stores.UserStore;
-import com.password4j.Password;
 import java.util.Locale;
 import java.util.Optional;
 import jakarta.inject.Inject;
@@ -49,8 +48,8 @@ public final class LoginService {
   public static final String ACCOUNT_PREFIX = "login:account:";
 
   private static final Logger LOG = LoggerFactory.getLogger(LoginService.class);
-  private static final String DUMMY_HASH =
-      Password.hash("lattice-dummy-password").addRandomSalt().withArgon2().getResult();
+  /** Checked when the account doesn't exist, so that an unknown sign-in takes as long as a wrong password. */
+  private static final String DUMMY_HASH = PasswordHasher.hash("lattice-dummy-password");
 
   private final UserStore users;
   private final CounterStore counters;
@@ -126,6 +125,9 @@ public final class LoginService {
       String hash = user.map(User::passwordHash).orElse(null);
       boolean ok = PasswordHasher.check(password, hash != null ? hash : DUMMY_HASH);
       authenticated = ok && hash != null ? user : Optional.empty();
+      if (authenticated.isPresent()) {
+        upgradeHash(authenticated.get(), hash, password);
+      }
     }
     if (authenticated.isPresent()) {
       counters.reset(accountKey);
@@ -145,6 +147,25 @@ public final class LoginService {
       return new Result(Outcome.LOCKED, Optional.empty());
     }
     return new Result(Outcome.INVALID_CREDENTIALS, Optional.empty());
+  }
+
+  /**
+   * A hash made with weaker parameters than a new one gets is replaced now, while the password is at
+   * hand: after raising the cost, accounts move to it as their owners sign in, with no reset for anyone.
+   * The update is conditional on the hash being unchanged, so a password the owner changed meanwhile is
+   * never overwritten. A failure here is logged and never fails the sign-in.
+   */
+  private void upgradeHash(User user, String verifiedHash, String password) {
+    if (!PasswordHasher.needsRehash(verifiedHash)) {
+      return;
+    }
+    try {
+      if (users.replacePasswordHash(user.getSubject(), verifiedHash, PasswordHasher.hash(password))) {
+        LOG.info("Upgraded the password hash of account {} to the current Argon2 parameters", user.getSubject());
+      }
+    } catch (RuntimeException e) {
+      LOG.warn("Could not upgrade the password hash of account {}: {}", user.getSubject(), e.getMessage());
+    }
   }
 
   private boolean locked(String accountKey, String accountAndIpKey, String ipKey) {

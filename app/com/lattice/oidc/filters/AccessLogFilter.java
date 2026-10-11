@@ -2,15 +2,14 @@ package com.lattice.oidc.filters;
 
 import com.lattice.oidc.metrics.Metrics;
 import java.time.Duration;
-import java.util.concurrent.CompletionStage;
-import java.util.function.Function;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
-import org.apache.pekko.stream.Materializer;
+import org.apache.pekko.util.ByteString;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import play.mvc.Filter;
-import play.mvc.Http;
+import play.libs.streams.Accumulator;
+import play.mvc.EssentialAction;
+import play.mvc.EssentialFilter;
 import play.mvc.Result;
 import play.routing.Router;
 
@@ -23,42 +22,44 @@ import play.routing.Router;
  * route pattern (never the raw path, which may contain identifiers).
  */
 @Singleton
-public final class AccessLogFilter extends Filter {
+public final class AccessLogFilter extends EssentialFilter {
 
   private static final Logger ACCESS = LoggerFactory.getLogger("access");
 
   private final Metrics metrics;
 
   @Inject
-  public AccessLogFilter(Materializer materializer, Metrics metrics) {
-    super(materializer);
+  public AccessLogFilter(Metrics metrics) {
     this.metrics = metrics;
   }
 
   @Override
-  public CompletionStage<Result> apply(
-      Function<Http.RequestHeader, CompletionStage<Result>> next, Http.RequestHeader request) {
-    String path = request.path();
-    if (path.startsWith("/health/") || path.startsWith("/assets/") || path.equals("/metrics")) {
-      return next.apply(request);
-    }
-    long start = System.nanoTime();
-    return next.apply(request)
-        .thenApply(
-            result -> {
-              long elapsed = System.nanoTime() - start;
-              String route =
-                  request.attrs().getOptional(Router.Attrs.HANDLER_DEF).map(handler -> handler.path()).orElse("unmatched");
-              metrics.httpRequest(request.method(), route, result.status(), Duration.ofNanos(elapsed));
-              ACCESS.info(
-                  "{} {} {} {}ms rid={} ip={}",
-                  request.method(),
-                  path,
-                  result.status(),
-                  elapsed / 1_000_000,
-                  RequestIdFilter.of(request),
-                  request.remoteAddress());
-              return result;
-            });
+  public EssentialAction apply(EssentialAction next) {
+    return EssentialAction.of(
+        request -> {
+          String path = request.path();
+          if (path.startsWith("/health/") || path.startsWith("/assets/") || path.equals("/metrics")) {
+            return next.apply(request);
+          }
+          long start = System.nanoTime();
+          Accumulator<ByteString, Result> action = next.apply(request);
+          return action.map(
+              result -> {
+                long elapsed = System.nanoTime() - start;
+                String route =
+                    request.attrs().getOptional(Router.Attrs.HANDLER_DEF).map(handler -> handler.path()).orElse("unmatched");
+                metrics.httpRequest(request.method(), route, result.status(), Duration.ofNanos(elapsed));
+                ACCESS.info(
+                    "{} {} {} {}ms rid={} ip={}",
+                    request.method(),
+                    path,
+                    result.status(),
+                    elapsed / 1_000_000,
+                    RequestIdFilter.of(request),
+                    request.remoteAddress());
+                return result;
+              },
+              FilterSupport.DIRECT);
+        });
   }
 }

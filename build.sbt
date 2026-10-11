@@ -87,7 +87,9 @@ ThisBuild / libraryDependencies ++= Seq(
   micrometerPrometheus,
   unboundid,
   bouncycastle,
-  password4j,
+  // Only the tests use it now: as the independent check that hashes written by the previous
+  // Argon2 implementation (and ours, in the other direction) still verify.
+  password4j % Test,
   hikaricp,
   flyway,
   flywayPostgres,
@@ -146,6 +148,33 @@ lazy val root = (project in file("."))
           .getOrElse("unknown")
       }
     ),
+
+    // An ".md5" next to every public asset (public/x.css gets public/x.css.md5 on the classpath).
+    // Play's Assets.versioned reads it to build a fingerprinted URL (x-<md5>.css, cacheable forever),
+    // and it caches an asset's digest only when that file exists. Without it, every page render
+    // searched every JAR on the classpath for five files that were never there: 62% of the CPU time
+    // of a sign-in page, and a ceiling of about 7,000 pages per second.
+    Compile / resourceGenerators += Def.task {
+      import java.nio.file.{Files, Path}
+      import java.security.MessageDigest
+      val publicDir = baseDirectory.value / "public"
+      val outDir    = (Compile / resourceManaged).value / "public"
+      val files     = Files.walk(publicDir.toPath)
+      try {
+        files
+          .filter(path => Files.isRegularFile(path))
+          .map[java.io.File] { asset =>
+            val relative = publicDir.toPath.relativize(asset)
+            val digest   = MessageDigest.getInstance("MD5").digest(Files.readAllBytes(asset))
+            val out      = outDir.toPath.resolve(relative.toString + ".md5")
+            Files.createDirectories(out.getParent)
+            Files.writeString(out, digest.map("%02x".format(_)).mkString)
+            out.toFile
+          }
+          .toArray(new Array[java.io.File](_))
+          .toSeq
+      } finally files.close()
+    }.taskValue,
 
     // Nothing reads the Scaladoc/Javadoc jar, so don't build it for `stage`, `dist` or the image.
     Compile / doc / sources                := Seq.empty,

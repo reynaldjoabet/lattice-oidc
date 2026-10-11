@@ -1,6 +1,7 @@
 package com.lattice.oidc.cache;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import com.lattice.oidc.metrics.Metrics;
@@ -59,6 +60,16 @@ public class CachingStoresTest {
     @Override
     public void save(User user) {
       users.put(user.getSubject(), user);
+    }
+
+    @Override
+    public boolean replacePasswordHash(String subject, String expectedHash, String newHash) {
+      User user = users.get(subject);
+      if (user == null || !expectedHash.equals(user.passwordHash())) {
+        return false;
+      }
+      users.put(subject, user.withPasswordHash(newHash));
+      return true;
     }
   }
 
@@ -132,6 +143,21 @@ public class CachingStoresTest {
 
     users.save(user("1001", "new-hash"));
     assertEquals("a new password is seen at once", "new-hash", users.bySubject("1001").orElseThrow().passwordHash());
+  }
+
+  /** A hash upgraded at sign-in must not be shadowed by the cached copy of the old one. */
+  @Test
+  public void anUpgradedPasswordHashIsSeenAtOnce() {
+    CountingUserStore backing = new CountingUserStore();
+    backing.save(user("1001", "old-hash"));
+    CachingUserStore users = new CachingUserStore(backing, new LocalReadCache(CONFIG, new LocalInvalidationBus(), METRICS), METRICS);
+
+    assertEquals("old-hash", users.bySubject("1001").orElseThrow().passwordHash()); // now cached
+    assertFalse("changed meanwhile: refused", users.replacePasswordHash("1001", "another-hash", "new-hash"));
+    assertEquals("old-hash", users.bySubject("1001").orElseThrow().passwordHash());
+
+    assertTrue(users.replacePasswordHash("1001", "old-hash", "new-hash"));
+    assertEquals("new-hash", users.bySubject("1001").orElseThrow().passwordHash());
   }
 
   @Test

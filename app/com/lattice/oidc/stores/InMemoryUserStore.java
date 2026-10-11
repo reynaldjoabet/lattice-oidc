@@ -3,7 +3,6 @@ package com.lattice.oidc.stores;
 import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.models.User;
-import com.password4j.Password;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -55,7 +54,7 @@ public final class InMemoryUserStore implements UserStore {
           new User(
               (String) account.get("subject"),
               (String) account.get("loginId"),
-              Password.hash((String) account.get("password")).addRandomSalt().withArgon2().getResult(),
+              com.lattice.oidc.security.PasswordHasher.hash((String) account.get("password")),
               (Map<String, Object>) account.get("claims"),
               (Map<String, Object>) account.get("attributes"),
               datasets));
@@ -114,5 +113,24 @@ public final class InMemoryUserStore implements UserStore {
   @Override
   public void save(User user) {
     bySubject.put(user.getSubject(), user);
+  }
+
+  @Override
+  public boolean replacePasswordHash(String subject, String expectedHash, String newHash) {
+    if (subject == null || expectedHash == null || newHash == null) {
+      return false;
+    }
+    boolean[] replaced = {false};
+    // Atomic per account: the comparison and the replacement happen under the map's lock for the key.
+    bySubject.computeIfPresent(
+        subject,
+        (key, user) -> {
+          if (expectedHash.equals(user.passwordHash())) {
+            replaced[0] = true;
+            return user.withPasswordHash(newHash);
+          }
+          return user;
+        });
+    return replaced[0];
   }
 }

@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import jakarta.inject.Singleton;
 
 /**
@@ -47,12 +48,38 @@ public final class InMemoryEphemeralStore implements EphemeralStore {
     }
   }
 
-  private static synchronized void evict(Map<String, Entry> entries, int max) {
-    entries.values().removeIf(entry -> !live(entry));
-    while (entries.size() > max) {
+  /** Set while one thread is evicting: the others carry on, and the cap holds again a moment later. */
+  private final AtomicBoolean evicting = new AtomicBoolean();
+
+  /**
+   * Brings a namespace that went over its cap back under it: first the expired entries, then, if
+   * the rest are all live, the ones expiring soonest, <b>down to 90% of the cap in one pass</b>.
+   *
+   * <p>Making room for one entry at a time was a flaw. Once a namespace was full, every {@code put}
+   * scanned all of it to find the oldest entry, under a lock shared by the whole JVM: a flood of
+   * authorization requests (or a load test) made every later request pay a scan of 50,000 entries,
+   * one thread at a time. Evicting a tenth of the cap per pass spreads one scan over thousands of
+   * puts, and a thread that finds another already evicting just continues.
+   */
+  private void evict(Map<String, Entry> entries, int max) {
+    if (!evicting.compareAndSet(false, true)) {
+      return;
+    }
+    try {
+      Instant now = Instant.now();
+      entries.values().removeIf(entry -> !entry.expiresAt().isAfter(now));
+      int target = max - Math.max(1, max / 10);
+      int excess = entries.size() - target;
+      if (entries.size() <= max || excess <= 0) {
+        return;
+      }
       entries.values().stream()
-          .min(Comparator.comparing(Entry::expiresAt))
-          .ifPresent(oldest -> entries.remove(oldest.key()));
+          .sorted(Comparator.comparing(Entry::expiresAt))
+          .limit(excess)
+          .toList()
+          .forEach(oldest -> entries.remove(oldest.key(), oldest));
+    } finally {
+      evicting.set(false);
     }
   }
 
