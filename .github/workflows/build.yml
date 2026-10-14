@@ -18,7 +18,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Give the compiler room for the Iron/jsoniter macro expansions.
   SBT_OPTS: -Xmx4g -XX:ReservedCodeCacheSize=512m
 
 jobs:

@@ -160,7 +160,7 @@ lazy val root = (project in file("."))
     pipelineStages := Seq(digest, gzip),
 
     // Nothing reads the Scaladoc/Javadoc jar, so don't build it for `stage`, `dist` or the image.
-    Compile / doc / sources                := Seq.empty,
+    Compile / doc / skip                   := true,
     Compile / packageDoc / publishArtifact := false,
 
     // `Docker/publishLocal` builds the image, `Docker/stage` writes only the Dockerfile and files.
@@ -235,6 +235,24 @@ lazy val root = (project in file("."))
       "org.opencontainers.image.source"  -> "https://github.com/reynaldjoabet/lattice-oidc"
     ) ++ sys.env.get("GITHUB_SHA").map("org.opencontainers.image.revision" -> _)
   )
+
+// sbt-native-packager defines these for the Debian, RPM and doc/source archive outputs, which this
+// build never produces; without the exclusion every load warns that nothing uses them.
+Global / excludeLintKeys ++= Set[Def.KeyedInitialize[?]](
+  Debian / daemonGroup,
+  Debian / daemonGroupGid,
+  Debian / daemonUser,
+  Debian / daemonUserUid,
+  Debian / executableScriptName,
+  Linux / javaOptions,
+  Rpm / daemonGroupGid,
+  Rpm / daemonUserUid,
+  Rpm / executableScriptName,
+  Rpm / name,
+  Universal / executableScriptName,
+  UniversalDocs / name,
+  UniversalSrc / name
+)
 
 addCommandAlias("fmt", "scalafmtAll; scalafmtSbt")
 addCommandAlias("fmtCheck", "scalafmtCheckAll; scalafmtSbtCheck")
