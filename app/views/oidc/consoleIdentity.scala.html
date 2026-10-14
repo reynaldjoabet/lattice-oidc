@@ -1,0 +1,46 @@
+@*
+ * Operator console: an account's identity-verification data, the verified_claims datasets that
+ * OpenID Connect for Identity Assurance releases to clients that ask for them. Lattice doesn't
+ * verify identities; this records the result of a KYC check made elsewhere.
+ *@
+@import com.lattice.oidc.models.User
+@import scala.jdk.CollectionConverters._
+@(account: String, user: java.util.Optional[User], json: String, problems: java.util.List[String], saved: Boolean)(implicit request: Http.Request)
+@consoleLayout("Identity verification", "identity") {
+  <div class="console-head">
+    <div>
+      <h1>Identity verification</h1>
+      <p class="muted">Verified claims an account can share, from a KYC check made outside Lattice</p>
+    </div>
+  </div>
+
+  <form method="get" action="@com.lattice.oidc.controllers.routes.ConsoleController.identity()" class="filters" role="search">
+    <label class="visually-hidden" for="account">Account</label>
+    <input type="search" id="account" name="account" value="@account" placeholder="Sign-in name, email or subject" required>
+    <button type="submit">Find</button>
+  </form>
+
+  @if(saved) { <div class="alert alert-success" role="status">@icon("check")<span>Verification data saved.</span></div> }
+  @if(!problems.isEmpty()) {
+    <div class="alert alert-error" role="alert">@icon("alert")<ul class="plain">@for(problem <- problems.asScala) { <li>@problem</li> }</ul></div>
+  }
+
+  @if(user.isPresent()) {
+    <section class="panel">
+      <h2>@user.get().displayName()</h2>
+      <p class="mono muted">subject @user.get().getSubject()</p>
+      <form method="post" action="@com.lattice.oidc.controllers.routes.ConsoleController.saveIdentity()">
+        @helper.CSRF.formField
+        <input type="hidden" name="subject" value="@user.get().getSubject()">
+        <div class="field">
+          <label for="verifiedClaims">Datasets (JSON array; empty for none)</label>
+          <textarea id="verifiedClaims" name="verifiedClaims" rows="18" wrap="off" spellcheck="false" class="mono">@json</textarea>
+          <span class="hint">Each dataset needs a <code>verification</code> object with a <code>trust_framework</code>, and the <code>claims</code> that were verified. Clients only receive the fields they request and the user approves.</span>
+        </div>
+        <button type="submit" class="primary">Save</button>
+      </form>
+    </section>
+  } else {
+    @if(!account.isBlank()) { <section class="panel"><p class="muted">No account matches “@account”.</p></section> }
+  }
+}

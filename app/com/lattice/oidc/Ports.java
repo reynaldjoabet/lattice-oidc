@@ -1,3 +1,4 @@
+package com.lattice.oidc;
 import java.io.ByteArrayOutputStream;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
@@ -141,7 +142,14 @@ public final class Ports {
 
   // ---- 8. Bound the work an attacker can make you do -------------------------------------------
 
-  /** Inflates at most maxBytes of output: limits what a decompression bomb can allocate. */
+  /**
+   * Inflates at most maxBytes of output: limits what a decompression bomb can allocate.
+   *
+   * <p>{@code end()} releases the native memory. It is called in {@code finally} rather than by
+   * try-with-resources because the build targets Java 21, where Inflater is not AutoCloseable (the
+   * IDE's "resource leak" warning comes from a newer JDK that does not know that).
+   */
+  @SuppressWarnings("resource")
   static byte[] inflate(byte[] compressed, int maxBytes) throws DataFormatException {
     Inflater inflater = new Inflater(true); // raw DEFLATE, as JWE "zip": "DEF"
     try {
@@ -320,10 +328,17 @@ public final class Ports {
     BigInteger p = ((ECFieldFp) p256.getCurve().getField()).getP();
     check(!onCurve(new ECPoint(w.getAffineX().add(p), w.getAffineY()), p256), "point: x + p rejected (passes the bare equation)");
 
-    Deflater deflater = new Deflater(Deflater.BEST_COMPRESSION, true);
-    deflater.setInput(new byte[10_000_000]); deflater.finish();
     byte[] bomb = new byte[200_000];
-    int len = deflater.deflate(bomb); deflater.end();
+    int len;
+    @SuppressWarnings("resource") // ended in finally: Deflater is not AutoCloseable on Java 21
+    Deflater deflater = new Deflater(Deflater.BEST_COMPRESSION, true);
+    try {
+      deflater.setInput(new byte[10_000_000]);
+      deflater.finish();
+      len = deflater.deflate(bomb);
+    } finally {
+      deflater.end();
+    }
     byte[] bombBytes = Arrays.copyOf(bomb, len);
     check(len < 100_000, "bomb: 10 MB of zeros compresses to " + len + " bytes, under Nimbus's 100,000-byte input limit");
     check(throwsAny(() -> inflate(bombBytes, 1_000_000)), "bomb: output capped at 1 MB");

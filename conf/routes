@@ -41,6 +41,8 @@ POST    /admin/clients/:id          com.lattice.oidc.controllers.ConsoleControll
 POST    /admin/clients/:id/secret   com.lattice.oidc.controllers.ConsoleController.rotateSecret(request: Request, id: Long)
 POST    /admin/clients/:id/delete   com.lattice.oidc.controllers.ConsoleController.delete(request: Request, id: Long)
 GET     /admin/security             com.lattice.oidc.controllers.ConsoleController.security(request: Request)
+GET     /admin/identity           com.lattice.oidc.controllers.ConsoleController.identity(request: Request, account: String ?= "")
+POST    /admin/identity           com.lattice.oidc.controllers.ConsoleController.saveIdentity(request: Request)
 GET     /admin/audit                com.lattice.oidc.controllers.ConsoleController.audit(request: Request, event: String ?= "", subject: String ?= "", before: java.lang.Long ?= null)
 GET     /ciba/approved              com.lattice.oidc.controllers.CibaApprovalController.approved(request: Request)
 

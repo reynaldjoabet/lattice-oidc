@@ -11,6 +11,8 @@ import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.common.Requests;
 import com.lattice.oidc.common.Responses;
 import com.lattice.oidc.models.ConsoleClient;
+import com.lattice.oidc.models.User;
+import com.lattice.oidc.models.VerifiedClaimsData;
 import com.lattice.oidc.security.AuditService;
 import com.lattice.oidc.security.SecurityStats;
 import com.lattice.oidc.security.UserSessions;
@@ -43,6 +45,8 @@ import play.mvc.Results;
  *   <li>{@code POST /admin/clients/:id/secret}: rotate the client secret; the new one is shown
  *       once (screen 36). Authlete replaces the secret immediately.
  *   <li>{@code POST /admin/clients/:id/delete}: delete the client.
+ *   <li>{@code GET|POST /admin/identity}: an account's identity-verification data ({@code
+ *       verified_claims}), recorded from a KYC check made outside Lattice.
  *   <li>{@code GET /admin/security}: failed sign-ins, locked accounts, passkey adoption and "not
  *       me" reports (screen 38).
  * </ul>
@@ -204,6 +208,56 @@ public final class ConsoleController extends BaseController {
           }
           return Results.seeOther(com.lattice.oidc.controllers.routes.ConsoleController.clients("", "all"));
         });
+  }
+
+  // ---------------------------------------------------------------- identity verification
+
+  /**
+   * {@code GET /admin/identity}: an account's identity-verification data (the {@code verified_claims}
+   * datasets of OpenID Connect for Identity Assurance), found by sign-in name, email or subject.
+   */
+  public CompletionStage<Result> identity(Http.Request request, String account) {
+    return admin(
+        request,
+        state -> {
+          String wanted = account == null ? "" : account.trim();
+          Optional<User> user = wanted.isEmpty() ? Optional.empty() : findAccount(wanted);
+          String json = user.map(u -> VerifiedClaimsData.pretty(u.verifiedClaims())).orElse("");
+          return html(views.html.oidc.consoleIdentity.render(wanted, user, json, List.of(), false, request).body());
+        });
+  }
+
+  /** {@code POST /admin/identity}: replaces the account's datasets, after checking their structure. */
+  public CompletionStage<Result> saveIdentity(Http.Request request) {
+    return admin(
+        request,
+        state -> {
+          Map<String, String[]> form = Requests.form(request);
+          String subject = Optional.ofNullable(Requests.first(form, "subject")).orElse("");
+          String json = Optional.ofNullable(Requests.first(form, "verifiedClaims")).orElse("");
+          Optional<User> user = subject.isEmpty() ? Optional.empty() : users.bySubject(subject);
+          if (user.isEmpty()) {
+            return html(views.html.oidc.consoleIdentity.render(subject, user, "", List.of(), false, request).body());
+          }
+          VerifiedClaimsData.Parsed parsed = VerifiedClaimsData.parse(json);
+          if (!parsed.ok()) {
+            return html(views.html.oidc.consoleIdentity.render(subject, user, json, parsed.problems(), false, request).body());
+          }
+          User updated = user.get().withVerifiedClaims(parsed.datasets());
+          users.save(updated);
+          audit.record(
+              request,
+              AuditService.Event.VERIFIED_CLAIMS_UPDATED,
+              "subject", state.user().getSubject(),
+              "account", subject,
+              "datasets", parsed.datasets().size());
+          String saved = VerifiedClaimsData.pretty(parsed.datasets());
+          return html(views.html.oidc.consoleIdentity.render(subject, Optional.of(updated), saved, List.of(), true, request).body());
+        });
+  }
+
+  private Optional<User> findAccount(String account) {
+    return users.byLoginId(account).or(() -> users.byEmail(account)).or(() -> users.bySubject(account));
   }
 
   // ---------------------------------------------------------------- audit log

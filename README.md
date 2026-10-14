@@ -650,6 +650,34 @@ Enable them for everyone with `verify-email` and `terms-version`, or for one acc
 - **TLS:** use `ldaps://` or `start-tls`; without either, a warning is logged, because passwords would be sent in clear. The directory's certificate must chain to a CA the JVM trusts, or to one in `trust-store`, a PEM file or a PKCS#12/JKS store with `trust-store-password`. It must also name the host in `url`.
 - **Console:** the **LDAP directory** panel shows whether the directory answers, the connection pool, sign-ins checked against it, and the last error.
 
+### Identity verification (OpenID Connect for Identity Assurance)
+
+Lattice doesn't verify identities. A KYC check made elsewhere (in person, a document check, an eKYC provider) does, and its result is stored on the account as `verified_claims` datasets. When a client asks for verified claims, Lattice releases only the datasets and fields that match the request, and only after the user approves them on the consent page.
+- **Recording the result:** in the operator console, **Identity** finds an account by sign-in name, email or subject and edits its datasets as JSON. Each dataset needs a `verification` object with a `trust_framework`, and a non-empty `claims` object. A save is audited as `VERIFIED_CLAIMS_UPDATED`.
+- **What a dataset looks like:**
+  ```json
+  [{
+    "verification": {
+      "trust_framework": "jp_aml",
+      "time": "2026-04-01T10:00:00Z",
+      "evidence": [{ "type": "document", "check_details": [{ "check_method": "vpip" }],
+                     "document_details": { "type": "passport", "document_number": "TZ1234567" } }]
+    },
+    "claims": { "given_name": "Taro", "family_name": "Yamada", "birthdate": "1990-01-01" }
+  }]
+  ```
+- **The consent page** shows the request's `purpose` and the purpose of each verified claim, as the specification requires. An approval of verified claims is never remembered: the user is asked each time.
+- **Discovery metadata is set in Authlete, not in Lattice.** `verified_claims_supported`, `trust_frameworks_supported`, `evidence_supported`, `documents_supported`, `documents_check_methods_supported`, `electronic_records_supported` and `claims_in_verified_claims_supported` come from the service's settings in the Authlete console, as does the version of the specification Authlete validates requests against (its verified-claims validation schema set). Set them there to match the data you store; otherwise clients can't tell what you offer.
+
+### Calls to URLs a client chose
+
+A client chooses its CIBA notification endpoint and its back-channel logout URI when it registers, so whoever registers a client chooses where Lattice sends requests.
+- **No internal addresses** (`lattice.outbound.allow-private-addresses`, `OUTBOUND_ALLOW_PRIVATE_ADDRESSES`). Before each call, the host is resolved, and the call is refused if any address is loopback, private, link-local (where cloud metadata services live), shared or reserved. The refusal is logged. Turn the check off only in development, where clients run on the same machine.
+- **Limit:** the HTTP client resolves the name again when it connects, so DNS rebinding can still get through. An egress firewall or proxy that blocks internal addresses is the stronger control.
+- **Retries:** a failed CIBA ping or push notification is sent again after each of `lattice.ciba.notification-retry-delays` (2, 10 and 30 seconds). In push mode the notification carries the tokens, and the client has no other way to get them. Back-channel logout retries after 5 and 30 seconds. Retries are kept on the server that started them.
+
+**CIBA user codes** are compared in constant time, and wrong ones are limited: after 5 within 15 minutes, every code for that account is refused until the 15 minutes are up. That also lets a client block an account's CIBA flows for that long, as with sign-in lockouts.
+
 ### Audit trail, webhooks and metrics
 
 **Sign-in events say which step happened.**

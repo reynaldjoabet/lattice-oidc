@@ -84,6 +84,11 @@ public final class User implements com.authlete.common.types.User {
     return new User(subject, loginId, newPasswordHash, claims, attributes, verifiedClaims);
   }
 
+  /** The same account with new identity-verification datasets. */
+  public User withVerifiedClaims(List<Map<String, Object>> newVerifiedClaims) {
+    return new User(subject, loginId, passwordHash, claims, attributes, newVerifiedClaims);
+  }
+
   /** The email claim, if the account has one. */
   public java.util.Optional<String> email() {
     return claims.get("email") instanceof String value ? java.util.Optional.of(value) : java.util.Optional.empty();

@@ -1,5 +1,6 @@
 package com.lattice.oidc.handlers;
 
+import com.lattice.oidc.common.OutboundUrls;
 import com.authlete.common.api.AuthleteApi;
 import com.authlete.common.dto.BackchannelLogoutTokenRequest;
 import com.authlete.common.dto.BackchannelLogoutTokenResponse;
@@ -167,7 +168,14 @@ public final class LogoutHandler {
         if (r.getAction() == BackchannelLogoutTokenResponse.Action.OK
             && r.getBackchannelLogoutUri() != null
             && r.getLogoutToken() != null) {
-          deliver(client, r.getBackchannelLogoutUri().toString(), r.getLogoutToken(), 0);
+          String uri = r.getBackchannelLogoutUri().toString();
+          // The client chose this URI: never call a loopback, private or link-local address.
+          Optional<String> problem = OutboundUrls.problem(uri, config.outboundAllowPrivateAddresses());
+          if (problem.isPresent()) {
+            LOG.warn("Back-channel logout to client {} not sent to {}: {}", client, uri, problem.get());
+          } else {
+            deliver(client, uri, r.getLogoutToken(), 0);
+          }
         }
       } catch (RuntimeException e) {
         LOG.warn("Back-channel logout token for client {} failed: {}", client, e.getMessage());

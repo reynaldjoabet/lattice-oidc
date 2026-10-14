@@ -203,4 +203,50 @@ public class ConsoleTest {
     assertFalse(johns.contains(">LOGIN_FAILED</span>"));
     assertEquals(403, route(app, get("/admin/audit").session(signIn("jane"))).status());
   }
+
+  private String subjectOn(String page) {
+    java.util.regex.Matcher m = java.util.regex.Pattern.compile("name=\"subject\" value=\"([^\"]+)\"").matcher(page);
+    assertTrue(page, m.find());
+    return m.group(1);
+  }
+
+  @Test
+  public void identityDataIsCheckedSavedAndAudited() {
+    Map<String, String> admin = signIn("john");
+    String page = contentAsString(route(app, get("/admin/identity?account=jane").session(admin)));
+    assertTrue(page.contains("name=\"verifiedClaims\""));
+    String subject = subjectOn(page);
+
+    Result refused =
+        route(app, withCsrf(post("/admin/identity", Map.of("subject", subject, "verifiedClaims", "[{\"claims\":{\"a\":1}}]"))).session(admin));
+    assertTrue(contentAsString(refused).contains("has no &quot;verification&quot; object"));
+
+    String json = "[{\"verification\":{\"trust_framework\":\"jp_aml\"},\"claims\":{\"given_name\":\"Jane\"}}]";
+    Result saved = route(app, withCsrf(post("/admin/identity", Map.of("subject", subject, "verifiedClaims", json))).session(admin));
+    assertTrue(contentAsString(saved).contains("Verification data saved."));
+
+    com.lattice.oidc.models.User jane =
+        app.injector().instanceOf(com.lattice.oidc.stores.UserStore.class).bySubject(subject).orElseThrow();
+    assertEquals(1, jane.verifiedClaims().size());
+    assertEquals("jp_aml", ((Map<?, ?>) jane.verifiedClaims().get(0).get("verification")).get("trust_framework"));
+    assertEquals(
+        1,
+        app.injector()
+            .instanceOf(com.lattice.oidc.stores.AuditEventStore.class)
+            .search(
+                new com.lattice.oidc.stores.AuditEventStore.Query(
+                    java.util.Optional.of("VERIFIED_CLAIMS_UPDATED"), java.util.Optional.empty(), java.util.Optional.empty(), 10))
+            .size());
+  }
+
+  @Test
+  public void onlyAdminsEditIdentityData() {
+    String subject = subjectOn(contentAsString(route(app, get("/admin/identity?account=jane").session(signIn("john")))));
+    com.lattice.oidc.stores.UserStore users = app.injector().instanceOf(com.lattice.oidc.stores.UserStore.class);
+    int before = users.bySubject(subject).orElseThrow().verifiedClaims().size();
+    String json = "[{\"verification\":{\"trust_framework\":\"jp_aml\"},\"claims\":{\"given_name\":\"Mallory\"}}]";
+    Result jane = route(app, withCsrf(post("/admin/identity", Map.of("subject", subject, "verifiedClaims", json))).session(signIn("jane")));
+    assertEquals(403, jane.status());
+    assertEquals(before, users.bySubject(subject).orElseThrow().verifiedClaims().size());
+  }
 }

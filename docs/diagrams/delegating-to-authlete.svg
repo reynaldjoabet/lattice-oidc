@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2000 900" width="2000" height="900" role="img" aria-labelledby="t d">
+  <title id="t">Delegating OAuth/OIDC processing to Authlete</title>
+  <desc id="d">An API client sends an OAuth/OIDC request to your service, which forwards its contents unchanged to the Authlete API.</desc>
+  <defs>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="115%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-opacity="0.3"/>
+    </filter>
+    <style>
+      text { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; }
+      .code { font-family: Menlo, Consolas, "Courier New", monospace; font-size: 24px; font-weight: 700; fill: #222; }
+      .label { font-size: 30px; font-weight: 700; fill: #1b457c; text-anchor: middle; }
+    </style>
+  </defs>
+  <rect width="2000" height="900" fill="#fff"/>
+
+  <text x="965" y="198" font-size="46" font-weight="700" fill="#111" text-anchor="middle">Delegating OAuth/OIDC processing to Authlete</text>
+
+  <!-- API client -->
+  <rect x="68" y="283" width="332" height="422" rx="14" fill="#e6e6e6" filter="url(#shadow)"/>
+  <text x="234" y="482" font-size="30" font-weight="700" fill="#111" text-anchor="middle">API client</text>
+  <text x="234" y="514" font-size="22" fill="#111" text-anchor="middle">(through a user agent)</text>
+
+  <!-- Your service -->
+  <rect x="817" y="283" width="332" height="422" rx="14" fill="#f8bb54" filter="url(#shadow)"/>
+  <text x="983" y="470" font-size="30" font-weight="700" fill="#111" text-anchor="middle">Your service</text>
+  <text x="983" y="502" font-size="22" fill="#111" text-anchor="middle">(a web application,</text>
+  <text x="983" y="530" font-size="22" fill="#111" text-anchor="middle">an API gateway, ...)</text>
+
+  <!-- Authlete -->
+  <rect x="1570" y="280" width="364" height="428" rx="14" fill="#1b457c" filter="url(#shadow)"/>
+  <rect x="1572" y="464" width="148" height="56" fill="#fff"/>
+  <text x="1646" y="505" font-size="34" font-weight="700" fill="#1b457c" text-anchor="middle">API</text>
+  <path d="M1790 372 l36 12 v34 c0 22 -14 40 -36 50 c-22 -10 -36 -28 -36 -50 v-34 z" fill="none" stroke="#fff" stroke-width="5" stroke-linejoin="round"/>
+  <text x="1790" y="478" font-size="30" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="3">AUTHLETE</text>
+  <text x="1790" y="528" font-size="22" fill="#fff" text-anchor="middle">(OAuth/OIDC protocol</text>
+  <text x="1790" y="558" font-size="22" fill="#fff" text-anchor="middle">processing and token</text>
+  <text x="1790" y="588" font-size="22" fill="#fff" text-anchor="middle">lifecycle management)</text>
+
+  <!-- Arrow 1 -->
+  <path d="M402 473 h336 v-18 l76 38 -76 38 v-18 h-336 z" fill="#cdd8e6"/>
+  <text class="label" x="603" y="296">Receives an OAuth/OIDC</text>
+  <text class="label" x="603" y="334">request from the</text>
+  <text class="label" x="603" y="372">API client</text>
+  <rect x="477" y="405" width="263" height="170" fill="#cdd8e6"/>
+  <text class="code" x="484" y="446">GET /authorize?</text>
+  <text class="code" x="496" y="472">client_id=…&amp;</text>
+  <text class="code" x="496" y="498">response_type=code&amp;</text>
+  <text class="code" x="496" y="524">redirect_uri=…&amp;</text>
+  <text class="code" x="496" y="550">scope=…</text>
+
+  <!-- Arrow 2 -->
+  <path d="M1150 493 h336 v-18 l76 38 -76 38 v-18 h-336 z" transform="translate(-6 -18)" fill="#cdd8e6"/>
+  <text class="label" x="1356" y="296">Forwards the request</text>
+  <text class="label" x="1356" y="334">contents to the Authlete</text>
+  <text class="label" x="1356" y="372">API unchanged</text>
+  <rect x="1198" y="389" width="316" height="245" fill="#cdd8e6"/>
+  <text class="code" x="1205" y="428">POST /auth/authorization</text>
+  <text class="code" x="1205" y="454">…</text>
+  <text class="code" x="1205" y="480">{ "parameters":</text>
+  <text class="code" x="1240" y="506">"client_id=…&amp;</text>
+  <text class="code" x="1252" y="532">response_type=code&amp;</text>
+  <text class="code" x="1252" y="558">redirect_uri=…&amp;</text>
+  <text class="code" x="1252" y="584">scope=…"</text>
+  <text class="code" x="1205" y="610">}</text>
+</svg>

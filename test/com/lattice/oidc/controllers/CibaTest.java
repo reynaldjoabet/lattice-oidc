@@ -49,6 +49,10 @@ public class CibaTest {
   private Application app;
 
   private void start(String mode) throws Exception {
+    start(mode, Map.of());
+  }
+
+  private void start(String mode, Map<String, Object> extraConfig) throws Exception {
     device = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
     device.createContext(
         "/api/authenticate/",
@@ -89,13 +93,11 @@ public class CibaTest {
                 new BackchannelAuthenticationCompleteResponse()
                     .setAction(BackchannelAuthenticationCompleteResponse.Action.NO_ACTION));
     authleteSays(r -> {});
-    app =
-        app(
-            fake,
-            Map.of(
-                "lattice.ciba.mode", mode,
-                "lattice.ciba.base-url", "http://127.0.0.1:" + device.getAddress().getPort(),
-                "lattice.ciba.workspace", "test-workspace"));
+    Map<String, Object> config = new HashMap<>(extraConfig);
+    config.put("lattice.ciba.mode", mode);
+    config.put("lattice.ciba.base-url", "http://127.0.0.1:" + device.getAddress().getPort());
+    config.put("lattice.ciba.workspace", "test-workspace");
+    app = app(fake, config);
     Helpers.start(app);
   }
 
@@ -217,6 +219,93 @@ public class CibaTest {
 
     authleteSays(r -> r.setUserCodeRequired(true).setUserCode("675325"));
     assertEquals(200, authenticate().status());
+  }
+
+  /** The user code works like a password: after 5 wrong ones, even the right one is refused for a while. */
+  @Test
+  public void repeatedWrongUserCodesBlockEvenTheRightOne() throws Exception {
+    start("sync");
+    for (int i = 0; i < 5; i++) {
+      authleteSays(r -> r.setUserCodeRequired(true).setUserCode("000000"));
+      assertEquals(400, authenticate().status());
+    }
+    authleteSays(r -> r.setUserCodeRequired(true).setUserCode("675325"));
+    assertEquals(400, authenticate().status());
+    assertEquals(BackchannelAuthenticationFailRequest.Reason.INVALID_USER_CODE, failureReason());
+    assertEquals(0, fake.count("backchannelAuthenticationIssue"));
+  }
+
+  /** A client notification endpoint that answers in a scripted order; records what it was sent. */
+  private record Receiver(HttpServer server, List<String> authorizations, List<String> bodies) {
+    static Receiver answering(int... statuses) throws Exception {
+      HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+      List<String> authorizations = new CopyOnWriteArrayList<>();
+      List<String> bodies = new CopyOnWriteArrayList<>();
+      server.createContext(
+          "/cb",
+          ex -> {
+            authorizations.add(ex.getRequestHeaders().getFirst("Authorization"));
+            bodies.add(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            int status = statuses[Math.min(bodies.size(), statuses.length) - 1];
+            ex.sendResponseHeaders(status, -1);
+            ex.close();
+          });
+      server.start();
+      return new Receiver(server, authorizations, bodies);
+    }
+
+    String url() {
+      return "http://127.0.0.1:" + server.getAddress().getPort() + "/cb";
+    }
+  }
+
+  private void authleteNotifies(String endpoint) {
+    fake.answer(
+        "backchannelAuthenticationComplete",
+        args ->
+            new BackchannelAuthenticationCompleteResponse()
+                .setAction(BackchannelAuthenticationCompleteResponse.Action.NOTIFICATION)
+                .setClientNotificationEndpoint(java.net.URI.create(endpoint))
+                .setClientNotificationToken("notification-token-1")
+                .setResponseContent("{\"auth_req_id\":\"arid-1\",\"access_token\":\"at-1\"}"));
+  }
+
+  /** Push mode carries the tokens, so a failed notification is sent again until the client takes it. */
+  @Test
+  public void aFailedNotificationIsRetried() throws Exception {
+    Receiver client = Receiver.answering(500, 204);
+    try {
+      start("sync", Map.of("lattice.outbound.allow-private-addresses", true, "lattice.ciba.notification-retry-delays", List.of("100ms", "100ms")));
+      authleteNotifies(client.url());
+      assertEquals(200, authenticate().status());
+      long deadline = System.currentTimeMillis() + 10_000;
+      while (client.bodies().size() < 2 && System.currentTimeMillis() < deadline) {
+        Thread.sleep(20);
+      }
+      assertEquals("sent again after the 500", 2, client.bodies().size());
+      assertEquals("Bearer notification-token-1", client.authorizations().get(1));
+      assertTrue(client.bodies().get(1).contains("at-1"));
+      Thread.sleep(400);
+      assertEquals("not sent again once accepted", 2, client.bodies().size());
+    } finally {
+      client.server().stop(0);
+    }
+  }
+
+  /** The client chose the endpoint: one on a loopback or private address is never called. */
+  @Test
+  public void notificationsToPrivateAddressesAreNotSent() throws Exception {
+    Receiver client = Receiver.answering(204);
+    try {
+      start("sync");
+      authleteNotifies(client.url());
+      assertEquals(200, authenticate().status());
+      awaitCompletion();
+      Thread.sleep(500);
+      assertEquals(0, client.bodies().size());
+    } finally {
+      client.server().stop(0);
+    }
   }
 
   @Test

@@ -14,6 +14,7 @@ import com.authlete.common.dto.Scope;
 import com.lattice.oidc.client.AuthleteExecutionContext;
 import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.common.LatticeConfig;
+import com.lattice.oidc.common.OutboundUrls;
 import com.lattice.oidc.common.Responses;
 import com.lattice.oidc.common.WebException;
 import com.lattice.oidc.models.CibaApproval;
@@ -21,13 +22,14 @@ import com.lattice.oidc.models.ConsentLabels;
 import com.lattice.oidc.models.User;
 import com.lattice.oidc.stores.EphemeralStore;
 import com.lattice.oidc.stores.UserStore;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import jakarta.inject.Inject;
 import jakarta.inject.Provider;
@@ -36,7 +38,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.apache.pekko.actor.ActorSystem;
 import play.libs.ws.WSClient;
-import play.libs.ws.WSResponse;
 
 /**
  * Drives the end-user's decision on the authentication device and reports it to Authlete
@@ -61,6 +62,11 @@ public final class CibaHandler {
   private static final String CALLBACKS = "ciba-callback";
   /** Requests waiting on the built-in approval page, by approval id, indexed by account. */
   private static final String APPROVALS = "ciba-approval";
+  /** Wrong CIBA user codes, counted per account. */
+  private static final String USER_CODE_FAILURES = "ciba-user-code-failures";
+
+  static final int USER_CODE_MAX_FAILURES = 5;
+  static final Duration USER_CODE_FAILURE_WINDOW = Duration.ofMinutes(15);
 
   private final Provider<AuthleteApi> api;
   private final AuthenticationDevice device;
@@ -103,11 +109,8 @@ public final class CibaHandler {
     User user = userByHint(backchannelResponse).orElseThrow(() -> fail(backchannelResponse.getTicket(), Reason.UNKNOWN_USER_ID));
     // Check the user code contained in the backchannel authentication request if necessary
     // (backchannel_user_code_parameter). The user code is stored as the "code" attribute of the user.
-    if (backchannelResponse.isUserCodeRequired()) {
-      Object code = user.getAttribute("code");
-      if (!(code instanceof String c) || !c.equals(backchannelResponse.getUserCode())) {
-        throw fail(backchannelResponse.getTicket(), Reason.INVALID_USER_CODE);
-      }
+    if (backchannelResponse.isUserCodeRequired() && !userCodeMatches(user, backchannelResponse.getUserCode())) {
+      throw fail(backchannelResponse.getTicket(), Reason.INVALID_USER_CODE);
     }
     // Check the binding message in the backchannel authentication request if necessary. It must be
     // short and printable because it is displayed on both the consumption and authentication devices.
@@ -127,6 +130,33 @@ public final class CibaHandler {
     // authorization (in the background).
     start(user, backchannelResponse, issue);
     return issue.getResponseContent();
+  }
+
+  /**
+   * Whether {@code given} is the user's CIBA user code. The user code works like a password a client
+   * must know to start a flow for the user, so wrong guesses are limited: after {@link
+   * #USER_CODE_MAX_FAILURES} within {@link #USER_CODE_FAILURE_WINDOW}, every code is refused until the
+   * window ends (which also lets a client block the user's CIBA flows for that long, as with sign-in
+   * lockouts). The comparison takes the same time wherever the codes differ.
+   */
+  private boolean userCodeMatches(User user, String given) {
+    String key = user.getSubject();
+    int failures = store.get(USER_CODE_FAILURES, key).map(entry -> Integer.parseInt(entry.json())).orElse(0);
+    if (failures >= USER_CODE_MAX_FAILURES) {
+      LOG.warn("CIBA user code refused for {}: too many wrong codes", key);
+      return false;
+    }
+    Object code = user.getAttribute("code");
+    boolean matches =
+        code instanceof String expected
+            && given != null
+            && MessageDigest.isEqual(expected.getBytes(StandardCharsets.UTF_8), given.getBytes(StandardCharsets.UTF_8));
+    if (matches) {
+      store.delete(USER_CODE_FAILURES, key);
+    } else {
+      store.put(USER_CODE_FAILURES, key, null, key, Integer.toString(failures + 1), USER_CODE_FAILURE_WINDOW);
+    }
+    return matches;
   }
 
   /**
@@ -390,30 +420,52 @@ public final class CibaHandler {
     }
   }
 
-  /** Ping/push mode: POST the result to the client notification endpoint (no redirects). */
+  /**
+   * Ping/push mode: POSTs the result to the client notification endpoint (no redirects), in the
+   * background. A failure (an error or a status other than 2xx) is retried after each of the
+   * configured {@code notification-retry-delays}, then logged. In push mode this matters most: the
+   * notification carries the tokens, and the client has no other way to get them. Retries are kept
+   * on this server, so a restart during them drops the remaining attempts.
+   *
+   * <p>The endpoint is chosen by the client, so it is checked first ({@link OutboundUrls}): one on a
+   * loopback, private or link-local address is never called.
+   */
   private void notifyClient(BackchannelAuthenticationCompleteResponse response) {
     if (response.getClientNotificationEndpoint() == null) {
       return;
     }
-    Duration timeout = config.ciba().notificationTimeout();
-    try {
-      WSResponse r =
-          ws.url(response.getClientNotificationEndpoint().toString())
-              .setFollowRedirects(false)
-              .setRequestTimeout(timeout)
-              .addHeader("Authorization", "Bearer " + response.getClientNotificationToken())
-              .setContentType("application/json")
-              .post(response.getResponseContent())
-              .toCompletableFuture()
-              .get(timeout.toMillis() + 1_000L, TimeUnit.MILLISECONDS);
-      if (r.getStatus() / 100 != 2 && r.getStatus() / 100 != 3) {
-        LOG.warn("CIBA client notification returned HTTP {}", r.getStatus());
-      }
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-    } catch (Exception e) {
-      LOG.warn("CIBA client notification failed: {}", e.getMessage());
+    String endpoint = response.getClientNotificationEndpoint().toString();
+    Optional<String> problem = OutboundUrls.problem(endpoint, config.outboundAllowPrivateAddresses());
+    if (problem.isPresent()) {
+      LOG.warn("CIBA client notification not sent to {}: {}", endpoint, problem.get());
+      return;
     }
+    deliver(endpoint, response.getClientNotificationToken(), response.getResponseContent(), 0);
+  }
+
+  private void deliver(String endpoint, String notificationToken, String body, int attempt) {
+    List<Duration> delays = config.ciba().notificationRetryDelays();
+    ws.url(endpoint)
+        .setFollowRedirects(false)
+        .setRequestTimeout(config.ciba().notificationTimeout())
+        .addHeader("Authorization", "Bearer " + notificationToken)
+        .setContentType("application/json")
+        .post(body)
+        .whenComplete(
+            (r, error) -> {
+              if (error == null && r.getStatus() / 100 == 2) {
+                return;
+              }
+              String reason = error != null ? error.getMessage() : "HTTP " + r.getStatus();
+              if (attempt < delays.size()) {
+                LOG.info("CIBA client notification failed ({}); retrying", reason);
+                actorSystem
+                    .scheduler()
+                    .scheduleOnce(delays.get(attempt), () -> deliver(endpoint, notificationToken, body, attempt + 1), executionContext);
+              } else {
+                LOG.warn("CIBA client notification failed after {} attempts: {}", attempt + 1, reason);
+              }
+            });
   }
 
   private String acr(String[] requested, String verifiedAcr) {

@@ -490,3 +490,5 @@ However, because user authentication is included as one step during the authoriz
 The primary advantage of this architecture is in that the backend service can focus on implementing OAuth 2.0 and OpenID Connect without caring about other components such as identity management, user authentication, login session management, API management and fraud detection. And, consequently, it leads to another major advantage which enables the backend service (implementation of OAuth 2.0 and OpenID Connect) to be combined with any solution of other components and thus gives flexibility to frontend server implementations.
 
 [new-architecture-of-oauth-2-0-and-openid-connect-implementation](https://darutk.medium.com/new-architecture-of-oauth-2-0-and-openid-connect-implementation-18f408f9338d)
+
+TLS works only my protecting the stream of bits in transit. It does not allow for message-level and application-level security operations. But what if we could sign the messages themselves?

@@ -66,7 +66,9 @@ public final class AuditService {
     RECOVERY_CODES_REPLACED,
     EMAIL_VERIFIED,
     TERMS_ACCEPTED,
-    TERMS_DECLINED
+    TERMS_DECLINED,
+    /** An operator replaced an account's identity-verification data ({@code account}, {@code datasets}). */
+    VERIFIED_CLAIMS_UPDATED
   }
 
   /** How many recent events the operator console overview shows. */

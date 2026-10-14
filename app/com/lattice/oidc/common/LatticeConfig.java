@@ -44,7 +44,8 @@ public final class LatticeConfig {
       Duration requestTimeout,
       Duration pollInterval,
       int pollMaxCount,
-      Duration notificationTimeout) {}
+      Duration notificationTimeout,
+      List<Duration> notificationRetryDelays) {}
 
   private final Optional<String> publicBaseUrl;
   private final boolean trustProxyCertificateHeaders;
@@ -71,6 +72,7 @@ public final class LatticeConfig {
   private final List<String> obbRootCertificates;
   private final Optional<String> obbDirectoryJwksUri;
   private final Duration backchannelLogoutTimeout;
+  private final boolean outboundAllowPrivateAddresses;
   private final String pairwiseSecret;
   private final List<String> adminLoginIds;
   private final Passkeys passkeys;
@@ -152,13 +154,15 @@ public final class LatticeConfig {
             device.getDuration("request-timeout"),
             device.getDuration("poll-interval"),
             device.getInt("poll-max-count"),
-            device.getDuration("notification-timeout"));
+            device.getDuration("notification-timeout"),
+            List.copyOf(device.getDurationList("notification-retry-delays")));
     identityProvidersFile = optionalString(lattice, "identity-providers.file");
     credentialOfferEndpoint = lattice.getString("vci.credential-offer-endpoint");
     obbEnabled = lattice.getBoolean("obb.enabled");
     obbRootCertificates = lattice.getStringList("obb.root-certificates");
     obbDirectoryJwksUri = optionalString(lattice, "obb.directory-jwks-uri");
     backchannelLogoutTimeout = lattice.getDuration("logout.backchannel-timeout");
+    outboundAllowPrivateAddresses = lattice.getBoolean("outbound.allow-private-addresses");
     adminLoginIds = stringList(lattice, "admin.login-ids");
     passkeys =
         new Passkeys(
@@ -316,6 +320,14 @@ public final class LatticeConfig {
 
   public Duration backchannelLogoutTimeout() {
     return backchannelLogoutTimeout;
+  }
+
+  /**
+   * Whether requests to client-chosen URLs (CIBA notifications, back-channel logout) may go to
+   * loopback and private addresses; see {@link OutboundUrls}.
+   */
+  public boolean outboundAllowPrivateAddresses() {
+    return outboundAllowPrivateAddresses;
   }
 
   public Passkeys passkeys() {
