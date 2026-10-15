@@ -25,9 +25,9 @@
     <div class="console-layout">
       <nav class="console-nav" aria-label="Console">
         <a class="brand" href="@com.lattice.oidc.controllers.routes.AdminController.index()">
-          <img src="@routes.Assets.versioned("images/logo.svg")" alt="">
+          @brandMark()
           <span>@ui.brandName()</span>
-          <span class="tag">Admin</span>
+          <span class="tag">Console</span>
         </a>
         <ul>
           @item("overview", "Overview", com.lattice.oidc.controllers.routes.AdminController.index().url)

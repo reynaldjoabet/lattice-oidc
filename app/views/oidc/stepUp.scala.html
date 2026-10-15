@@ -5,7 +5,7 @@
 @import com.lattice.oidc.models.AuthorizationPage
 @import scala.jdk.OptionConverters._
 @(page: AuthorizationPage)(implicit request: Http.Request)
-@layout("Verify it's you") {
+@layout("Verify it's you", context = requestContext(page, 2)) {
   <div class="status">
     <span class="status-icon info">@icon("shield", "")</span>
     <h1>Verify it's you</h1>

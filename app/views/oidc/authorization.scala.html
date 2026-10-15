@@ -7,13 +7,7 @@
 @import scala.jdk.CollectionConverters._
 @import scala.jdk.OptionConverters._
 @(page: AuthorizationPage)(implicit request: Http.Request)
-@clientMark = {
-  @page.logoUri().toScala match {
-    case Some(logo) => { <img class="client-logo" src="@logo" alt="@page.clientName() logo" referrerpolicy="no-referrer"> }
-    case None => { <span class="monogram" aria-hidden="true">@page.clientInitials()</span> }
-  }
-}
-@layout("Allow " + page.clientName(), aside = clientMark) {
+@layout("Allow " + page.clientName(), wide = true, context = requestContext(page, 3)) {
   <form method="post" action="@com.lattice.oidc.controllers.routes.AuthorizationController.decision()">
     @helper.CSRF.formField
     <input type="hidden" name="ticket" value="@page.ticket()">

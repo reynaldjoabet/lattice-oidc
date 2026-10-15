@@ -1,12 +1,16 @@
 @*
- * Shell of all end-user pages: brand (hexagonal lattice logo) inside the card, an optional element
- * on the right of the brand row (`aside`), optional footer links (lattice.ui). No inline scripts
- * or styles (CSP), not indexed by search engines, light/dark from the OS. `wide` is for pages with
- * more content (developer tools).
+ * Shell of all end-user pages, in two parts. On the left, the context panel: the brand, then what
+ * this page is about (`context`: the app asking and the path through sign-in, see requestContext),
+ * over a faint lattice drawing. On the right, the task itself, under a bar that names the address
+ * people should see in the address bar. On a phone the panel shrinks to a header.
+ *
+ * `aside` sits at the left of that top bar (a back link, sign out); `wide` is for pages with more
+ * content (consent, developer tools). No inline scripts or styles (CSP), not indexed by search
+ * engines, light/dark from the OS, optional footer links (lattice.ui).
  *@
 @import com.lattice.oidc.models.UiSettings
 @import scala.jdk.OptionConverters._
-@(title: String, wide: Boolean = false, aside: Html = play.twirl.api.HtmlFormat.empty)(content: Html)(implicit request: Http.RequestHeader)
+@(title: String, wide: Boolean = false, aside: Html = play.twirl.api.HtmlFormat.empty, context: Html = play.twirl.api.HtmlFormat.empty)(content: Html)(implicit request: Http.RequestHeader)
 @ui = @{ UiSettings.of(request) }
 <!DOCTYPE html>
 <html lang="en">
@@ -22,25 +26,44 @@
     <script src="@routes.Assets.versioned("javascripts/oidc.js")" defer></script>
     <script src="@routes.Assets.versioned("javascripts/passkeys.js")" defer></script>
   </head>
-  <body>
+  <body class="auth">
     <a class="skip-link" href="#main">Skip to content</a>
-    <main id="main" class="card@if(wide){ wide}">
-      <div class="card-head">
+    <div class="shell">
+      <aside class="context" aria-label="About this page">
         <a class="brand" href="@com.lattice.oidc.controllers.routes.HomeController.index()">
-          <img src="@routes.Assets.versioned("images/logo.svg")" alt="">
+          @brandMark()
           <span>@ui.brandName()</span>
         </a>
-        @aside
+        @if(context.body.trim.isEmpty) {
+          <div class="ctx-block ctx-default">
+            <span class="eyebrow">Your account</span>
+            <p class="ctx-lead">One @ui.brandName() account for every app that signs you in with it.</p>
+          </div>
+        } else {
+          @context
+        }
+        @latticeArt()
+      </aside>
+
+      <div class="pane">
+        <div class="pane-top">
+          <div class="pane-aside">@aside</div>
+          <span class="secure-pill">@icon("lock")<span>Secure sign-in at <code>@request.host</code></span></span>
+        </div>
+        <div class="pane-body">
+          <main id="main" class="card@if(wide){ wide}">
+            @content
+          </main>
+        </div>
+        @if(ui.hasFooterLinks()) {
+          <footer class="site-footer">
+            @for(url <- ui.privacyUrl().toScala) { <a href="@url">Privacy</a> }
+            @for(url <- ui.termsUrl().toScala) { <a href="@url">Terms</a> }
+            @for(url <- ui.helpUrl().toScala) { <a href="@url">Help</a> }
+          </footer>
+        }
       </div>
-      @content
-    </main>
+    </div>
     @passkeyWaiting()
-    @if(ui.hasFooterLinks()) {
-      <footer class="site-footer">
-        @for(url <- ui.privacyUrl().toScala) { <a href="@url">Privacy</a> }
-        @for(url <- ui.termsUrl().toScala) { <a href="@url">Terms</a> }
-        @for(url <- ui.helpUrl().toScala) { <a href="@url">Help</a> }
-      </footer>
-    }
   </body>
 </html>

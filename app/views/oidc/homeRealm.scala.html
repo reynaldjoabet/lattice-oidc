@@ -4,7 +4,7 @@
  *@
 @import com.lattice.oidc.models.AuthorizationPage
 @(page: AuthorizationPage, email: String, providerId: String, providerName: String)(implicit request: Http.Request)
-@layout("Continue with " + providerName) {
+@layout("Continue with " + providerName, context = requestContext(page, 2)) {
   <form method="post" action="@com.lattice.oidc.controllers.routes.AuthorizationController.decision()">
     @helper.CSRF.formField
     <input type="hidden" name="ticket" value="@page.ticket()">

@@ -64,6 +64,7 @@ public final class PerfServer {
     Client client = new Client();
     client.setClientId(42L);
     client.setClientName("Acme Notes");
+    client.setClientUri(java.net.URI.create("https://notes.example"));
     client.setClientType(ClientType.CONFIDENTIAL);
     client.setTokenAuthMethod(ClientAuthMethod.CLIENT_SECRET_BASIC);
     client.setGrantTypes(new GrantType[] {GrantType.AUTHORIZATION_CODE, GrantType.REFRESH_TOKEN});

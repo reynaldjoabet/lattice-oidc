@@ -185,6 +185,21 @@ public record AuthorizationPage(
     return Initials.of(clientName);
   }
 
+  /**
+   * The host of the client's website ({@code notes.acme.example}), shown beside its name so people
+   * can check which app is asking; empty when the client registered no website or it doesn't parse.
+   */
+  public Optional<String> clientHost() {
+    return clientUri.flatMap(
+        uri -> {
+          try {
+            return Optional.ofNullable(java.net.URI.create(uri).getHost());
+          } catch (IllegalArgumentException e) {
+            return Optional.empty();
+          }
+        });
+  }
+
   /** Scopes shown as permissions: the consent:... scope is described by the consent itself. */
   public List<ScopeItem> displayScopes() {
     return scopes.stream().filter(s -> !s.name().startsWith("consent:")).toList();

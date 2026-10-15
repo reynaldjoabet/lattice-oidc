@@ -8,7 +8,7 @@
 @import scala.jdk.CollectionConverters._
 @import scala.jdk.OptionConverters._
 @(page: AuthorizationPage)(implicit request: Http.Request)
-@layout("Sign in to " + page.clientName()) {
+@layout("Sign in to " + page.clientName(), context = requestContext(page, 1)) {
   <div class="intro">
     <h1>Sign in</h1>
     <p class="lead">to continue to <strong>@page.clientName()</strong></p>

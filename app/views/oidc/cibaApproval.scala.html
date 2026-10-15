@@ -8,7 +8,7 @@
 @import scala.jdk.CollectionConverters._
 @import scala.jdk.OptionConverters._
 @(approvals: java.util.List[CibaApproval], userName: String, hasPasskeys: Boolean)(implicit request: Http.Request)
-@layout("Approve sign-in") {
+@layout("Approve sign-in", context = simpleContext("Another screen", "A sign-in was started somewhere else, such as a shop counter or a call centre. Approve it only if you started it.")) {
   @if(approvals.isEmpty()) {
     <div class="status">
       <span class="status-icon info">@icon("check", "")</span>

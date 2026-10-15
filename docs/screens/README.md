@@ -1,5 +1,7 @@
 # Design and screens
 
+> **New design: Lattice Signal.** The sign-in, consent, device, account and console pages now use a two-panel light design. Screenshots of the running server are in [`light/`](light/README.md); the dark-panel variant it was chosen against is in [`dark/`](dark/README.md). The screens below show the previous design: their flows and texts still hold, but not their look.
+
 Designs for every end-user and operator screen of Lattice. The screenshots below are rendered from the design canvas; the editable source lives in the canvas ([Lattice OIDC screens](https://claude.ai/artifact/CRds8ufKFuZjJGn3n1aqBB), private until shared).
 
 Every screen except 37 (Shared Signals) is implemented; the last column of each table names the template and endpoint behind it. Screen 37 is a design for a later feature.

@@ -1,0 +1,44 @@
+@*
+ * The context panel of a sign-in: which app is asking (its logo or initials, name and website, so
+ * people can tell a look-alike from the real one), then the path through the flow with the current
+ * step marked. `step`: 1 say who you are, 2 prove it, 3 choose what to share.
+ *@
+@import com.lattice.oidc.models.AuthorizationPage
+@import scala.jdk.OptionConverters._
+@(page: AuthorizationPage, step: Int)
+@state(n: Int) = @{ if (n < step) "done" else if (n == step) "current" else "next" }
+<div class="ctx-block">
+  <span class="eyebrow">@if(step == 3){About this app} else {Sign-in request}</span>
+  <div class="app-card">
+    <div class="app-card-head">
+      @page.logoUri().toScala match {
+        case Some(logo) => { <img class="app-mark" src="@logo" alt="" referrerpolicy="no-referrer"> }
+        case None => { <span class="app-mark" aria-hidden="true">@page.clientInitials()</span> }
+      }
+      <div class="app-title">
+        <strong class="app-name">@page.clientName()</strong>
+        <span class="app-sub">@if(step == 3){wants access to your account} else {wants to make sure it's you}</span>
+      </div>
+    </div>
+    @for(host <- page.clientHost().toScala) {
+      <div class="app-card-foot">
+        <span class="app-label">Website</span>
+        <code class="app-host">@host</code>
+      </div>
+    }
+  </div>
+</div>
+<ol class="steps" aria-label="Steps">
+  <li class="step @state(1)"@if(step == 1){ aria-current="step"}>
+    <span class="node" aria-hidden="true"></span>
+    <span class="step-text"><strong>Say who you are</strong>@if(step > 1 && page.loginId().nonEmpty){<span>@page.loginId()</span>} else if(step == 1){<span>Now</span>}</span>
+  </li>
+  <li class="step @state(2)"@if(step == 2){ aria-current="step"}>
+    <span class="node" aria-hidden="true"></span>
+    <span class="step-text"><strong>Prove it</strong><span>@if(step == 2){Now} else if(step < 2){Passkey, password or your organisation} else {Done}</span></span>
+  </li>
+  <li class="step @state(3)"@if(step == 3){ aria-current="step"}>
+    <span class="node" aria-hidden="true"></span>
+    <span class="step-text"><strong>@if(step == 3){Choose what to share} else {Back to @page.clientName()}</strong>@if(step == 3){<span>Now</span>}</span>
+  </li>
+</ol>

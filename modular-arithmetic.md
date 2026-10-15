@@ -288,7 +288,7 @@ The inverse of 2 is 4. This isn't luck: a prime has no divisors other than 1 and
 - every non-zero number has exactly one inverse, so division always works;
 - no two non-zero numbers multiply to zero, so nothing collapses.
 
-This is why an elliptic curve's modulus is always prime: its point-addition rule divides (the slope $\frac{y_2 - y_1}{x_2 - x_1}$), so every non-zero number must have an inverse. The README's [Elliptic curve keys](README.md#elliptic-curve-keys-how-they-work) section shows the curve built on top of this.
+This is why an elliptic curve's modulus is always prime: its point-addition rule divides (the slope $\frac{y_2 - y_1}{x_2 - x_1}$), so every non-zero number must have an inverse. The [Elliptic curve keys](crypto-notes.md#elliptic-curve-keys-how-they-work) section shows the curve built on top of this.
 
 ## Groups, rings and fields
 
@@ -524,7 +524,7 @@ All block ciphers (such as AES) and stream ciphers (such as ChaCha20) are symmet
 
 ## Elliptic curves: a group made of points
 
-An elliptic curve in Weierstrass form is $y^2 = x^3 + ax + b$, with $4a^3 + 27b^2 \ne 0$ so the curve has no cusps or self-crossings. Its points, plus one extra point $\mathcal{O}$, form an **abelian group**. The objects are points, not numbers, and the operation is a geometric rule, not ordinary addition. The README's [Elliptic curve keys](README.md#elliptic-curve-keys-how-they-work) section shows how keys are built on this. This section checks the group rules.
+An elliptic curve in Weierstrass form is $y^2 = x^3 + ax + b$, with $4a^3 + 27b^2 \ne 0$ so the curve has no cusps or self-crossings. Its points, plus one extra point $\mathcal{O}$, form an **abelian group**. The objects are points, not numbers, and the operation is a geometric rule, not ordinary addition. The [Elliptic curve keys](crypto-notes.md#elliptic-curve-keys-how-they-work) section shows how keys are built on this. This section checks the group rules.
 
 ### The group rules, over the real numbers
 

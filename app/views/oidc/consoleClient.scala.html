@@ -27,6 +27,22 @@
     <div class="alert alert-error" role="alert">@icon("alert")<ul class="plain">@for(problem <- problems.asScala) { <li>@problem</li> }</ul></div>
   }
 
+  <section class="panel token-flow" aria-labelledby="token-flow">
+    <div class="section-head">
+      <h2 id="token-flow">How @client.name() gets a token</h2>
+      <span class="muted">Each step shows the setting that guards it.</span>
+    </div>
+    <ol class="token-path">
+      @for((step, index) <- client.tokenPath().asScala.zipWithIndex) {
+        <li class="path-step @step.tone()">
+          <span class="path-label">@(index + 1) · @step.label()</span>
+          <strong>@step.setting()</strong>
+          <span class="path-note">@step.note()</span>
+        </li>
+      }
+    </ol>
+  </section>
+
   <form method="post" action="@com.lattice.oidc.controllers.routes.ConsoleController.update(client.id())" id="client-form" class="panels">
     @helper.CSRF.formField
     <section class="panel">

@@ -1,0 +1,26 @@
+@*
+ * The faint hexagonal lattice in the corner of the context panel: the logo's honeycomb, fading out,
+ * with one amber node. Decorative only (aria-hidden); colours come from CSS so dark mode can change
+ * them (CSP allows no inline styles).
+ *@
+@()
+<svg class="lattice-art" aria-hidden="true" focusable="false" viewBox="0 0 560 460" width="560" height="460">
+  <defs>
+    <pattern id="lattice-hexes" width="69.28" height="120" patternUnits="userSpaceOnUse">
+      <path class="lattice-line" d="M34.64 0 69.28 20v40L34.64 80 0 60V20zM34.64 80v40" fill="none" stroke-width="1.2"></path>
+    </pattern>
+    <radialGradient id="lattice-fade" cx="62%" cy="62%" r="60%">
+      <stop offset="0" stop-color="#fff" stop-opacity="1"></stop>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"></stop>
+    </radialGradient>
+    <mask id="lattice-mask"><rect width="560" height="460" fill="url(#lattice-fade)"></rect></mask>
+  </defs>
+  <rect width="560" height="460" fill="url(#lattice-hexes)" mask="url(#lattice-mask)"></rect>
+  <g mask="url(#lattice-mask)">
+    <circle class="lattice-node" cx="277" cy="260" r="6"></circle>
+    <circle class="lattice-node faint" cx="346" cy="220" r="4.5"></circle>
+    <circle class="lattice-node faint" cx="242" cy="320" r="4.5"></circle>
+    <circle class="lattice-here-glow" cx="311.6" cy="320" r="16"></circle>
+    <circle class="lattice-here" cx="311.6" cy="320" r="8"></circle>
+  </g>
+</svg>

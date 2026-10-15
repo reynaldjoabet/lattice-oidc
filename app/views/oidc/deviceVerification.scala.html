@@ -4,7 +4,7 @@
  *@
 @import scala.jdk.OptionConverters._
 @(userCode: String, user: java.util.Optional[String], notice: java.util.Optional[String])(implicit request: Http.Request)
-@layout("Connect a device") {
+@layout("Connect a device", context = simpleContext("Another screen", "A TV, console or other device wants to use your account. You confirm it here, on a screen you trust.")) {
   <span class="tile-icon">@icon("device", "")</span>
   <div class="intro">
     <h1>Connect a device</h1>

@@ -80,6 +80,47 @@ public record ConsoleClient(
     return Initials.of(name);
   }
 
+  /**
+   * One step of how the client gets and uses a token, with the setting that guards it. {@code tone}
+   * is {@code good} (the stronger choice is on), {@code warn} (worth fixing) or {@code neutral}.
+   */
+  public record PathStep(String label, String setting, String note, String tone) {}
+
+  /** The client's token flow, step by step, as the console's summary shows it. */
+  public List<PathStep> tokenPath() {
+    PathStep request =
+        parRequired
+            ? new PathStep("Pushed request", "PAR required", "Request details never pass through the browser", "good")
+            : new PathStep("Request", "Sent through the browser", "Require PAR to keep request details out of the address bar", "neutral");
+    PathStep signIn =
+        pkceRequired
+            ? new PathStep("Sign-in", "PKCE required", "A stolen code is useless on its own", "good")
+            : confidential
+                ? new PathStep("Sign-in", "PKCE optional", "Its secret protects the code exchange", "neutral")
+                : new PathStep("Sign-in", "PKCE not required", "A public app without PKCE can have its codes stolen", "warn");
+    boolean plainHttp =
+        redirectUris.stream()
+            .anyMatch(uri -> uri.startsWith("http://") && !uri.startsWith("http://localhost") && !uri.startsWith("http://127.0.0.1") && !uri.startsWith("http://[::1]"));
+    PathStep back =
+        redirectUris.isEmpty()
+            ? new PathStep("Return", "No return address", "Sign-ins that return to the app will fail", grants.contains("code") ? "warn" : "neutral")
+            : plainHttp
+                ? new PathStep("Return", "Plain http address", "Codes can be read on the way back; use https", "warn")
+                : new PathStep("Return", redirectUris.size() == 1 ? "1 exact address" : redirectUris.size() + " exact addresses", "Exact match, no wildcards", "good");
+    PathStep tokenRequest =
+        switch (tokenAuthMethod) {
+          case "private_key_jwt" -> new PathStep("Token request", "Signed with its own key", "No shared secret to leak", "good");
+          case "tls_client_auth", "self_signed_tls_client_auth" -> new PathStep("Token request", "Client certificate", "No shared secret to leak", "good");
+          case "none" -> new PathStep("Token request", "No client secret", "A public app: PKCE is what protects it", "neutral");
+          default -> new PathStep("Token request", "Shared secret", "A signed key (private_key_jwt) can't be copied from config", "neutral");
+        };
+    PathStep use =
+        dpopRequired
+            ? new PathStep("Using the token", "Bound to a key (DPoP)", "A stolen token can't be used elsewhere", "good")
+            : new PathStep("Using the token", "Bearer token", "Not bound to a key; turn on DPoP to bind it", "neutral");
+    return List.of(request, signIn, back, tokenRequest, use);
+  }
+
   public String registeredVia() {
     return dynamic ? "Dynamic (RFC 7591)" : "Console";
   }
