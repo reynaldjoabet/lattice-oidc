@@ -79,7 +79,6 @@ ThisBuild / libraryDependencies ++= Seq(
   javaWs,
   javaJdbc,
   javaCore,
-  javaClusterSharding,
   logback,
   slf4j,
   caffeine,
