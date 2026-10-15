@@ -20,6 +20,7 @@ public class PasswordHasherTest {
   @After
   public void restore() {
     PasswordHasher.configure(PasswordHasher.defaultConcurrency());
+    PasswordHasher.configure(PasswordHasher.Cost.DEFAULT);
   }
 
   @Test
@@ -177,5 +178,51 @@ public class PasswordHasherTest {
   @Test(expected = IllegalArgumentException.class)
   public void theLimitIsAtLeastOne() {
     PasswordHasher.configure(0);
+  }
+
+  // ---------------------------------------------------------------- configured cost
+
+  /** Any of OWASP's equally strong minimums, or more, is accepted. */
+  @Test
+  public void costsAtOrAboveAnOwaspMinimumAreAccepted() {
+    for (int[] c : new int[][] {{47_104, 1}, {19_456, 2}, {12_288, 3}, {9_216, 4}, {7_168, 5}, {65_536, 3}, {19_456, 4}}) {
+      new PasswordHasher.Cost(c[0], c[1], 1);
+    }
+    new PasswordHasher.Cost(19_456, 2, 4);
+  }
+
+  /** A typo must not quietly make every new hash weak, or unverifiable: the server refuses to start. */
+  @Test
+  public void costsBelowTheMinimumOrBeyondTheBoundsAreRefused() {
+    for (int[] c :
+        new int[][] {
+          {19_455, 2, 1}, // just under 19 MiB with 2 passes
+          {12_288, 2, 1}, // 12 MiB needs 3 passes
+          {47_103, 1, 1}, // 1 pass needs 46 MiB
+          {1_024, 20, 1}, // many passes can't make up for too little memory
+          {19_456, 2, 0},
+          {19_456, 2, 33},
+          {262_145, 2, 1}, // more memory than a stored hash may ask for
+          {19_456, 21, 1}
+        }) {
+      try {
+        new PasswordHasher.Cost(c[0], c[1], c[2]);
+        throw new AssertionError("accepted m=" + c[0] + ", t=" + c[1] + ", p=" + c[2]);
+      } catch (IllegalArgumentException expected) {
+        // refused
+      }
+    }
+  }
+
+  @Test
+  public void newHashesUseTheConfiguredCostAndOlderOnesNeedRehashing() {
+    String atDefault = PasswordHasher.hash("secret");
+    PasswordHasher.configure(new PasswordHasher.Cost(24_576, 2, 1));
+    String raised = PasswordHasher.hash("secret");
+    assertTrue(raised, raised.startsWith("$argon2id$v=19$m=24576,t=2,p=1$"));
+    assertTrue(PasswordHasher.check("secret", raised));
+    assertFalse(PasswordHasher.needsRehash(raised));
+    assertTrue("less memory than now configured", PasswordHasher.needsRehash(atDefault));
+    assertTrue("and it still verifies", PasswordHasher.check("secret", atDefault));
   }
 }

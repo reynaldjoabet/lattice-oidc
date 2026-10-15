@@ -24,15 +24,18 @@ import org.bouncycastle.crypto.params.Argon2Parameters;
  * at startup by {@link LoginService}.
  *
  * <p><b>Format and compatibility.</b> Hashes are Argon2id in the standard PHC string format,
- * {@code $argon2id$v=19$m=19456,t=2,p=1$<salt>$<hash>} (Base64 without padding), with 19 MiB of memory
- * and two passes: the minimum OWASP's password storage guidance lists for Argon2id (19 MiB, two
+ * {@code $argon2id$v=19$m=19456,t=2,p=1$<salt>$<hash>} (Base64 without padding), by default with 19
+ * MiB of memory and two passes: the minimum OWASP's password storage guidance lists for Argon2id (19 MiB, two
  * passes, one lane). A check takes its parameters from the stored string, so a hash made with other
  * parameters, or by another implementation of the standard (this class replaced password4j, which
  * writes the same format), still verifies.
  *
- * <p><b>Raising the cost.</b> Change the constants. Existing hashes keep verifying with their own
- * parameters, and {@link #needsRehash} tells {@link LoginService} to replace a weaker one when its
- * owner next signs in (it cannot be done any other way: a hash cannot be recomputed from itself).
+ * <p><b>Raising the cost.</b> The cost of new hashes is configuration ({@code lattice.login.argon2},
+ * see {@link Cost}), set at startup by {@link LoginService}; the default is the one above. Existing
+ * hashes keep verifying with their own parameters, and {@link #needsRehash} tells {@link
+ * LoginService} to replace a weaker one when its owner next signs in (it cannot be done any other way:
+ * a hash cannot be recomputed from itself). A cost below OWASP's minimum is refused at startup, so a
+ * typo cannot quietly make every new hash weak.
  *
  * <p><b>Going back to password4j.</b> Its {@code check(...).withArgon2()} does not read the memory size
  * from the hash: it uses its own default (15 MiB), so it cannot verify a hash that was upgraded to
@@ -48,11 +51,44 @@ import org.bouncycastle.crypto.params.Argon2Parameters;
  */
 public final class PasswordHasher {
 
-  /** 19 MiB, in KiB (Argon2's unit). Hashes made with less are upgraded when their owner signs in. */
-  static final int MEMORY_KIB = 19_456;
+  /**
+   * The cost of new hashes: memory in KiB (Argon2's unit), passes over it, and lanes. Hashes made with
+   * less memory or fewer passes are upgraded when their owner signs in.
+   *
+   * <p>Must meet at least one of the Argon2id minimums in OWASP's Password Storage Cheat Sheet, which
+   * it lists as equally strong: 46 MiB and 1 pass, 19 MiB and 2, 12 MiB and 3, 9 MiB and 4, or 7 MiB
+   * and 5 (as much memory and as many passes, or more). It must also stay within what a stored hash
+   * may ask for ({@link #MAX_MEMORY_KIB} and friends), or new hashes would never verify.
+   */
+  public record Cost(int memoryKib, int iterations, int parallelism) {
 
-  static final int ITERATIONS = 2;
-  static final int PARALLELISM = 1;
+    /** OWASP's minimums, as {memory KiB, passes}. Declared first: {@link #DEFAULT} is checked against it. */
+    private static final int[][] OWASP_MINIMUMS = {{47_104, 1}, {19_456, 2}, {12_288, 3}, {9_216, 4}, {7_168, 5}};
+
+    /** 19 MiB, two passes, one lane. */
+    public static final Cost DEFAULT = new Cost(19_456, 2, 1);
+
+    public Cost {
+      if (parallelism < 1 || parallelism > MAX_PARALLELISM) {
+        throw new IllegalArgumentException("lattice.login.argon2.parallelism must be 1 to " + MAX_PARALLELISM + ": " + parallelism);
+      }
+      if (memoryKib > MAX_MEMORY_KIB || iterations > MAX_ITERATIONS) {
+        throw new IllegalArgumentException(
+            "lattice.login.argon2 asks for more than a stored hash may ("
+                + MAX_MEMORY_KIB + " KiB, " + MAX_ITERATIONS + " passes): m=" + memoryKib + ", t=" + iterations);
+      }
+      boolean meetsAMinimum = false;
+      for (int[] minimum : OWASP_MINIMUMS) {
+        meetsAMinimum |= memoryKib >= minimum[0] && iterations >= minimum[1];
+      }
+      if (!meetsAMinimum || memoryKib < 8 * parallelism) {
+        throw new IllegalArgumentException(
+            "lattice.login.argon2 is below OWASP's Argon2id minimum (for example 19456 KiB and 2 passes): m="
+                + memoryKib + ", t=" + iterations + ", p=" + parallelism);
+      }
+    }
+  }
+
   static final int SALT_BYTES = 16;
   static final int HASH_BYTES = 32;
 
@@ -74,6 +110,7 @@ public final class PasswordHasher {
   private static final SecureRandom RANDOM = new SecureRandom();
   private static final Base64.Encoder BASE64 = Base64.getEncoder().withoutPadding();
 
+  private static volatile Cost cost = Cost.DEFAULT;
   private static volatile Semaphore slots = new Semaphore(defaultConcurrency(), true);
   private static volatile int concurrency = defaultConcurrency();
 
@@ -94,6 +131,16 @@ public final class PasswordHasher {
 
   public static int concurrency() {
     return concurrency;
+  }
+
+  /** Sets the cost of new hashes; called once at startup. */
+  static void configure(Cost newCost) {
+    cost = java.util.Objects.requireNonNull(newCost);
+  }
+
+  /** The cost new hashes get. */
+  public static Cost cost() {
+    return cost;
   }
 
   /**
@@ -128,16 +175,18 @@ public final class PasswordHasher {
    */
   public static boolean needsRehash(String hash) {
     Stored stored = Stored.parse(hash);
+    Cost current = cost;
     return stored != null
         && (stored.type != Argon2Parameters.ARGON2_id
             || stored.version != Argon2Parameters.ARGON2_VERSION_13
-            || stored.memoryKib < MEMORY_KIB
-            || stored.iterations < ITERATIONS
+            || stored.memoryKib < current.memoryKib()
+            || stored.iterations < current.iterations()
             || stored.hash.length < HASH_BYTES);
   }
 
   /** A new Argon2id hash of {@code password}, with a random salt. */
   public static String hash(String password) {
+    Cost current = cost;
     byte[] salt = new byte[SALT_BYTES];
     RANDOM.nextBytes(salt);
     byte[] hash =
@@ -146,13 +195,13 @@ public final class PasswordHasher {
                 argon2(
                     Argon2Parameters.ARGON2_id,
                     Argon2Parameters.ARGON2_VERSION_13,
-                    MEMORY_KIB,
-                    ITERATIONS,
-                    PARALLELISM,
+                    current.memoryKib(),
+                    current.iterations(),
+                    current.parallelism(),
                     salt,
                     HASH_BYTES,
                     password));
-    return "$argon2id$v=19$m=" + MEMORY_KIB + ",t=" + ITERATIONS + ",p=" + PARALLELISM + "$" + BASE64.encodeToString(salt) + "$" + BASE64.encodeToString(hash);
+    return "$argon2id$v=19$m=" + current.memoryKib() + ",t=" + current.iterations() + ",p=" + current.parallelism() + "$" + BASE64.encodeToString(salt) + "$" + BASE64.encodeToString(hash);
   }
 
   /** The password's UTF-8 bytes go in unchanged: no normalisation, as in the standard. */

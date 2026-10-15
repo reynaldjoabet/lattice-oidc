@@ -626,6 +626,10 @@ PostgreSQL and Redis are both checked at startup, so a wrong address stops the s
 **A limit on concurrent password hashing** (`lattice.login.hashing-concurrency`, `PASSWORD_HASHING_CONCURRENCY`; 0 means the number of CPU cores). Every Argon2 check and hash waits for one of a fixed number of slots. Argon2 is memory-hard, and its throughput stops rising after a few threads (see [perf/README.md](perf/README.md)). Without a limit, a burst of sign-ins or wrong passwords would run one hash per request thread at once, raising memory use with every thread and slowing every check. With a limit, memory stays bounded and requests queue instead.
 
 **Argon2 implementation, cost and upgrades.** Password hashes are Argon2id (19 MiB, two passes: the minimum OWASP's guidance lists) in the standard `$argon2id$v=19$m=19456,t=2,p=1$salt$hash` format, computed with Bouncy Castle. A check uses the parameters stored in the hash, so hashes made with another cost or by another implementation still verify.
+- **The cost is configuration** (`lattice.login.argon2`: `memory-kib`, `iterations`, `parallelism`; `ARGON2_MEMORY_KIB`, `ARGON2_ITERATIONS`, `ARGON2_PARALLELISM`). Raise it without a release, and each account moves to the new cost at its owner's next sign-in.
+  - **A floor:** the server refuses to start with a cost below every one of OWASP's equally strong Argon2id minimums (46 MiB and 1 pass, 19 MiB and 2, 12 MiB and 3, 9 MiB and 4, 7 MiB and 5), so a typo can't quietly make every new hash weak. It also refuses more than a stored hash may ask for (256 MiB, 20 passes, 32 lanes), since such hashes would never verify.
+  - **Memory:** each check holds `memory-kib`, and up to `hashing-concurrency` checks run at once, so raising one may mean more heap.
+  - **Unknown accounts:** the hash checked when an account doesn't exist is made at the configured cost, so its timing doesn't reveal which accounts exist.
 - **Weaker hashes are upgraded at sign-in** (`PasswordHasher.needsRehash`, `LoginService`). A hash made with less memory or fewer passes than a new one gets (such as the 15 MiB ones from before this change) is replaced the next time its owner signs in, when the password is at hand: nobody has to reset anything. A hash that is stronger than today's is left alone, so raising the cost later is never undone.
 - **The upgrade can't overwrite a password change.** It is a conditional update (`UserStore.replacePasswordHash`): it applies only if the stored hash is still the one that was just verified. Without that, an old-password sign-in in flight while the owner changes their password could write the old hash back over the new one. A store that can't make the update conditional simply doesn't upgrade.
 - **A failed upgrade never fails the sign-in.** It is logged as a warning and tried again at the next sign-in.
@@ -2262,3 +2266,14 @@ registry   namespace      image name     tag
 ```sh
 dockerUsername := sys.env.get("DOCKER_USERNAME")//my company
 ```
+
+```sh
+$argon2id $v=19 $m=19456,t=2,p=1 $Q9cF7Mm8oZnGIhV+rpOk/w $nzkxl54lCGjQeQIYviXqRY5BQPT586xWoU/eTwAo2c4
+ type      version  settings          salt (Base64)          hash (Base64)
+```
+
+`argon2id`: which variant of Argon2.
+`v=19`: version 1.3 of the algorithm, written as 19 (0x13).
+- `m=19456,t=2,p=1`: 19456 KiB (19 MiB) of memory, 2 passes, 1 lane.
+- The salt: 16 random bytes, different for every password, Base64-encoded.
+- The hash: 32 bytes, Base64-encoded.

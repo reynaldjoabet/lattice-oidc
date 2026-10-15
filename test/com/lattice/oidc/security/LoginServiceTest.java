@@ -162,4 +162,40 @@ public class LoginServiceTest {
           assertEquals(LoginService.Outcome.SUCCESS, login.authenticate("max", "max", "203.0.113.9").outcome());
         });
   }
+
+  /** Raising the configured cost moves an account to it at its owner's next sign-in. */
+  @Test
+  public void aRaisedCostIsAppliedAtTheNextSignIn() {
+    Application app =
+        OidcTestSupport.app(new FakeAuthleteApi(), Map.of("lattice.login.argon2.memory-kib", 24_576));
+    try {
+      Helpers.running(
+          app,
+          () -> {
+            UserStore users = app.injector().instanceOf(UserStore.class);
+            LoginService login = app.injector().instanceOf(LoginService.class);
+            User max = users.byLoginId("max").orElseThrow();
+            String atDefault = "$argon2id$v=19$m=19456,t=2,p=1$BLsu3zxC5eXb3nouktgyYw$Li1yWpFfMWW1I00InB2XPkcFo56t+rHyoxTdgrfj5xQ";
+            users.save(max.withPasswordHash(atDefault));
+            assertEquals(LoginService.Outcome.SUCCESS, login.authenticate("max", "secret").outcome());
+            String upgraded = users.bySubject(max.getSubject()).orElseThrow().passwordHash();
+            assertTrue(upgraded, upgraded.startsWith("$argon2id$v=19$m=24576,t=2,p=1$"));
+          });
+    } finally {
+      PasswordHasher.configure(PasswordHasher.Cost.DEFAULT);
+    }
+  }
+
+  /** A cost below OWASP's minimum stops the server from starting rather than weakening new hashes. */
+  @Test
+  public void aCostBelowTheMinimumStopsStartup() {
+    try {
+      OidcTestSupport.app(new FakeAuthleteApi(), Map.of("lattice.login.argon2.memory-kib", 4_096)).injector().instanceOf(LoginService.class);
+      throw new AssertionError("started with 4 MiB and 2 passes");
+    } catch (RuntimeException e) {
+      assertTrue(String.valueOf(e.getMessage()), String.valueOf(e.getMessage()).contains("below OWASP"));
+    } finally {
+      PasswordHasher.configure(PasswordHasher.Cost.DEFAULT);
+    }
+  }
 }

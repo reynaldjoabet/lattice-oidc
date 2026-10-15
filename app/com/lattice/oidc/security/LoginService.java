@@ -48,13 +48,18 @@ public final class LoginService {
   public static final String ACCOUNT_PREFIX = "login:account:";
 
   private static final Logger LOG = LoggerFactory.getLogger(LoginService.class);
-  /** Checked when the account doesn't exist, so that an unknown sign-in takes as long as a wrong password. */
-  private static final String DUMMY_HASH = PasswordHasher.hash("lattice-dummy-password");
 
   private final UserStore users;
   private final CounterStore counters;
   private final LatticeConfig config;
   private final LdapDirectory directory;
+
+  /**
+   * Checked when the account doesn't exist, so that an unknown sign-in takes as long as a wrong
+   * password. Made after the cost is configured: a dummy cheaper than real hashes would tell an
+   * attacker, by its speed, which accounts don't exist.
+   */
+  private final String dummyHash;
 
   @Inject
   public LoginService(
@@ -65,6 +70,12 @@ public final class LoginService {
       com.typesafe.config.Config rawConfig) {
     int concurrency = rawConfig.getInt("lattice.login.hashing-concurrency");
     PasswordHasher.configure(concurrency > 0 ? concurrency : PasswordHasher.defaultConcurrency());
+    PasswordHasher.configure(
+        new PasswordHasher.Cost(
+            rawConfig.getInt("lattice.login.argon2.memory-kib"),
+            rawConfig.getInt("lattice.login.argon2.iterations"),
+            rawConfig.getInt("lattice.login.argon2.parallelism")));
+    this.dummyHash = PasswordHasher.hash("lattice-dummy-password");
     this.users = users;
     this.counters = counters;
     this.config = config;
@@ -123,7 +134,7 @@ public final class LoginService {
       }
     } else {
       String hash = user.map(User::passwordHash).orElse(null);
-      boolean ok = PasswordHasher.check(password, hash != null ? hash : DUMMY_HASH);
+      boolean ok = PasswordHasher.check(password, hash != null ? hash : dummyHash);
       authenticated = ok && hash != null ? user : Optional.empty();
       if (authenticated.isPresent()) {
         upgradeHash(authenticated.get(), hash, password);
