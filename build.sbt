@@ -56,25 +56,45 @@ val jacksonOverrides =
 
 ThisBuild / dependencyOverrides ++= jacksonOverrides
 
-ThisBuild / libraryDependencies ++=
-  Seq(javaForms, jodaForms, guice, javaWs, javaJdbc, javaCore, logback, caffeine) ++
-    Dependencies.logging.api ++
-    Dependencies.oauth ++
-    Dependencies.crypto ++
-    Dependencies.passkeys ++
-    Dependencies.database.postgres ++
-    Dependencies.redis ++
-    Dependencies.directory ++
-    Dependencies.mail.core ++
-    Dependencies.json.jackson3 ++
-    Dependencies.qrCodes ++
-    Dependencies.validation ++
-    Dependencies.scheduling ++
-    Dependencies.yaml ++
-    Dependencies.pins ++
-    Dependencies.observability.micrometer ++
-    Dependencies.observability.kamon ++
-    Dependencies.testing.password4j
+ThisBuild / libraryDependencies ++= Seq(
+  javaForms,
+  jodaForms,
+  guice,
+  javaWs,
+  javaJdbc,
+  javaCore,
+  logback,
+  caffeine,
+  Dependencies.logging.slf4j,
+  Dependencies.security.authlete,
+  Dependencies.security.nimbus.oauth2Oidc,
+  Dependencies.security.bouncycastle.pkix,
+  Dependencies.security.webauthn,
+  // Only the tests use it: the independent check that Argon2 hashes still verify.
+  Dependencies.security.password4j % Test,
+  Dependencies.database.postgres,
+  Dependencies.database.flyway,
+  Dependencies.database.flywayPostgres,
+  Dependencies.database.hikaricp,
+  Dependencies.cache.jedis,
+  Dependencies.directory.unboundid,
+  Dependencies.mail.api,
+  Dependencies.mail.angus,
+  Dependencies.mail.angusMail,
+  Dependencies.json.jackson3.core,
+  Dependencies.json.jackson3.databind,
+  Dependencies.json.jackson3.xml,
+  Dependencies.json.jsonSmart,
+  Dependencies.qrCodes.zxing,
+  Dependencies.domain.uuidGenerator,
+  Dependencies.validation.api,
+  Dependencies.validation.commonsValidator,
+  Dependencies.scheduling.cronUtils,
+  Dependencies.yaml.snakeyaml,
+  Dependencies.observability.micrometerPrometheus,
+  Dependencies.observability.kamon.bundle,
+  Dependencies.observability.kamon.prometheus
+)
 
 // Compile Java for the oldest JDK CI tests (21), whichever JDK runs sbt, so the classes also run
 // on the newer JRE in the Docker image.
