@@ -2,7 +2,7 @@ import sbt.*
 
 object Dependencies {
 
-  private object Version {
+  private object Versions {
 
     // --- ZIO ecosystem ---
     val zio        = "2.1.26"
@@ -11,19 +11,18 @@ object Dependencies {
     val zioLogging = "2.5.3"
     val zioConfig  = "4.1.0"
     val zioSchema  = "1.9.0"
-    val zioBlocks  = "0.0.54"
     val zioKafka   = "3.8.0"
 
     // --- HTTP ---
-    val http4s      = "0.23.38"
-    val http4sNetty = "0.7.1"
-    val netty       = "4.2.17.Final"
-    val sttp4       = "4.0.25"
-    val tapir       = "1.13.18"
+    val http4s  = "0.23.38"
+    val sttp4   = "4.0.25"
+    val tapir   = "1.13.18"
+    val jsonRpc = "0.2.0"
 
     // --- JSON ---
     val jsoniter = "2.41.2"
     val circe    = "0.14.16"
+    val jackson3 = "3.2.2"
 
     // --- FP ---
     val catsEffect      = "3.7.1"
@@ -52,32 +51,31 @@ object Dependencies {
     val nimbusJoseJwt    = "10.10"
     val nimbusOauth2Oidc = "11.38.2"
     val vault            = "5.1.0"
+    val webauthn         = "2.10.0"
+    val authlete         = "4.48"
 
     // --- Logging ---
     val scribe  = "3.19.0"
     val slf4j   = "2.0.20"
     val logback = "1.6.4"
 
-    // --- Directory ---
-    val unboundid = "7.0.5"
-
     // --- Cache ---
     val caffeine = "3.3.0"
     val jedis    = "8.0.1"
 
-    // --- UI ---
+    // --- Directory ---
+    val unboundid = "7.0.5"
+
     val zxing = "3.5.4"
 
-    // --- Passkeys ---
-    val webauthn = "2.10.0"
-
     // --- Mail ---
-    val angusMail = "2.0.5"
+    val angusMail   = "2.0.5"
+    val jakartaMail = "2.1.5"
 
     // --- Observability ---
     val micrometer = "1.17.1"
     val datadog    = "2.60.0"
-    val kamon      = "2.7.7"
+    val kamon      = "2.8.1"
     val otel4s     = "1.1.0"
 
     // --- Config ---
@@ -92,194 +90,293 @@ object Dependencies {
 
   // Helpers
   private def http4s(a: String) =
-    "org.http4s" %% s"http4s-$a" % Version.http4s
+    "org.http4s" %% s"http4s-$a" % Versions.http4s
 
-  private def tapir(a: String) =
-    "com.softwaremill.sttp.tapir" %% s"tapir-$a" % Version.tapir
+  private def tapirDep(a: String) =
+    "com.softwaremill.sttp.tapir" %% s"tapir-$a" % Versions.tapir
 
-  private def sttp(a: String) =
-    "com.softwaremill.sttp.client4" %% a % Version.sttp4
+  private def sttpDep(a: String) =
+    "com.softwaremill.sttp.client4" %% a % Versions.sttp4
 
-  private def circe(a: String) =
-    "io.circe" %% s"circe-$a" % Version.circe
+  private def circeDep(a: String) =
+    "io.circe" %% s"circe-$a" % Versions.circe
 
-  // ZIO
-  lazy val zio        = "dev.zio" %% "zio"          % Version.zio
-  lazy val zioTest    = "dev.zio" %% "zio-test"     % Version.zio % Test
-  lazy val zioTestSbt = "dev.zio" %% "zio-test-sbt" % Version.zio % Test
+  // Reusable across modules as-is
+  val catsEffect = Seq("org.typelevel" %% "cats-effect" % Versions.catsEffect)
+  val fs2        = Seq("co.fs2" %% "fs2-core" % Versions.fs2)
+  val fs2Kafka   = Seq("org.typelevel" %% "fs2-kafka" % Versions.fs2Kafka)
+  val chimney    = Seq("io.scalaland" %% "chimney" % Versions.chimney)
+  val caffeine   = Seq("com.github.ben-manes.caffeine" % "caffeine" % Versions.caffeine)
+  val jedis      = Seq("redis.clients" % "jedis" % Versions.jedis)
+  val jsonRpc    = Seq("tech.neander" %% "jsonrpclib-fs2" % Versions.jsonRpc)
+  val unboundid  = Seq("com.unboundid" % "unboundid-ldapsdk" % Versions.unboundid)
+  val zxing      = Seq("com.google.zxing" % "core" % Versions.zxing)
 
-  lazy val zioJson = "dev.zio" %% "zio-json" % Version.zioJson
+  // Small libraries the app uses directly
+  val misc = Seq(
+    "net.minidev"       % "json-smart"        % "2.6.0",
+    "com.cronutils"     % "cron-utils"        % "9.2.1",
+    "org.yaml"          % "snakeyaml"         % "2.7",
+    "javax.validation"  % "validation-api"    % "2.0.1.Final",
+    "commons-validator" % "commons-validator" % "1.11.0"
+  )
 
-  lazy val zioJsonGolden =
-    "dev.zio" %% "zio-json-golden" % Version.zioJson % Test
+  object zio {
 
-  lazy val zioHttp = "dev.zio" %% "zio-http" % Version.zioHttp
-
-  lazy val zioLogging = "dev.zio" %% "zio-logging" % Version.zioLogging
-
-  lazy val zioLoggingSlf4j =
-    "dev.zio" %% "zio-logging-slf4j" % Version.zioLogging
-
-  lazy val zioConfig = "dev.zio" %% "zio-config" % Version.zioConfig
-
-  lazy val zioConfigMagnolia =
-    "dev.zio" %% "zio-config-magnolia" % Version.zioConfig
-
-  lazy val zioConfigTypesafe =
-    "dev.zio" %% "zio-config-typesafe" % Version.zioConfig
-
-  lazy val zioSchema     = "dev.zio" %% "zio-schema"      % Version.zioSchema
-  lazy val zioSchemaJson = "dev.zio" %% "zio-schema-json" % Version.zioSchema
-
-  lazy val zioSchemaDerivation =
-    "dev.zio" %% "zio-schema-derivation" % Version.zioSchema
-
-  lazy val zioSchemaProtobuf =
-    "dev.zio" %% "zio-schema-protobuf" % Version.zioSchema
-
-  lazy val zioBlocksSchema =
-    "dev.zio" %% "zio-blocks-schema" % Version.zioBlocks
-
-  lazy val zioKafka = "dev.zio" %% "zio-kafka" % Version.zioKafka
-
-  // HTTP
-  lazy val http4sDsl   = http4s("dsl")
-  lazy val emberServer = http4s("ember-server")
-  lazy val emberClient = http4s("ember-client")
-  lazy val http4sCirce = http4s("circe")
-
-  lazy val sttpCore              = sttp("core")
-  lazy val sttpJsoniter          = sttp("jsoniter")
-  lazy val sttpFs2               = sttp("fs2")
-  lazy val sttpCats              = sttp("cats")
-  lazy val sttpCirce             = sttp("circe")
-  lazy val sttpSlf4j             = sttp("slf4j-backend")
-  lazy val sttpOkHttpBackend     = sttp("okhttp-backend")
-  lazy val sttpPrometheusBackend = sttp("prometheus-backend")
-  lazy val sttpScribeBackend     = sttp("scribe-backend")
-  lazy val clientBackendFs2      = sttp("async-http-client-backend-fs2")
-  lazy val http4sBackend         = sttp("http4s-backend")
-  lazy val zioSttp               = sttp("zio")
-
-  lazy val tapirCore          = tapir("core")
-  lazy val tapirHttp4s        = tapir("http4s-server")
-  lazy val tapirHttp4sServer  = tapir("http4s-server")
-  lazy val tapirJsoniter      = tapir("jsoniter-scala")
-  lazy val tapirJsoniterScala = tapir("jsoniter-scala")
-  lazy val tapirOpenAPIDocs   = tapir("openapi-docs")
-  lazy val tapirSwagger       = tapir("swagger-ui-bundle")
-  lazy val tapirIron          = tapir("iron")
-
-  // JSON
-  lazy val jsoniter =
-    "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-core" % Version.jsoniter
-
-  lazy val jsoniterMacros =
-    "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-macros" % Version.jsoniter % Provided
-
-  lazy val jsoniterCirce =
-    "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-circe" % Version.jsoniter
-
-  lazy val circeCore    = circe("core")
-  lazy val circeGeneric = circe("generic")
-  lazy val circeParser  = circe("parser")
-
-  // Data
-  lazy val chimney      = "io.scalaland"       %% "chimney"       % Version.chimney
-  lazy val iron         = "io.github.iltotore" %% "iron"          % Version.iron
-  lazy val ironZioJson  = "io.github.iltotore" %% "iron-zio-json" % Version.iron
-  lazy val ironJsoniter = "io.github.iltotore" %% "iron-jsoniter" % Version.iron
-  lazy val ironChimney  = "io.github.iltotore" %% "iron-chimney"  % Version.iron
-  lazy val ironDoobie   = "io.github.iltotore" %% "iron-doobie"   % Version.iron
-  lazy val ironSkunk    = "io.github.iltotore" %% "iron-skunk"    % Version.iron
-
-  lazy val ironPureconfig =
-    "io.github.iltotore" %% "iron-pureconfig" % Version.iron
-
-  // Typelevel
-  lazy val catsEffect = "org.typelevel" %% "cats-effect" % Version.catsEffect
-  lazy val fs2        = "co.fs2"        %% "fs2-core"    % Version.fs2
-  lazy val fs2Kafka   = "org.typelevel" %% "fs2-kafka"   % Version.fs2Kafka
-
-  lazy val postgres = "org.postgresql" % "postgresql"  % Version.postgres
-  lazy val hikaricp = "com.zaxxer"     % "HikariCP"    % Version.hikaricp
-  lazy val flyway   = "org.flywaydb"   % "flyway-core" % Version.flyway
-
-  // Flyway 10+ ships database support separately; this is the PostgreSQL one.
-  lazy val flywayPostgres =
-    "org.flywaydb" % "flyway-database-postgresql" % Version.flyway
-
-  lazy val auth0 = "com.auth0" % "java-jwt" % Version.auth0
-
-  lazy val password4j =
-    "com.password4j" % "password4j" % Version.password4j
-
-  lazy val nimbusJoseJwt =
-    "com.nimbusds" % "nimbus-jose-jwt" % Version.nimbusJoseJwt
-
-  lazy val nimbusOauth2Oidc =
-    "com.nimbusds" % "oauth2-oidc-sdk" % Version.nimbusOauth2Oidc
-
-  lazy val bouncycastle =
-    "org.bouncycastle" % "bcpkix-jdk18on" % Version.bouncycastle
-
-  lazy val bouncycastleProvider =
-    "org.bouncycastle" % "bcprov-jdk18on" % Version.bouncycastle
-
-  lazy val pemKeystore =
-    "de.dentrassi.crypto" % "pem-keystore" % "3.0.0"
-
-  lazy val vault =
-    "com.bettercloud" % "vault-java-driver" % Version.vault
-
-  // Azure
-  lazy val azureIdentity =
-    "com.azure" % "azure-identity" % Version.azureIdentity
-
-  lazy val azureKeyVaultKeys =
-    "com.azure" % "azure-security-keyvault-keys" % Version.azureKv
-
-  lazy val azureKeyVaultSecrets =
-    "com.azure" % "azure-security-keyvault-secrets" % Version.azureKv
-
-  // Observability
-  lazy val datadog =
-    ("com.datadoghq" % "datadog-api-client" % Version.datadog).classifier(
-      "shaded-jar"
+    val core = Seq(
+      "dev.zio" %% "zio"          % Versions.zio,
+      "dev.zio" %% "zio-test"     % Versions.zio % Test,
+      "dev.zio" %% "zio-test-sbt" % Versions.zio % Test
     )
 
-  lazy val kamon =
-    "io.kamon" %% "kamon-bundle" % Version.kamon
+    val json = Seq(
+      "dev.zio" %% "zio-json"        % Versions.zioJson,
+      "dev.zio" %% "zio-json-golden" % Versions.zioJson % Test
+    )
 
-  lazy val kamonPrometheus =
-    "io.kamon" %% "kamon-prometheus" % Version.kamon
+    val http = Seq("dev.zio" %% "zio-http" % Versions.zioHttp)
 
-  lazy val slf4j = "org.slf4j" % "slf4j-api" % Version.slf4j
+    val logging = Seq(
+      "dev.zio" %% "zio-logging"       % Versions.zioLogging,
+      "dev.zio" %% "zio-logging-slf4j" % Versions.zioLogging
+    )
 
-  lazy val logback =
-    "ch.qos.logback" % "logback-classic" % Version.logback
+    val config = Seq(
+      "dev.zio" %% "zio-config"          % Versions.zioConfig,
+      "dev.zio" %% "zio-config-magnolia" % Versions.zioConfig,
+      "dev.zio" %% "zio-config-typesafe" % Versions.zioConfig
+    )
 
-  // UI: QR codes for credential offers and authenticator-app setup (Apache 2.0, no dependencies)
-  lazy val zxing = "com.google.zxing" % "core" % Version.zxing
+    val schema = Seq(
+      "dev.zio" %% "zio-schema"            % Versions.zioSchema,
+      "dev.zio" %% "zio-schema-json"       % Versions.zioSchema,
+      "dev.zio" %% "zio-schema-derivation" % Versions.zioSchema,
+      "dev.zio" %% "zio-schema-protobuf"   % Versions.zioSchema
+    )
 
-  // Passkeys: WebAuthn relying party (Yubico, BSD-2)
-  lazy val webauthn = "com.yubico" % "webauthn-server-core" % Version.webauthn
+    val kafka = Seq("dev.zio" %% "zio-kafka" % Versions.zioKafka)
 
-  // Mail: SMTP for password-reset links (Jakarta Mail implementation, EPL-2.0 / GPL-2.0 with CPE)
-  lazy val angusMail = "org.eclipse.angus" % "angus-mail" % Version.angusMail
+  }
 
-  // Metrics: Prometheus endpoint (per-app registry, live values)
-  lazy val micrometerPrometheus =
-    "io.micrometer" % "micrometer-registry-prometheus" % Version.micrometer
+  object http4s {
 
-  // LDAP / Active Directory user federation (Apache 2.0); also an in-memory server for tests
-  lazy val unboundid = "com.unboundid" % "unboundid-ldapsdk" % Version.unboundid
+    val core  = Seq(http4s("dsl"), http4s("ember-server"), http4s("ember-client"))
+    val circe = Seq(http4s("circe"))
 
-  // Cache
-  lazy val caffeine =
-    "com.github.ben-manes.caffeine" % "caffeine" % Version.caffeine
+  }
 
-  // Redis client for the shared read cache and short-lived state (no Netty, so no clash with Play)
-  lazy val jedis = "redis.clients" % "jedis" % Version.jedis
+  object sttp {
+
+    val core     = Seq(sttpDep("core"))
+    val cats     = Seq(sttpDep("cats"))
+    val fs2      = Seq(sttpDep("fs2"))
+    val jsoniter = Seq(sttpDep("jsoniter"))
+    val circe    = Seq(sttpDep("circe"))
+
+    val backends = Seq(
+      sttpDep("slf4j-backend"),
+      sttpDep("okhttp-backend"),
+      sttpDep("prometheus-backend"),
+      sttpDep("scribe-backend"),
+      sttpDep("async-http-client-backend-fs2"),
+      sttpDep("http4s-backend"),
+      sttpDep("zio")
+    )
+
+  }
+
+  object tapir {
+
+    val core = Seq(
+      tapirDep("core"),
+      tapirDep("http4s-server"),
+      tapirDep("jsoniter-scala"),
+      tapirDep("openapi-docs")
+    )
+
+    val extras = Seq(tapirDep("swagger-ui-bundle"), tapirDep("iron"))
+
+  }
+
+  object json {
+
+    val jsoniter = Seq(
+      "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-core"   % Versions.jsoniter,
+      "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-macros" % Versions.jsoniter % Provided
+    )
+
+    val jsoniterCirce = Seq(
+      "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-circe" % Versions.jsoniter
+    )
+
+    val circe = Seq(circeDep("core"), circeDep("generic"), circeDep("parser"))
+
+    // Jackson 3 lives under tools.jackson.*; the Jackson 2 pins stay in build.sbt.
+    val jackson3 = Seq(
+      "tools.jackson.core"       % "jackson-core"           % Versions.jackson3,
+      "tools.jackson.core"       % "jackson-databind"       % Versions.jackson3,
+      "tools.jackson.dataformat" % "jackson-dataformat-xml" % Versions.jackson3
+    )
+
+  }
+
+  object iron {
+
+    val core       = Seq("io.github.iltotore" %% "iron" % Versions.iron)
+    val zioJson    = Seq("io.github.iltotore" %% "iron-zio-json" % Versions.iron)
+    val jsoniter   = Seq("io.github.iltotore" %% "iron-jsoniter" % Versions.iron)
+    val chimney    = Seq("io.github.iltotore" %% "iron-chimney" % Versions.iron)
+    val doobie     = Seq("io.github.iltotore" %% "iron-doobie" % Versions.iron)
+    val skunk      = Seq("io.github.iltotore" %% "iron-skunk" % Versions.iron)
+    val pureconfig = Seq("io.github.iltotore" %% "iron-pureconfig" % Versions.iron)
+
+  }
+
+  object database {
+
+    // Flyway 10+ ships database support separately; flyway-database-postgresql is the PostgreSQL one.
+    val postgres = Seq(
+      "org.postgresql" % "postgresql"                 % Versions.postgres,
+      "org.flywaydb"   % "flyway-core"                % Versions.flyway,
+      "org.flywaydb"   % "flyway-database-postgresql" % Versions.flyway,
+      "com.zaxxer"     % "HikariCP"                   % Versions.hikaricp
+    )
+
+    val skunk  = Seq("org.tpolecat" %% "skunk-core" % Versions.skunk)
+    val quill  = Seq("io.getquill" %% "quill-jdbc-zio" % Versions.quill)
+    val magnum = Seq("com.augustnagro" %% "magnum" % Versions.magnum)
+
+  }
+
+  object aws {
+
+    val core = Seq(
+      "software.amazon.awssdk" % "ec2"            % Versions.awsV2,
+      "software.amazon.awssdk" % "iam"            % Versions.awsV2,
+      "software.amazon.awssdk" % "rds"            % Versions.awsV2,
+      "software.amazon.awssdk" % "kms"            % Versions.awsV2,
+      "software.amazon.awssdk" % "secretsmanager" % Versions.awsV2,
+      "software.amazon.awssdk" % "sts"            % Versions.awsV2
+    )
+
+  }
+
+  object azure {
+
+    val core = Seq(
+      "com.azure" % "azure-identity"                  % Versions.azureIdentity,
+      "com.azure" % "azure-security-keyvault-keys"    % Versions.azureKv,
+      "com.azure" % "azure-security-keyvault-secrets" % Versions.azureKv
+    )
+
+  }
+
+  object security {
+
+    val core = Seq(
+      "org.bouncycastle" % "bcpkix-jdk18on"       % Versions.bouncycastle,
+      "com.nimbusds"     % "oauth2-oidc-sdk"      % Versions.nimbusOauth2Oidc,
+      "com.yubico"       % "webauthn-server-core" % Versions.webauthn,
+      "com.authlete"     % "authlete-java-common" % Versions.authlete
+    )
+
+    // Only the tests use it: the independent check that Argon2 hashes still verify.
+    val password4j = Seq("com.password4j" % "password4j" % Versions.password4j % Test)
+
+    val nimbusJoseJwt        = Seq("com.nimbusds" % "nimbus-jose-jwt" % Versions.nimbusJoseJwt)
+    val bouncycastleProvider = Seq("org.bouncycastle" % "bcprov-jdk18on" % Versions.bouncycastle)
+    val pemKeystore          = Seq("de.dentrassi.crypto" % "pem-keystore" % "3.0.0")
+    val vault                = Seq("com.bettercloud" % "vault-java-driver" % Versions.vault)
+    val auth0                = Seq("com.auth0" % "java-jwt" % Versions.auth0)
+
+    val jwt = Seq(
+      "com.github.jwt-scala" %% "jwt-zio-json" % Versions.jwtScala,
+      "com.github.jwt-scala" %% "jwt-circe"    % Versions.jwtScala
+    )
+
+  }
+
+  object mail {
+
+    val core = Seq(
+      "org.eclipse.angus" % "angus-mail"       % Versions.angusMail,
+      "jakarta.mail"      % "jakarta.mail-api" % Versions.jakartaMail,
+      "org.eclipse.angus" % "jakarta.mail"     % Versions.angusMail
+    )
+
+  }
+
+  object observability {
+
+    val micrometer = Seq(
+      "io.micrometer" % "micrometer-registry-prometheus" % Versions.micrometer
+    )
+
+    val datadog = Seq(
+      ("com.datadoghq" % "datadog-api-client" % Versions.datadog).classifier("shaded-jar")
+    )
+
+    val kamon = Seq(
+      "io.kamon" %% "kamon-bundle"     % Versions.kamon,
+      "io.kamon" %% "kamon-prometheus" % Versions.kamon
+    )
+
+    val otel = Seq(
+      "org.typelevel" %% "otel4s-core"     % Versions.otel4s,
+      "org.typelevel" %% "otel4s-otlp"     % Versions.otel4s,
+      "org.typelevel" %% "otel4s-otelJava" % Versions.otel4s
+    )
+
+  }
+
+  object logging {
+
+    // The compile-time API; Play supplies the Logback runtime.
+    val api = Seq("org.slf4j" % "slf4j-api" % Versions.slf4j)
+
+    val runtime = Seq(
+      "org.slf4j"      % "slf4j-api"       % Versions.slf4j,
+      "ch.qos.logback" % "logback-classic" % Versions.logback % Runtime
+    )
+
+    val test = Seq(
+      "org.slf4j"      % "slf4j-api"       % Versions.slf4j   % Test,
+      "ch.qos.logback" % "logback-classic" % Versions.logback % Test
+    )
+
+    val scribe = Seq(
+      "com.outr" %% "scribe"       % Versions.scribe,
+      "com.outr" %% "scribe-slf4j" % Versions.scribe,
+      "com.outr" %% "scribe-cats"  % Versions.scribe
+    )
+
+  }
+
+  object config {
+
+    val pureconfig = Seq("com.github.pureconfig" %% "pureconfig-core" % Versions.pureconfig)
+
+    val pureconfigGeneric = Seq(
+      "com.github.pureconfig" %% "pureconfig-generic-scala3" % Versions.pureconfig
+    )
+
+  }
+
+  object testing {
+
+    val munit = Seq("org.scalameta" %% "munit" % Versions.munit % Test)
+
+    val munitCatsEffect = Seq(
+      "org.typelevel" %% "munit-cats-effect" % Versions.munitCatsEffect % Test
+    )
+
+    val hedgehog = Seq(
+      "qa.hedgehog" %% "hedgehog-core" % Versions.hedgehog % Test,
+      "qa.hedgehog" %% "hedgehog-sbt"  % Versions.hedgehog % Test
+    )
+
+    val scalacheck = Seq("org.scalacheck" %% "scalacheck" % Versions.scalacheck % Test)
+
+  }
 
 }

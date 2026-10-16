@@ -1,20 +1,4 @@
 import com.typesafe.sbt.packager.docker.{Cmd, DockerChmodType}
-import Dependencies.{
-  angusMail,
-  bouncycastle,
-  flyway,
-  flywayPostgres,
-  hikaricp,
-  jedis,
-  micrometerPrometheus,
-  nimbusOauth2Oidc,
-  password4j,
-  postgres,
-  slf4j,
-  unboundid,
-  webauthn,
-  zxing
-}
 
 ThisBuild / organization := "com.lattice"
 
@@ -72,45 +56,20 @@ val jacksonOverrides =
 
 ThisBuild / dependencyOverrides ++= jacksonOverrides
 
-ThisBuild / libraryDependencies ++= Seq(
-  javaForms,
-  jodaForms,
-  guice,
-  javaWs,
-  javaJdbc,
-  javaCore,
-  logback,
-  slf4j,
-  caffeine,
-  jedis,
-  micrometerPrometheus,
-  unboundid,
-  bouncycastle,
-  // Only the tests use it now: as the independent check that hashes written by the previous
-  // Argon2 implementation (and ours, in the other direction) still verify.
-  password4j % Test,
-  hikaricp,
-  flyway,
-  flywayPostgres,
-  postgres,
-  nimbusOauth2Oidc,
-  zxing,
-  webauthn,
-  angusMail,
-  "net.minidev"              % "json-smart"             % "2.6.0",
-  "com.cronutils"            % "cron-utils"             % "9.2.1",
-  "org.yaml"                 % "snakeyaml"              % "2.7",
-  "jakarta.mail"             % "jakarta.mail-api"       % "2.1.5",
-  "org.eclipse.angus"        % "jakarta.mail"           % "2.0.5",
-  "javax.validation"         % "validation-api"         % "2.0.1.Final",
-  "commons-validator"        % "commons-validator"      % "1.11.0",
-  "tools.jackson.core"       % "jackson-core"           % jackson3Version,
-  "tools.jackson.core"       % "jackson-databind"       % jackson3Version,
-  "tools.jackson.dataformat" % "jackson-dataformat-xml" % jackson3Version,
-  "io.kamon"                %% "kamon-bundle"           % "2.8.1",
-  "io.kamon"                %% "kamon-prometheus"       % "2.8.1",
-  "com.authlete"             % "authlete-java-common"   % "4.48"
-)
+ThisBuild / libraryDependencies ++=
+  Seq(javaForms, jodaForms, guice, javaWs, javaJdbc, javaCore, logback, caffeine) ++
+    Dependencies.logging.api ++
+    Dependencies.misc ++
+    Dependencies.jedis ++
+    Dependencies.unboundid ++
+    Dependencies.zxing ++
+    Dependencies.database.postgres ++
+    Dependencies.security.core ++
+    Dependencies.security.password4j ++
+    Dependencies.mail.core ++
+    Dependencies.json.jackson3 ++
+    Dependencies.observability.micrometer ++
+    Dependencies.observability.kamon
 
 // Compile Java for the oldest JDK CI tests (21), whichever JDK runs sbt, so the classes also run
 // on the newer JRE in the Docker image.
