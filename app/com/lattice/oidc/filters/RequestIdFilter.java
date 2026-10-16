@@ -1,6 +1,6 @@
 package com.lattice.oidc.filters;
 
-import java.util.UUID;
+import com.lattice.oidc.common.Ids;
 import java.util.regex.Pattern;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
@@ -41,7 +41,7 @@ public final class RequestIdFilter extends EssentialFilter {
     return EssentialAction.of(
         request -> {
           String id =
-              request.header(HEADER).filter(v -> VALID.matcher(v).matches()).orElseGet(() -> UUID.randomUUID().toString());
+              request.header(HEADER).filter(v -> VALID.matcher(v).matches()).orElseGet(Ids::timeOrdered);
           Accumulator<ByteString, Result> action = next.apply(request.addAttr(REQUEST_ID, id));
           return action.map(r -> r.withHeader(HEADER, id), FilterSupport.DIRECT);
         });

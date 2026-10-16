@@ -1,6 +1,7 @@
 package com.lattice.oidc.security;
 
 import com.lattice.oidc.client.AuthleteExecutionContext;
+import com.lattice.oidc.common.Ids;
 import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.metrics.Metrics;
 import io.micrometer.core.instrument.Gauge;
@@ -19,7 +20,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import javax.crypto.Mac;
@@ -141,7 +141,7 @@ public final class Webhooks {
   /** Sends the audit record to every endpoint that wants its event. */
   public void deliver(Map<String, Object> record) {
     String event = String.valueOf(record.get("event"));
-    String id = "msg_" + UUID.randomUUID();
+    String id = "msg_" + Ids.timeOrdered();
     long timestamp = Instant.now().getEpochSecond();
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("type", event);

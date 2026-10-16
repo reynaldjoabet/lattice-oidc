@@ -1,6 +1,7 @@
 package com.lattice.oidc.stores;
 
 import com.google.inject.ImplementedBy;
+import com.lattice.oidc.common.Ids;
 import com.lattice.oidc.common.ObbSupport;
 import com.lattice.oidc.models.Consent;
 import java.time.Duration;
@@ -8,7 +9,6 @@ import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 /**
  * Open Banking consents. A consent is kept until it expires (at most a year), or a day when it has
@@ -30,7 +30,7 @@ public interface ConsentStore {
     String now = ObbSupport.now();
     Consent consent =
         new Consent(
-            "urn:lattice:" + UUID.randomUUID(),
+            "urn:lattice:" + Ids.timeOrdered(),
             permissions,
             "AWAITING_AUTHORISATION",
             now,
