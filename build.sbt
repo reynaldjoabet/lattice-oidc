@@ -59,17 +59,22 @@ ThisBuild / dependencyOverrides ++= jacksonOverrides
 ThisBuild / libraryDependencies ++=
   Seq(javaForms, jodaForms, guice, javaWs, javaJdbc, javaCore, logback, caffeine) ++
     Dependencies.logging.api ++
-    Dependencies.misc ++
-    Dependencies.jedis ++
-    Dependencies.unboundid ++
-    Dependencies.zxing ++
+    Dependencies.oauth ++
+    Dependencies.crypto ++
+    Dependencies.passkeys ++
     Dependencies.database.postgres ++
-    Dependencies.security.core ++
-    Dependencies.security.password4j ++
+    Dependencies.redis ++
+    Dependencies.directory ++
     Dependencies.mail.core ++
     Dependencies.json.jackson3 ++
+    Dependencies.qrCodes ++
+    Dependencies.validation ++
+    Dependencies.scheduling ++
+    Dependencies.yaml ++
+    Dependencies.pins ++
     Dependencies.observability.micrometer ++
-    Dependencies.observability.kamon
+    Dependencies.observability.kamon ++
+    Dependencies.testing.password4j
 
 // Compile Java for the oldest JDK CI tests (21), whichever JDK runs sbt, so the classes also run
 // on the newer JRE in the Docker image.

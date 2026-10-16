@@ -107,19 +107,47 @@ object Dependencies {
   val fs2Kafka   = Seq("org.typelevel" %% "fs2-kafka" % Versions.fs2Kafka)
   val chimney    = Seq("io.scalaland" %% "chimney" % Versions.chimney)
   val caffeine   = Seq("com.github.ben-manes.caffeine" % "caffeine" % Versions.caffeine)
-  val jedis      = Seq("redis.clients" % "jedis" % Versions.jedis)
   val jsonRpc    = Seq("tech.neander" %% "jsonrpclib-fs2" % Versions.jsonRpc)
-  val unboundid  = Seq("com.unboundid" % "unboundid-ldapsdk" % Versions.unboundid)
-  val zxing      = Seq("com.google.zxing" % "core" % Versions.zxing)
 
-  // Small libraries the app uses directly
-  val misc = Seq(
-    "net.minidev"       % "json-smart"        % "2.6.0",
-    "com.cronutils"     % "cron-utils"        % "9.2.1",
-    "org.yaml"          % "snakeyaml"         % "2.7",
+  // --- What Lattice uses, by what it is for ---
+
+  // Redis: the shared read cache and short-lived state (sessions, sign-in tickets). Jedis has no
+  // Netty, so it doesn't clash with Play's.
+  val redis = Seq("redis.clients" % "jedis" % Versions.jedis)
+
+  // LDAP and Active Directory user federation; also an in-memory directory for the tests.
+  val directory = Seq("com.unboundid" % "unboundid-ldapsdk" % Versions.unboundid)
+
+  // QR codes: credential offers and authenticator-app setup.
+  val qrCodes = Seq("com.google.zxing" % "core" % Versions.zxing)
+
+  // Cryptography beyond the JDK: Argon2, PKIX (certificates, PEM).
+  val crypto = Seq("org.bouncycastle" % "bcpkix-jdk18on" % Versions.bouncycastle)
+
+  // OAuth and OpenID Connect: Authlete runs the protocol; Nimbus parses and checks the JOSE and OIDC
+  // objects Lattice handles itself.
+  val oauth = Seq(
+    "com.authlete" % "authlete-java-common" % Versions.authlete,
+    "com.nimbusds" % "oauth2-oidc-sdk"      % Versions.nimbusOauth2Oidc
+  )
+
+  // Passkeys: the WebAuthn relying party.
+  val passkeys = Seq("com.yubico" % "webauthn-server-core" % Versions.webauthn)
+
+  // Pins json-smart, which the Nimbus SDK brings in, to a newer version.
+  val pins = Seq("net.minidev" % "json-smart" % "2.6.0")
+
+  // Input validation.
+  val validation = Seq(
     "javax.validation"  % "validation-api"    % "2.0.1.Final",
     "commons-validator" % "commons-validator" % "1.11.0"
   )
+
+  // Cron expressions.
+  val scheduling = Seq("com.cronutils" % "cron-utils" % "9.2.1")
+
+  // YAML parsing.
+  val yaml = Seq("org.yaml" % "snakeyaml" % "2.7")
 
   object zio {
 
@@ -273,16 +301,6 @@ object Dependencies {
 
   object security {
 
-    val core = Seq(
-      "org.bouncycastle" % "bcpkix-jdk18on"       % Versions.bouncycastle,
-      "com.nimbusds"     % "oauth2-oidc-sdk"      % Versions.nimbusOauth2Oidc,
-      "com.yubico"       % "webauthn-server-core" % Versions.webauthn,
-      "com.authlete"     % "authlete-java-common" % Versions.authlete
-    )
-
-    // Only the tests use it: the independent check that Argon2 hashes still verify.
-    val password4j = Seq("com.password4j" % "password4j" % Versions.password4j % Test)
-
     val nimbusJoseJwt        = Seq("com.nimbusds" % "nimbus-jose-jwt" % Versions.nimbusJoseJwt)
     val bouncycastleProvider = Seq("org.bouncycastle" % "bcprov-jdk18on" % Versions.bouncycastle)
     val pemKeystore          = Seq("de.dentrassi.crypto" % "pem-keystore" % "3.0.0")
@@ -363,6 +381,9 @@ object Dependencies {
   }
 
   object testing {
+
+    // The independent check that Argon2 hashes from the previous implementation still verify.
+    val password4j = Seq("com.password4j" % "password4j" % Versions.password4j % Test)
 
     val munit = Seq("org.scalameta" %% "munit" % Versions.munit % Test)
 
