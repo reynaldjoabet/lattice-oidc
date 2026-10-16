@@ -43,18 +43,18 @@ object Dependencies {
     val skunk    = "2.0.0-RC3"
     val hikaricp = "7.1.0"
     val flyway   = "13.8.0"
-    val postgres = "42.7.13"
+    val postgres = "42.7.14"
 
     // --- Security ---
     val jwtScala         = "11.0.4"
     val bouncycastle     = "1.84"
     val password4j       = "1.8.4"
-    val auth0            = "4.6.1"
+    val auth0            = "4.6.2"
     val nimbusJoseJwt    = "10.10"
     val nimbusOauth2Oidc = "11.38.2"
     val vault            = "5.1.0"
     val authlete         = "4.48"
-    val webauthn         = "2.10.0"
+    val webauthn         = "2.10.1"
 
     // --- Logging ---
     val scribe  = "3.19.0"
@@ -62,8 +62,8 @@ object Dependencies {
     val logback = "1.6.5"
 
     // --- Cache ---
-    val caffeine = "3.3.0"
-    val jedis    = "8.0.1"
+    val caffeine = "3.3.1"
+    val jedis    = "8.0.2"
 
     // --- Directory ---
     val unboundid = "7.0.5"
@@ -83,7 +83,7 @@ object Dependencies {
 
     // --- Observability ---
     val micrometer = "1.17.1"
-    val datadog    = "2.61.0"
+    val datadog    = "2.62.0"
     val kamon      = "2.8.1"
     val otel4s     = "1.0.0"
 
