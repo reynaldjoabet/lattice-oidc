@@ -18,6 +18,8 @@ import java.util.Optional;
 import jakarta.inject.Inject;
 import jakarta.inject.Provider;
 import jakarta.inject.Singleton;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import play.mvc.Result;
 
 /**
@@ -36,6 +38,8 @@ public final class NativeSsoHandler {
 
   /** What is stored about a device secret: its hash and session, never the secret itself. */
   record Registered(String hash, String sessionId) {}
+
+  private static final Logger LOG = LoggerFactory.getLogger(NativeSsoHandler.class);
 
   private static final String NAMESPACE = "device-secret";
 
@@ -64,7 +68,9 @@ public final class NativeSsoHandler {
     // Validate the presented device secret, or create and register a new one.
     DeviceSecret deviceSecret = deviceSecret(token.getDeviceSecret(), token.getDeviceSecretHash(), sessionId, headers);
 
-    // Call Authlete's /nativesso API.
+    // Call Authlete's /nativesso API. "claims" carries /auth/token's additionalClaims unchanged: the
+    // nonce and s_hash of the original request, which the new ID token must repeat (a client that
+    // sent a nonce rejects an ID token without it).
     NativeSsoResponse response =
         api.get()
             .nativeSso(
@@ -75,11 +81,21 @@ public final class NativeSsoHandler {
                             : token.getAccessToken())
                     .setRefreshToken(token.getRefreshToken())
                     .setDeviceSecret(deviceSecret.value())
-                    .setDeviceSecretHash(deviceSecret.hash()),
+                    .setDeviceSecretHash(deviceSecret.hash())
+                    .setClaims(token.getAdditionalClaims()),
                 null);
     return switch (response.getAction()) {
       case OK -> Responses.ok(response.getResponseContent(), headers);
-      default -> Responses.serverError(response.getResponseContent(), headers);
+      // A mistake in this request (CALLER_ERROR) or a failure at Authlete: logged here, and the client
+      // gets a generic error, not Authlete's message.
+      case CALLER_ERROR -> {
+        LOG.error("Authlete's /nativesso refused Lattice's request: {}", response.getResultMessage());
+        yield Responses.serverError(Responses.error("server_error", "The token could not be issued."), headers);
+      }
+      default -> {
+        LOG.warn("Authlete's /nativesso failed: {}", response.getResultMessage());
+        yield Responses.serverError(Responses.error("server_error", "The token could not be issued."), headers);
+      }
     };
   }
 

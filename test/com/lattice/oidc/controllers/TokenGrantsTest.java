@@ -4,6 +4,7 @@ import static com.lattice.oidc.OidcTestSupport.app;
 import static com.lattice.oidc.OidcTestSupport.post;
 import static com.lattice.oidc.OidcTestSupport.route;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -231,6 +232,39 @@ public class TokenGrantsTest {
     nativeSso(otherSessionId, issued.getDeviceSecret(), issued.getDeviceSecretHash());
     assertEquals(400, tokenRequest().status());
     assertEquals(1, fake.count("nativeSso"));
+  }
+
+  @Test
+  public void theNonceAndSHashOfTheOriginalRequestReachTheNewIdToken() {
+    String sessionId = login();
+    String additional = "{\"nonce\":\"n-0S6_WzA2Mj\",\"s_hash\":\"5Q8T2rqMBnaOhJp_Mr3ZoA\"}";
+    authleteSays(
+        TokenResponse.Action.NATIVE_SSO,
+        r -> {
+          r.setSessionId(sessionId);
+          r.setAccessToken("at");
+          r.setAdditionalClaims(additional);
+        });
+    assertEquals(200, tokenRequest().status());
+    assertEquals(additional, ((NativeSsoRequest) fake.lastRequest("nativeSso")).getClaims());
+  }
+
+  @Test
+  public void authletesRefusalIsLoggedNotShownToTheClient() {
+    String sessionId = login();
+    fake.answer(
+        "nativeSso",
+        args -> {
+          NativeSsoResponse r = new NativeSsoResponse().setAction(NativeSsoResponse.Action.CALLER_ERROR);
+          r.setResultMessage("[A123] internal detail about Lattice's request");
+          r.setResponseContent("{\"error\":\"internal detail\"}");
+          return r;
+        });
+    nativeSso(sessionId, null, null);
+    Result r = tokenRequest();
+    assertEquals(500, r.status());
+    assertTrue(contentAsString(r).contains("server_error"));
+    assertFalse(contentAsString(r).contains("internal detail"));
   }
 
   @Test
