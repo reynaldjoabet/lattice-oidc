@@ -491,6 +491,38 @@ sequenceDiagram
     end
 ```
 
+#### How Keycloak handles the same grant
+
+Keycloak calls it the **JWT Authorization Grant** (feature `jwt-authorization-grant`, on by default). It trades a JWT about a user, signed by a system Keycloak trusts, for a Keycloak token, with no browser and no login page. Examples: a partner platform that has already signed the user in, or an internal system that issues signed assertions about its users.
+
+The request is RFC 7523 §2.1:
+
+```sh
+curl -X POST https://kc.example/realms/myrealm/protocol/openid-connect/token \
+  -u partner-app:secret \
+  -d grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer \
+  -d assertion=eyJhbGciOiJSUzI1NiIs...      # {"iss":"https://idp.partner.com","sub":"alice", ...}
+```
+
+What `JWTAuthorizationGrantType` does, in order (checked against the Keycloak source, `services/.../protocol/oidc/grants/`):
+
+1. **The client:** must be confidential, and must have the JWT Authorization Grant switched on in its settings.
+2. **The assertion's issuer:** `iss` and `sub` must be present. `iss` selects the identity provider configured with that issuer, which must be enabled.
+3. **Per-client allow-list:** the client must be allowed to use that identity provider.
+4. **The signature:** checked by the provider (`JWTAuthorizationGrantIdentityProvider`), with its JWKS URL or a pasted public key. An existing OIDC identity provider can also accept these assertions.
+5. **Lifetime and replay:**
+   - `exp` is required, with clock skew allowed.
+   - The assertion may live at most 300 seconds by default.
+   - It is single-use by default: `jti` is required and remembered until the assertion expires, and a second use fails with "Token reuse detected".
+6. **The user:** found by `sub`, through an existing link between a Keycloak user and that provider. `preferred_username` only names the brokered identity. Unlike a browser sign-in through a provider, **no user is created**: an unlinked `sub` fails with "User not found". The user must also be enabled, have no pending required actions, and already have consent for the requested scopes.
+7. **The audience:** `aud` must be the realm's issuer or its token endpoint, unless the client's settings name other audiences.
+8. **The tokens:** an access token, and **no refresh token**. The client presents a fresh assertion when it needs a new token.
+
+Compared with Lattice's checks above, Keycloak also:
+- **Allows each assertion once** (`jti`) and **caps its lifetime** (300 s). Lattice checks only `exp` and `nbf`, so a captured assertion can be replayed until it expires.
+- **Limits which issuers each client may use.** Lattice's `lattice.trusted-jwt-issuers` applies to every client.
+- **Requires an existing, linked user,** while Lattice takes `sub` as the subject directly.
+
 ### Login: Argon2 hashing, lockout, and no account enumeration
 
 - Argon2 hashing, a memory-hard algorithm that makes offline cracking expensive. Demo passwords are hashed when the store loads; nothing is stored in plain text.
@@ -533,6 +565,74 @@ Consents are kept, so apps on the device that stays signed in get new tokens wit
 
 The thumbprint covers only the required public members, in canonical form. The same key therefore always gets the same value, whatever its `kid` or member order, and a private JWK gets the thumbprint of its public half. RSA values are encoded unsigned and minimal. EC coordinates are padded to the curve's size. These are the two details that hand-written versions most often get wrong. OKP keys are read from their X.509 encoding, so JDK and Bouncy Castle keys both work. Symmetric keys are refused, because a published thumbprint of a secret key would be a hash of the secret. The tests check the RFC 7638 and RFC 8037 vectors and compare against nimbus-jose-jwt for every key type.
 
+#### How Keycloak authenticates workloads without a secret
+
+**The problem:** a program, such as a backend in Kubernetes, needs a token (`client_credentials`). Normally it authenticates with a client secret or a private key, which someone has to create, store, distribute and rotate. A leaked secret works until someone notices.
+
+**The idea:** the platform the program runs on already gives it an identity. Kubernetes issues every pod a signed service-account token, and SPIRE issues SPIFFE SVIDs. Keycloak can accept that platform-issued JWT as the client's credential, so there's no secret to manage.
+
+This is the **"Signed JWT - Federated"** client authenticator (`federated-jwt`, `FederatedJWTClientAuthenticator`). The identity provider says which issuer to trust and how to get its keys; the client says which subject at that issuer it is. Federated client authentication and the Kubernetes provider are on by default; the SPIFFE provider is a preview feature that must be enabled.
+
+```text
+Client config (Credentials tab)
+  Client Authenticator: Signed JWT - Federated
+  Identity provider:    my-cluster                                  ← which issuer to trust
+  Federated subject:    system:serviceaccount:billing:billing-job   ← who this client is
+
+Identity provider "my-cluster" (type Kubernetes)
+  Issuer:  https://kubernetes.default.svc.cluster.local             ← your cluster's issuer
+  Keys:    fetched from the cluster's JWKS
+```
+
+**1. Kubernetes issues a token to the pod.** Ask for a projected service-account token whose audience is the Keycloak realm:
+
+```yaml
+apiVersion: v1
+kind: Pod
+spec:
+  serviceAccountName: billing-job          # a dedicated service account, never "default"
+  volumes:
+    - name: kc-token
+      projected:
+        sources:
+          - serviceAccountToken:
+              audience: https://kc.example/realms/myrealm   # must be the realm's issuer URL, and the only audience
+              expirationSeconds: 600                        # at least 600; Keycloak rejects over 3600 by default
+              path: kc-token
+```
+
+The kubelet writes a JWT to the volume and refreshes it before it expires. Decoded:
+
+```json
+{
+  "iss": "https://kubernetes.default.svc.cluster.local",
+  "sub": "system:serviceaccount:billing:billing-job",
+  "aud": ["https://kc.example/realms/myrealm"],
+  "exp": 1760000600,
+  "kubernetes.io": { "namespace": "billing", "serviceaccount": { "name": "billing-job" } }
+}
+```
+
+**2. The pod sends it to Keycloak as its client credential:**
+
+```sh
+curl https://kc.example/realms/myrealm/protocol/openid-connect/token \
+  --data-urlencode grant_type=client_credentials \
+  --data-urlencode client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer \
+  --data-urlencode client_assertion="$(cat /var/run/secrets/tokens/kc-token)"
+```
+
+There's no `client_id` and no `client_secret`. Keycloak finds the identity provider from the token's `iss`, then the client whose identity provider and federated subject match (`DefaultClientAssertionStrategy`). A self-signed assertion (`iss` equal to `sub`) is left to the ordinary "Signed JWT" authenticator.
+
+**3. Keycloak verifies it** (`KubernetesIdentityProvider`, `FederatedJWTClientValidator`):
+- **Signature:** checked with the cluster's public keys. `KubernetesJwksEndpointLoader` reads `<issuer>/.well-known/openid-configuration`, then its `jwks_uri`, unless the provider has a JWKS URL set. When Keycloak runs in a cluster, it authenticates those calls with its own service-account token (`/var/run/secrets/kubernetes.io/serviceaccount/token`), but only if that token's issuer is the configured one, so its credential is never sent to another cluster.
+- **Issuer:** `iss` must be the provider's issuer.
+- **Audience:** exactly one, and it must be the realm's issuer.
+- **Lifetime:** not expired (with clock skew allowed), and at most 3600 seconds long by default, configurable on the provider.
+- **Reuse is allowed:** the pod presents the same token on every request until the kubelet refreshes it. That's unlike Keycloak's JWT Authorization Grant above, which allows each assertion once.
+
+**4. Keycloak returns an access token** for the client's service account, with whatever roles it was given.
+
 ### Security building blocks
 
 These standalone helpers aren't all used by the sign-in flows yet. Each one's Javadoc explains the attacks it handles.
@@ -546,6 +646,58 @@ These standalone helpers aren't all used by the sign-in flows yet. Each one's Ja
 | `SecureContexts` | Whether a page is a browser secure context, which WebAuthn and `Secure` cookies need | `https`, or loopback. Loopback is recognised by the host's form only, never by DNS. An `https` frame inside an `http` page is detected with `Sec-Fetch-Dest` and `Referer`. |
 | `LockoutBackoff` | Incremental lockout as a pure function of the stored state and the time | Waits grow per failure up to a cap. Machine-speed failures wait even below the threshold. Old failures expire. A permanent lock is optional. Keying the state on account and IP keeps it from becoming a lock-out-anyone tool. |
 | `EmailAddresses` | Checks email syntax | Splits at the last `@`. Applies the length limits for the local part, the domain and the whole address. The domain is converted with IDNA, then checked as a host name. Line breaks are refused, so the address can't inject mail headers. It uses small patterns instead of one large regular expression, which avoids ReDoS. |
+
+### Identifiers and secrets
+
+Lattice makes two kinds of random-looking values, and they must not be mixed up.
+
+- **An identifier** names a record or a message. Knowing it lets you refer to the thing, not act on it. `Ids` makes these as UUIDv7 (RFC 9562), using `java-uuid-generator`.
+- **A secret** grants something to whoever holds it: a session ID, OAuth `state`, `nonce`, a PKCE verifier, a device secret, the "this wasn't me" link. These come from `UserSessions.randomId()`, which returns 256 random bits from `SecureRandom`, base64url-encoded.
+
+**What a UUIDv7 looks like.** The first 48 bits are the creation time in milliseconds since 1970. The `7` that starts the third group is the version. The rest is random, apart from two variant bits.
+
+```sh
+# One hex digit is 4 bits.
+01a1443f-df50-7843-bd08-e9e28f06efd0
+└─────┬─────┘ ↑└─────────┬─────────┘
+  time (ms)   version   76 bits: 74 random + 2 variant
+
+time 0x01a1443fdf50 = 2026-10-16T10:26:39.056Z
+
+# The 2 bits that aren't random. The first digit of the fourth group, b, is 1011 in binary. Its first two bits, 10, are the variant
+variant: the first 2 bits of "b" (1011) are always 10, so that digit is always 8, 9, a or b
+
+b is 4 bits. Only its first 2 bits are fixed; its last 2 bits are random. 
+```
+
+Because the time comes first, ids sort by creation time, both as UUIDs and as text. That gives two benefits:
+- A run of request IDs in the logs reads as a timeline.
+- A new primary key goes at the end of the index, instead of at a random place as a UUIDv4 would. That keeps inserts cheap and the index compact.
+
+**Where Lattice uses them** (`Ids.timeOrdered()`):
+
+| Value | Example |
+|---|---|
+| `X-Request-ID`, when the request didn't bring a valid one (`RequestIdFilter`) | `01a1443f-df50-7843-bd08-e9e28f06efd0` |
+| Webhook message ID, the `webhook-id` header (`Webhooks`) | `msg_01a1443f-df56-72c2-a252-7738a76a733a` |
+| Open Banking consent ID, the `consents` primary key (`ConsentStore`) | `urn:lattice:01a1443f-df56-7784-b908-6021083a0896` |
+
+**The two generators.** `Ids` has two methods. They differ only in what happens when several ids are made in the same millisecond. These samples come from bursts of six:
+
+| `Ids.timeOrdered()` (the default) | `Ids.sequential()` |
+|---|---|
+| `01a1443f-df50-7843-bd08-e9e28f06efd0` | `01a1443f-dfba-76e8-9a09-a357446f4eb9` |
+| `01a1443f-df50-7293-9ed7-64727e88886d` | `01a1443f-dfba-76e8-9a09-a357446f4eba` |
+| `01a1443f-df50-70f1-b150-f66ac508f895` | `01a1443f-dfba-76e8-9a09-a357446f4ebb` |
+| `01a1443f-df50-7d0e-bba1-26a3f51654c6` | `01a1443f-dfba-76e8-9a09-a357446f4ebc` |
+| Fresh randomness for every id. Within one millisecond, the order is arbitrary, and one id says nothing about the next. | The first id in a millisecond is random. Each later id in the same millisecond is the previous one plus 1. The order is strict, but the neighbours of an id can be guessed. |
+
+- **Use `timeOrdered()`** for anything another party sees, which is every current use. Order within a millisecond doesn't matter for logs or index locality, and unpredictable neighbours mean that one consent ID can't be used to guess another.
+- **Use `sequential()`** only where ids made in the same millisecond must keep their order. An example is paging through rows by id when many are inserted at once.
+
+Its order holds only within one JVM, and only while the clock doesn't step back. Replicas don't coordinate, and a clock corrected backwards by NTP produces smaller ids.
+
+**Why a UUIDv7 is never a secret.** It has at most 74 random bits, and the other 48 bits are a timestamp that anyone can estimate. With `sequential()`, even the random part follows from a neighbouring id. A secret needs all its bits unpredictable, and Lattice uses 256. So none of the values that `UserSessions.randomId()` makes was switched to UUIDv7. The jti of DPoP proofs that Lattice signs stays a UUIDv4, and the audit table keeps its `bigserial` key, which is already in order.
 
 ## Project structure
 

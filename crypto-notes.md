@@ -31,6 +31,112 @@ An Elliptic Curve signature (like ECDSA used in ES256) consists of two distinct 
 - When you sign a token with a 256-bit ECC key, the algorithm outputs two 256-bit numbers, totaling 512 bits.
 - In computer memory, 512 bits translates to exactly 64 bytes of raw binary data.
 
+## Keys from passwords: Argon2id
+
+A random 256-bit key can't be guessed, so it is expanded with a fast function such as HKDF. A password comes from a tiny space by comparison: an attacker who has the encrypted data guesses passwords, deriving a key from each guess. A password-based key derivation function makes every guess expensive: one derivation is unnoticeable to the user, but it multiplies the attacker's work by billions. Argon2id (RFC 9106) also makes each guess fill a large block of memory, which removes most of a GPU's advantage. In Lattice, `PasswordHasher` uses it to check sign-in passwords, and `Argon2idKdf` to turn a password into an encryption key.
+
+Where it's used in production:
+
+| Product | What it does |
+| --- | --- |
+| Bitwarden | Offers Argon2id for deriving the master key since client version 2023.2.0, by default with 64 MiB, 3 passes and 4 lanes. PBKDF2-HMAC-SHA256 with 600,000 iterations remains the default option. |
+| LUKS2 (Linux disk encryption) | cryptsetup has made Argon2id the default for new key slots since version 2.4.0. |
+| Signal | Stretches a user's PIN with Argon2 before using it in Secure Value Recovery. |
+
+Two limits show up in the same products:
+- **Stretching can't save a very weak secret.** Signal also caps guesses, in a secure enclave, because no feasible amount of stretching protects a 4-digit PIN.
+- **FIPS.** Argon2 isn't NIST-approved. SUSE builds cryptsetup with PBKDF2 as the LUKS2 default instead, because a disk using Argon2 would be unbootable once the kernel switched to FIPS mode.
+
+Signal also shows the limit of stretching. Its blog says some passwords are so weak that no feasible amount of stretching stops brute force. So Signal adds a second protection: a server-side secure enclave that allows only a few guesses before the data is gone. Stretching makes each guess expensive; only a guess limit protects a 4-digit PIN
+
+Sources: [Bitwarden: KDF algorithms](https://bitwarden.com/en-gb/help/kdf-algorithms/), [cryptsetup 2.4.0 release notes](https://www.kernel.org/pub/linux/utils/cryptsetup/v2.4/v2.4.0-ReleaseNotes), [Signal: secure value recovery](https://signal.org/blog/secure-value-recovery/).
+
+
+## The pattern
+1. Data key: a random key that encrypts the actual data, such as the disk, the file or the database rows.
+2. Key-encryption key: a second key that encrypts ("wraps") the data key. The wrapped data key is stored next to the data.
+To read the data, you first unwrap the data key with the key-encryption key, then decrypt the data with the data key.
+
+```sh
+data ──encrypted with──► data key ──wrapped by──► key-encryption key
+                                                   (where does this come from?)
+```
+
+
+### Where the KEK comes from
+
+A KMS is only one way to hold the KEK. Envelope encryption works the same with any KEK, and the products below differ only in where it comes from:
+
+| | Key-encryption key | Who can unwrap |
+| --- | --- | --- |
+| LUKS | Derived from your passphrase with Argon2id | Anyone who knows the passphrase |
+| Apple data protection | Derived from your passcode, mixed with a key fused into the device's hardware | Someone with the passcode, on that device |
+| AWS KMS / Google Cloud KMS | A key generated inside the KMS, in hardware security modules. It never leaves. | Anyone the KMS's access policy allows to call "decrypt" |
+
+With a passphrase, the KEK is something you know, turned into a key by a password-based key derivation function. With a KMS, it's something a service holds, and access depends on who you are to that service. The benefits below come from the pattern, whichever KEK is used. For example, LUKS stores one wrapped copy of the volume key per passphrase, so changing a passphrase rewrites one small key slot, not the disk.
+
+Argon2id takes a password, a salt and cost settings, and outputs a fixed number of pseudorandom bytes. You choose the length, commonly 32 bytes. The specification (RFC 9106) calls this output a tag, and describes Argon2 as both a password hashing function and a key derivation function (KDF).
+
+```sh
+Argon2id(password, salt, m=19456, t=2, p=1, length=32)  →  32 random-looking bytes
+```
+## Used as a key: encrypting with a password
+Example: an encrypted backup or password-manager vault that only the user's password can open.
+```sh
+key = Argon2id(password, salt, m, t, p, length=32)    ← exactly 32 bytes = an AES-256 key
+ciphertext = AES-256-GCM(key, data)
+store: salt + settings + ciphertext                   ← the key itself is NEVER stored
+```
+
+- You never store the output. You recompute it from the password each time.
+- It's used directly as an encryption key. A wrong password gives a different key, so the GCM auth tag check fails
+
+Argon2id itself only outputs raw bytes. The $argon2id$… string is built afterwards by code, by joining the parts into a standard text layout called the PHC string format.
+
+Some libraries build the string for you, such as the C reference library, password4j and Spring Security's `Argon2PasswordEncoder`. Others, like Bouncy Castle, only return the raw bytes and leave the formatting to you. Your Lattice project uses Bouncy Castle, so it builds the string itself
+```sh
+byte[] salt = new byte[SALT_BYTES];          // 1. 16 random bytes
+RANDOM.nextBytes(salt);
+
+byte[] hash = argon2(ARGON2_id, ARGON2_VERSION_13,   // 2. raw Argon2id output: 32 bytes
+        memoryKib, iterations, parallelism, salt, HASH_BYTES, password);
+
+return "$argon2id$v=19$m=" + memoryKib + ",t=" + iterations + ",p=" + parallelism   // 3. glue it together
+     + "$" + BASE64.encodeToString(salt)
+     + "$" + BASE64.encodeToString(hash);
+```
+
+```sh
+$argon2id $v=19 $m=19456,t=2,p=1 $Q9cF7Mm8oZnGIhV+rpOk/w $nzkxl54lCGjQeQIYviXqRY5BQPT586xWoU/eTwAo2c4
+ │         │     │                 │                       │
+ │         │     │                 │                       └─ 5. the 32-byte Argon2id output, Base64
+ │         │     │                 └─ 4. the 16-byte random salt, Base64
+ │         │     └─ 3. the cost settings used: memory KiB, passes, lanes
+ │         └─ 2. algorithm version 1.3, written as decimal 19 (= 0x13)
+ └─ 1. which Argon2 variant
+```
+
+```sh
+byte[] salt = /* 16 bytes you choose and store */;
+Argon2Function f = Argon2Function.getInstance(19456, 2, 1, 32, Argon2.ID);  // m, t, p, output length, variant
+Hash h = Password.hash("correct horse").addSalt(salt).with(f);
+
+h.getResult();         // "$argon2id$v=19$m=19456,t=2,p=1$ABEiM0RV...$ggG5eVD9..."  ← PHC string, for storing
+h.getBytes();          // 32 raw bytes: 8201b979...d1ab                            ← usable as an AES-256 key
+h.getResultAsBytes();  // 97 bytes                                                   ← the PHC string's bytes, NOT a key
+```
+
+`SecretKey key = new SecretKeySpec(h.getBytes(), "AES");`
+
+```java
+ private String encodeHash(byte[] hash, byte[] salt)
+{
+return "$argon2" + variant.name()
+.toLowerCase() + "$v=" + version + "$m=" + memory + ",t=" + iterations + ",p=" + parallelism + "$"
++ Utils.encodeBase64(salt, false) + "$"
+ + Utils.encodeBase64(hash, false);
+}
+```
 ## The Base64Url Encoding Penalty
 
 JWTs cannot be transmitted over HTTP as raw binary; they must be encoded into text using Base64Url. Base64Url encoding expands the size of binary data by roughly 33%. This is where the size difference explodes and severely impacts your server's HTTP traffic
@@ -222,9 +328,146 @@ Two parties, A and B, can agree on a secret over an open network without ever se
 
 **Authentication is a separate problem.** Unauthenticated ECDH is open to a man-in-the-middle who substitutes their own public keys. TLS prevents this by having the server sign its handshake with its certificate key. The signature proves who sent the public key, not the key agreement itself.
 
+### Why the shared secret isn't uniformly random
+
+An encryption key should be **uniform**: every possible bit string equally likely.
+
+**What uniform means, with a 2-bit key.** Each bit is 0 or 1, so 2 bits give $2 \times 2 = 2^2 = 4$ patterns:
+
+| Bits | Value | Probability |
+| :-: | :-: | :-: |
+| `00` | 0 | $\frac{1}{4}$ |
+| `01` | 1 | $\frac{1}{4}$ |
+| `10` | 2 | $\frac{1}{4}$ |
+| `11` | 3 | $\frac{1}{4}$ |
+
+- **The count:** the values run from $0$ to $3$, which is $2^2 - 1$. Counting starts at 0, so the largest value is one less than the number of values.
+- **The probability:** uniform means each pattern is equally likely, so each gets an equal share of the total probability, 1: $\frac{1}{4} = 2^{-2}$. The four shares add up to $4 \times \frac{1}{4} = 1$, because the key is always one of them.
+
+**The same rule for any length.** An $n$-bit key has $2^n$ patterns, with values from $0$ to $2^n - 1$, each with probability $\frac{1}{2^n} = 2^{-n}$:
+
+| Bits | Patterns | Values | Probability of each |
+| --: | --: | :-- | :-- |
+| 2 | $2^2 = 4$ | 0 to 3 | $2^{-2} = 0.25$ |
+| 8 (one byte) | $2^8 = 256$ | 0 to 255 | $2^{-8} \approx 0.004$ |
+| 256 | $2^{256} \approx 1.2 \times 10^{77}$ | 0 to $2^{256} - 1$ | $2^{-256} \approx 8.6 \times 10^{-78}$ |
+
+**As a formula.** A key generated with true randomness follows a uniform distribution: every outcome in the sample space, here every 256-bit string, is exactly as likely as any other. The probability of one specific string $x$ is one outcome divided by the number of possible outcomes:
+
+$$
+P(x) = \frac{1}{2^{256}} = 2^{-256}
+$$
+
+
+A random 256-bit key is the last row: an attacker's best guess is right with probability $2^{-256}$, whichever value they pick, because no value is more likely than another. That's the assumption the security proofs make about keys.
+
+**The ECDH shared secret isn't like that.** Some 256-bit values can never occur, so the others are more likely than $2^{-256}$, and an attacker who knows which values are impossible can skip them. It's the x-coordinate of a point on the curve, $S = (k_A k_B) \times G$, and that has **structure**: it must obey mathematical rules that anyone can check, which a random string obeys only by chance.
+
+A valid credit card number is the everyday example. Its last digit is a check digit computed from the others (the Luhn formula), so anyone can tell whether 16 digits could be a real card number. Most random strings of digits fail the check; real card numbers always pass. The check digit doesn't reveal anyone's card, but it makes card numbers recognisably non-random. The ECDH secret is the same: an outsider can't compute *which* value it is (the Diffie-Hellman assumption), but it always belongs to a recognisable set of values, smaller than all 256-bit strings. Three rules make that set smaller:
+
+**1. Only about half of all numbers are x-coordinates.** A value $x$ appears only if $x^3 + ax + b$ has a square root modulo $p$, which holds for about half of the numbers. The [toy curve](#a-toy-example) above shows it:
+
+| $x$ values that occur | $x$ values that never occur |
+| --- | --- |
+| 0, 3, 5, 6, 7, 9, 10, 13, 16 | 1, 2, 4, 8, 11, 12, 14, 15 |
+
+A shared secret on that curve is never 1, 2 or 4. On P-256 the same holds at scale: about half of all 256-bit values can never be the output.
+
+**Where the square root comes from.** It comes from the curve equation itself. A point $(x, y)$ is on the curve when
+
+$$
+y^2 \equiv x^3 + ax + b \pmod{p}
+$$
+
+Pick an $x$, and the right side becomes a number. Call it $r = x^3 + ax + b$. The equation becomes
+
+$$
+y^2 \equiv r \pmod{p}
+$$
+
+For a point with that $x$ to exist, you need a $y$ whose square leaves the same remainder as $r$ when divided by $p$. That $y$ is a **square root of $r$ modulo $p$**. If none exists, no point on the curve has that $x$, so it can never be a shared secret.
+
+**Two different "mod"s.** This section writes "mod" in two ways, and they mean different things:
+
+| Written | What kind of thing | Read it as | Gives |
+| --- | --- | --- | --- |
+| $36 \bmod 17$ | An **operation**, like $+$ or $\times$ | "the remainder when 36 is divided by 17" | One number: $2$ |
+| $36 \equiv 2 \pmod{17}$ | A **statement**, like $=$ | "36 and 2 leave the same remainder when divided by 17" | True or false: true |
+
+- **The operation** answers "what's the remainder?": $36 \bmod 17 = 2$, $121 \bmod 17 = 2$, $35 \bmod 17 = 1$. It makes a number smaller.
+- **The statement** compares two numbers. $36 \equiv 2 \pmod{17}$ is true, because both leave remainder 2; put another way, $36 - 2 = 34 = 2 \times 17$. But $36 \equiv 3 \pmod{17}$ is false.
+- **In the statement, "(mod 17)" belongs to the $\equiv$ sign,** not to the number beside it. It qualifies the whole comparison: "equal, as far as remainders after dividing by 17 go". A clock works the same way: on a 12-hour clock, 14:00 and 2:00 are the same time.
+
+**The curve equation is a statement.** $y^2 \equiv x^3 + ax + b \pmod{p}$ says $y^2$ and $x^3 + ax + b$ leave the same remainder. Neither side has to be reduced first: $y^2$ can be 36 while the right side is 2. That's why $r = x^3 + ax + b$ needs no "mod" of its own; the statement already takes care of it.
+
+**The operation appears when we simplify.** The table's column $r \bmod 17$, and the attacker's check below, compute a remainder to get a small number to compare with the list of quadratic residues. That's an operation used inside a statement, and it's harmless, because reducing a number never changes its remainder: $r \equiv (r \bmod p) \pmod{p}$, always. So $y^2 \equiv r$ and $y^2 \equiv (r \bmod p)$ have exactly the same solutions. For $x = 3$, $y^2 \equiv 35$ and $y^2 \equiv 1 \pmod{17}$ are the same question, since $35 \equiv 1$.
+
+So when "mod" appears twice, it's always one statement (comparing remainders) with an operation inside it (making a number smaller to work with). The operation never changes the statement's answer.
+
+**What $y^2 \equiv 2 \pmod{17}$ asks** (the toy curve below, at $x = 0$). Find a $y$ from 0 to 16 whose square leaves remainder 2 when divided by 17, or equivalently, where $y^2 - 2$ is a multiple of 17. Trying values:
+
+| $y$ | $y^2$ | $y^2 \bmod 17$ |
+| --: | --: | --: |
+| 5 | 25 | 8 |
+| 6 | 36 | 2 ✓ |
+| 7 | 49 | 15 |
+| 11 | 121 | 2 ✓ |
+
+So $y = 6$ and $y = 11$, because $36 - 2 = 34 = 2 \times 17$ and $121 - 2 = 119 = 7 \times 17$. That gives the points $(0, 6)$ and $(0, 11)$.
+
+**$x = 0$ on any curve.** Plug $x = 0$ into $y^2 \equiv x^3 + ax + b \pmod{p}$, and the $x^3$ and $ax$ terms vanish, leaving
+
+$$
+y^2 \equiv b \pmod{p}
+$$
+
+So a curve has a point with $x = 0$ only if its constant $b$ is a quadratic residue modulo $p$:
+- **If $b$ is a residue,** its two square roots give the points $(0, y)$ and $(0, p - y)$. On the toy curve, $b = 2$ is a residue modulo 17, hence $(0, 6)$ and $(0, 11)$.
+- **If $b$ is a non-residue,** no point has $x = 0$, so 0 can never be a shared secret on that curve.
+
+Bitcoin's secp256k1 is an example of the second case. Its equation is $y^2 \equiv x^3 + 7 \pmod{p}$, with $p = 2^{256} - 2^{32} - 977$, so the question is whether 7 is a residue. Euler's criterion answers it: $b^{(p-1)/2} \bmod p$ is 1 for a residue and $p - 1$ for a non-residue. For $b = 7$ it's $p - 1$. So $y^2 \equiv 7$ has no solution, and secp256k1 has no point with $x = 0$. (Checked by computing it. Because $p \bmod 4 = 3$, the only candidate square root is $7^{(p+1)/4} \bmod p$, and squaring it doesn't give 7.)
+
+Modulo a prime, many numbers have no square root, just as $-1$ has no square root among the real numbers. On the toy curve $y^2 \equiv x^3 + 2x + 2 \pmod{17}$:
+
+| $x$ | $r = x^3 + 2x + 2$ | $r \bmod 17$ | Square root of $r$ modulo 17? | Points |
+| --: | --: | --: | --- | --- |
+| 0 | 2 | 2 | yes: $6^2 = 36 \equiv 2$, and $11^2 = 121 \equiv 2$ | $(0, 6)$, $(0, 11)$ |
+| 1 | 5 | 5 | none | none |
+| 2 | 14 | 14 | none | none |
+| 3 | 35 | 1 | yes: $1^2 = 1$, and $16^2 = 256 \equiv 1$ | $(3, 1)$, $(3, 16)$ |
+
+The numbers with a square root modulo 17, the **quadratic residues**, are 0, 1, 2, 4, 8, 9, 13, 15 and 16. Compare $r \bmod 17$ with that list: 5 and 14 aren't on it, so $x = 1$ and $x = 2$ never appear.
+
+**Why about half.** Square every number from 1 to 16 modulo 17. Each square comes out exactly twice, because $y$ and $p - y$ have the same square:
+
+$$
+(p - y)^2 = p^2 - 2py + y^2 \equiv y^2 \pmod{p}
+$$
+
+For example, $6^2 \equiv 11^2 \equiv 2$. So the 16 non-zero numbers produce only 8 different squares, exactly half: in general, $\frac{p - 1}{2}$ of the $p - 1$ non-zero numbers. The other half have no square root: they are the **quadratic non-residues**. This is the check an attacker can run on any guess: compute $x^3 + ax + b \bmod p$, and if it's a non-residue, that $x$ can't be a point, so it was never a shared secret. Since $r$ behaves much like a random number as $x$ varies, about half the x-values give a square and the other half give none. That pairing is also cause 3 below: $(x, y)$ and $(x, p - y)$ are the two square roots of the same $r$.
+
+**2. The values stop below $p$, not at a power of 2.** Coordinates run from $0$ to $p - 1$:
+- **P-256:** $p = 2^{256} - 2^{224} + 2^{192} + 2^{96} - 1$, about $2^{256}(1 - 2^{-32})$. The values from $p$ to $2^{256} - 1$ never appear: a tiny bias, but a real one.
+- **X25519:** $p = 2^{255} - 19$, written in 32 bytes, so the output's top bit is always 0.
+
+**3. $+y$ and $-y$ share an x-coordinate.** Each x-coordinate comes from two points, $(x, y)$ and $(x, p - y)$, so there are about half as many possible secrets as points: about 255 bits of unpredictability, spread unevenly over 256-bit strings.
+
+Classic Diffie-Hellman, $g^{ab} \bmod p$, is uneven in the same ways. How much depends on the group:
+- **Safe primes,** $p = 2q + 1$ with $q$ prime, such as the RFC 7919 groups TLS 1.3 uses: $g$ generates the subgroup of order $q$, which is exactly the quadratic residues, half of all values. Every output is a quadratic residue, and anyone can test that with the Legendre symbol. It's a property of the whole number, not a pattern in particular bits.
+- **Groups with a small prime subgroup,** such as DSA-style groups with a 256-bit $q$ inside a 2048-bit $p$: the output lies in a subgroup that is a tiny fraction of the values below $p$ (about $2^{256}$ of $2^{2048}$).
+- **Values below $p$:** RFC 7919's primes have their top 64 bits set to 1, so the values above $p$ are a fraction of about $2^{-64}$. Tiny, like P-256's.
+
+Each of these removes about a bit of unpredictability or less. Nothing about a particular key leaks, but the output is distinguishable from random, which is what the security proofs rule out.
+
+**Why it matters.** The proofs for AES-GCM, ChaCha20-Poly1305 and HMAC assume a uniformly random key. A key that is merely hard to compute, with visible structure, doesn't meet that assumption, even when no practical attack follows from it. So the shared secret goes through **HKDF-Extract** (RFC 5869), which compresses an input that is unpredictable but unevenly distributed into a uniform-looking key (a "randomness extractor"). From 255 bits of unpredictability, a 256-bit key loses almost nothing. The result is pseudorandom: no feasible computation can tell it apart from uniform, although strictly it isn't uniform. The standards require this step:
+- **NIST SP 800-56A** requires a key-derivation function on the shared secret.
+- **RFC 7748,** which defines X25519, says the same.
+- **TLS 1.3** feeds it into its HKDF key schedule (below).
+- **JWE's `ECDH-ES`** (RFC 7518 §4.6), used for encrypted tokens, runs it through the Concat KDF from NIST SP 800-56A instead of HKDF. Same job, older construction.
+
 ### Deriving the traffic keys
 
-The raw result of ECDH isn't used directly as an encryption key. By the standard it is the x-coordinate of $S$ (or the u-coordinate for X25519), which isn't uniformly random. It is fed into a key-derivation function:
+The raw result of ECDH isn't used directly as an encryption key. By the standard it is the x-coordinate of $S$ (or the u-coordinate for X25519), which [isn't uniformly random](#why-the-shared-secret-isnt-uniformly-random). It is fed into a key-derivation function:
 
 - **TLS 1.3:** HKDF (HMAC-based), mixed with a hash of the handshake transcript. This gives separate keys for each direction and purpose.
 - **TLS 1.2:** the TLS PRF (also HMAC-based), which first makes a master secret.
