@@ -8,6 +8,8 @@ import com.lattice.oidc.common.Responses;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.CompletionStage;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import play.mvc.Http;
 import play.mvc.Result;
 
@@ -17,6 +19,8 @@ import play.mvc.Result;
  * @see <a href="https://openid.net/specs/fapi-grant-management.html">Grant Management for OAuth 2.0</a>
  */
 public final class GrantManagementController extends BaseController {
+
+  private static final Logger LOG = LoggerFactory.getLogger(GrantManagementController.class);
 
   /**
    * The entry point for grant management 'query' requests.
@@ -51,18 +55,26 @@ public final class GrantManagementController extends BaseController {
     }
     String content = response.getResponseContent();
     return switch (response.getAction()) {
-      // 200 OK
+      // 200 OK, with the grant as JSON.
       case OK -> Responses.ok(content, headers);
-      // 204 No Content
+      // 204 No Content: the grant and its tokens are revoked.
       case NO_CONTENT -> Responses.noContent(headers);
-      // 401 Unauthorized
-      case UNAUTHORIZED -> Responses.unauthorized(content, null, headers);
-      // 403 Forbidden
-      case FORBIDDEN -> Responses.forbidden(content, headers);
-      // 404 Not Found
-      case NOT_FOUND -> Responses.json(404, content, headers);
-      // 500 Internal Server Error
-      case CALLER_ERROR, AUTHLETE_ERROR -> Responses.serverError(content, headers);
+      // For errors, Authlete's response content is a WWW-Authenticate value, such as
+      // 'Bearer error="invalid_token", ...' or a DPoP "use_dpop_nonce" challenge: it goes in that
+      // header, with no body (RFC 6750), as on the UserInfo endpoint.
+      case UNAUTHORIZED -> Responses.bearerError(401, content, headers);
+      case FORBIDDEN -> Responses.bearerError(403, content, headers);
+      case NOT_FOUND -> Responses.bearerError(404, content, headers);
+      // A mistake in Lattice's call, or a failure at Authlete: logged, and a generic error for the
+      // client rather than Authlete's message.
+      case CALLER_ERROR -> {
+        LOG.error("Authlete's /gm refused Lattice's request: {}", response.getResultMessage());
+        yield Responses.serverError(Responses.error("server_error", "The grant could not be processed."), headers);
+      }
+      case AUTHLETE_ERROR -> {
+        LOG.warn("Authlete's /gm failed: {}", response.getResultMessage());
+        yield Responses.serverError(Responses.error("server_error", "The grant could not be processed."), headers);
+      }
       // This should not happen.
       default -> throw unknownAction("/gm", response.getAction());
     };

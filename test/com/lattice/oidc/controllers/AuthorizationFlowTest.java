@@ -129,6 +129,49 @@ public class AuthorizationFlowTest {
   }
 
   @Test
+  public void theReleasedClaimsAreSentAsConsentedClaims() {
+    Result page = consentPage();
+    route(app, decision(page, Map.of("ticket", "ticket-1", "loginId", "john", "password", "john", "authorized", "true")));
+    AuthorizationIssueRequest issue = fake.lastRequest("authorizationIssue");
+    assertEquals(
+        java.util.Set.of("name", "email"), java.util.Set.of(issue.getConsentedClaims()));
+  }
+
+  /** An authorization request that would merge into (or replace) the grant of {@code grantSubject}. */
+  private void grantOf(String grantSubject) {
+    fake.answer(
+        "authorization",
+        args -> {
+          AuthorizationResponse r = interaction("ticket-1", null);
+          r.setGmAction(com.authlete.common.types.GMAction.MERGE);
+          r.setGrantId("grant-1");
+          r.setGrantSubject(grantSubject);
+          return r;
+        });
+  }
+
+  @Test
+  public void changingAnotherUsersGrantIsRefused() {
+    grantOf("2002");
+    Result page = consentPage();
+    Result r =
+        route(app, decision(page, Map.of("ticket", "ticket-1", "loginId", "john", "password", "john", "authorized", "true")));
+    assertEquals(302, r.status());
+    AuthorizationFailRequest fail = fake.lastRequest("authorizationFail");
+    assertEquals(AuthorizationFailRequest.Reason.DIFFERENT_SUBJECT, fail.getReason());
+    assertEquals(0, fake.count("authorizationIssue"));
+  }
+
+  @Test
+  public void changingYourOwnGrantIsIssued() {
+    grantOf("1001");
+    Result page = consentPage();
+    route(app, decision(page, Map.of("ticket", "ticket-1", "loginId", "john", "password", "john", "authorized", "true")));
+    assertEquals(1, fake.count("authorizationIssue"));
+    assertEquals(0, fake.count("authorizationFail"));
+  }
+
+  @Test
   public void wrongPasswordRerendersWithoutIssuing() {
     Result page = consentPage();
     Result r =

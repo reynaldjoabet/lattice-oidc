@@ -387,6 +387,8 @@ public final class CibaHandler {
     Map<String, Object> claims = new ClaimsCollector(user.get()).collect(pending.claimNames(), null);
     if (claims != null) {
       request.setClaims(claims);
+      // The claims the user consented to, kept with the grant (Grant Management).
+      request.setConsentedClaims(claims.keySet().toArray(String[]::new));
     }
     send(request);
   }

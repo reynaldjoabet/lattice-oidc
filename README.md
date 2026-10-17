@@ -42,7 +42,7 @@ sbt --client "scalafmtSbtCheck; scalafmtCheckAll"
 - [Identity brokering](#identity-brokering)
 - [OpenID Federation 1.0](#openid-federation-10)
 
-Background notes live in separate files: [crypto-notes.md](crypto-notes.md) (elliptic curves, ECDH, signatures and MACs, X.509 validation), [modular-arithmetic.md](modular-arithmetic.md), [envelope-encryption.md](envelope-encryption.md) (KMS and JWE), [oauth-grants-notes.md](oauth-grants-notes.md) (grants and client authentication, with Keycloak examples), [nimbus-crypto-design.md](nimbus-crypto-design.md), [authlete.md](authlete.md) and [misc-notes.md](misc-notes.md).
+Background notes live in separate files: [crypto-notes.md](crypto-notes.md) (elliptic curves, ECDH, signatures and MACs, X.509 validation), [modular-arithmetic.md](modular-arithmetic.md), [envelope-encryption.md](envelope-encryption.md) (KMS and JWE), [oauth-grants-notes.md](oauth-grants-notes.md) (grants and client authentication, with Keycloak examples), [grant-management.md](grant-management.md) (Grant Management for OAuth 2.0 with Authlete), [nimbus-crypto-design.md](nimbus-crypto-design.md), [authlete.md](authlete.md) and [misc-notes.md](misc-notes.md).
 
 ## Lattice and Authlete: who does what
 
@@ -301,7 +301,7 @@ The word is used in three ways:
 
 - **The permission the user gave**, which is what a token represents: who (`sub`) let which app (`client_id`) do what (`scope`, or `authorization_details` for fine-grained rights) at which API (`aud`) until when (`exp`). In Lattice, the remembered consent (`AppConsentStore`) records this per account and app.
 - **An authorization grant, in RFC 6749's sense:** the credential a client exchanges for tokens. The grant types are an authorization code, a refresh token, client credentials, a device code, a CIBA request and others. This is the meaning of `grant_type=authorization_code`.
-- **A grant in Grant Management for OAuth 2.0**, a FAPI specification Authlete supports: a long-lived record of a user's permissions for a client, with an ID (`grant_id`) that the client can query, extend or revoke. Lattice serves it at `/api/gm/{grantId}`.
+- **A grant in Grant Management for OAuth 2.0**, a FAPI specification Authlete supports: a long-lived record of a user's permissions for a client, with an ID (`grant_id`) that the client can query, extend or revoke. Lattice serves it at `/api/gm/{grantId}`. Details: [grant-management.md](grant-management.md).
 
 ### Consent, grant and access token
 
@@ -1061,6 +1061,67 @@ sequenceDiagram
     Note over U,L: That's SSO: one login at Lattice, many apps
 ```
 
+### Native SSO: the same for mobile apps
+
+Native apps on a phone don't share a browser cookie. OpenID Connect Native SSO for Mobile Apps lets a second app from the same vendor sign the user in with the first app's tokens, without showing a login page. Lattice implements it with Authlete 3.0's `/nativesso` API, following [Authlete's guide](https://developers.authlete.com/protocols-and-flows/advanced-flows/native-sso). Authlete follows draft 07 of the specification.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant A1 as App 1
+    participant A2 as App 2 (same vendor)
+    participant L as Lattice
+    participant AL as Authlete
+
+    A1->>L: sign in, scope = openid device_sso
+    L->>AL: /auth/authorization/issue with the login session ID (becomes sid)
+    A1->>L: POST /api/token (authorization code)
+    L->>AL: /auth/token → action NATIVE_SSO
+    L->>L: session still active? new device secret, store its hash
+    L->>AL: /nativesso (tokens, device secret, its hash, nonce)
+    L-->>A1: tokens + ID token (sid, ds_hash) + device_secret
+    A1->>A1: store ID token and device secret where App 2 can read them
+    A2->>L: POST /api/token: token exchange (ID token + device secret)
+    L->>AL: /auth/token → action NATIVE_SSO
+    L->>L: session still active? secret known, same hash and session?
+    L->>AL: /nativesso
+    L-->>A2: App 2's own tokens, no login page
+```
+
+**App 2's request** is a token exchange:
+
+| Parameter | Value |
+| --- | --- |
+| `grant_type` | `urn:ietf:params:oauth:grant-type:token-exchange` |
+| `audience` | Lattice's issuer |
+| `subject_token` | App 1's ID token |
+| `subject_token_type` | `urn:ietf:params:oauth:token-type:id_token` |
+| `actor_token` | The device secret |
+| `actor_token_type` | `urn:openid:params:token-type:device-secret` |
+
+**What Authlete does, and what Lattice must do** (`NativeSsoHandler`). Authlete checks the ID token's signature, issuer and claims, but can't know whether the user's session is still active or whether the device secret is genuine. Lattice does those checks:
+- **The session must still be active.** The session ID comes from the ID token's `sid`, or from the refresh token. This check matters because Authlete accepts an *expired* ID token as the subject token, as the specification allows. An ended session gets `invalid_grant`.
+- **Device secrets:**
+  - Generated by Lattice: 32 random bytes.
+  - Stored only as a SHA-256 hash, bound to the session they were issued in, and kept no longer than a session can last.
+  - In a token exchange, the secret must be known, its hash must match the ID token's `ds_hash`, and it must belong to the same session. Otherwise the request gets `invalid_grant`.
+  - In a code or refresh-token request, an unknown secret is replaced by a new one.
+- **`nonce` and `s_hash`:** Authlete returns them in `additionalClaims`, and Lattice passes them to `/nativesso` unchanged, so the new ID token carries the original request's `nonce`.
+- **Errors:** if `/nativesso` fails, the client gets a generic `server_error`; Authlete's message goes to the log only.
+- **Logout:** ending the session calls `/nativesso/logout`, which deletes every token issued in that session. The device secrets stop working because their session has ended.
+
+**Setting it up in Authlete:**
+- **Service:**
+  - Enable Native SSO (`nativeSsoSupported`), which publishes `native_sso_supported: true` in discovery.
+  - Register the `device_sso` scope.
+  - Allow the token exchange grant.
+  - `tokenExchangeByConfidentialClientsOnly` and `tokenExchangeByPermittedClientsOnly` restrict which clients may exchange tokens.
+- **Each client:**
+  - Allow `device_sso` and the token exchange grant.
+  - With `tokenExchangeByPermittedClientsOnly`, also set `extension.tokenExchangePermitted`.
+
+**Not done yet: binding secrets to a device.** The specification expects a device secret to be tied to the device; Authlete's own sample leaves this empty. Lattice binds each secret to a login session instead. Binding it to a device would need a device identifier that apps can't forge, such as platform attestation.
+
 ## Identity brokering
 
 Identity brokering lets users sign in to Lattice with an existing account at an external identity provider such as Okta, Azure AD or Google. Lattice delegates authentication to that provider, verifies the result, and maps the external identity to a local account (for example `alice@okta`) with its own Lattice session. Keycloak calls this feature Identity Brokering; it is also known as social login or upstream identity providers.
@@ -1541,6 +1602,69 @@ flowchart TD
   - `POST /api/federation/register` handles explicit registration: a client sends its entity configuration or trust chain, and Authlete verifies it and creates the client.
 - **Code**: `FederationController.configuration()` and `register()`. Authlete does the verification.
 - **Configured in**: the Authlete service settings (trust anchors, entity ID, keys), not the identity providers file.
-- **Spec**: OpenID Federation 1.0.
+- **Spec**: OpenID Federation 1.0, final since 17 February 2026.
+
+#### Setting it up in Authlete
+
+From [Authlete's OpenID Federation guide](https://developers.authlete.com/guides/flows-and-protocols/identity-and-federation/openid-federation-1-0). Federation needs Authlete 2.3 or later; the details below are for 3.x.
+
+| Setting | Why |
+| --- | --- |
+| `feature.oidc_federation.enabled=true` (server deployment) | Turns the feature on for the Authlete server |
+| **Federation Support** on (`federationEnabled`) | Turns it on for this service |
+| **Authorities** (`authority_hints`), at least one Entity ID | The superiors that vouch for Lattice. Without one, Authlete can't build the Entity Configuration. |
+| **Trust Anchors**, at least one, each with its JWK Set | Whose chains Lattice accepts. Without one, no client's chain can be trusted. |
+| **JWK Set > Federation**, with a private signing key, and **Signature Key ID** | Signs the Entity Configuration and the registration responses. Separate from the keys that sign tokens. |
+| **Organization Name** (`organization_name`) and **Entity Configuration Duration** | Shown in the Entity Configuration, and how long it is valid (`exp`); `0` uses Authlete's default |
+| **Client Registration Types**: `automatic`, `explicit` or both | Which registration flows Lattice offers, published as `client_registration_types_supported` |
+| **Registration Endpoint**: `https://<lattice>/api/federation/register` | Required with `explicit`. Published as `federation_registration_endpoint`, so it must be Lattice's URL, not Authlete's. |
+
+Lattice's discovery document comes from Authlete, so these appear there without any change to Lattice.
+
+#### Automatic registration: no registration request at all
+
+The RP simply starts a flow using its Entity ID as its `client_id`, for example `client_id=https://rp.example.com`. Lattice forwards authorization, PAR, CIBA and token requests to Authlete unchanged, so this needs no extra code. Authlete looks the client up as a numeric ID, then as an alias, then as an Entity ID. If none matches and the service allows `automatic`, it resolves the RP's trust chain, applies the metadata policies, checks that the RP's metadata allows `automatic`, authenticates the request, registers the client and carries on with the request.
+
+The request must prove it comes from the RP. Since 3.0.32 Authlete no longer publishes the methods in discovery, but still requires one of them:
+
+| Method | Authorization endpoint | PAR and CIBA | Token and device authorization |
+| --- | :-: | :-: | :-: |
+| A signed request object (`request`) | ✓ | ✓ | |
+| `private_key_jwt` | | ✓ | ✓ |
+| `tls_client_auth`, `self_signed_tls_client_auth` | | ✓ | ✓ |
+
+Lattice passes the request object, the client assertion and the TLS client certificate to Authlete, so all of these work through it.
+
+#### Explicit registration: `POST /api/federation/register`
+
+- **Request:** the RP's Entity Configuration (`application/entity-statement+jwt`) or a whole trust chain (`application/trust-chain+json`). Any other content type gets `415 invalid_request`, and an empty body gets `400 invalid_request`, both without a call to Authlete.
+- **Response:** a JWT signed by Authlete, with the `trust_anchor` Authlete chose (called `trust_anchor_id` before Authlete 3.0.32). The `client_id` it returns may differ from the Entity ID. The RP's own metadata must allow `explicit`.
+- **Media type:** the final specification gives the response its own media type and `typ`, `explicit-registration-response+jwt` (§12.2.3). The drafts, and Authlete's guide, use `entity-statement+jwt`. Lattice reads the `typ` of the JWT Authlete returns and serves the matching media type, so it follows Authlete as Authlete adopts the final specification.
+- **Errors:** passed on as Authlete returned them, as JSON `{"error", "error_description"}` (§8.9), for example `invalid_trust_chain` or Authlete's `A320308` (unsupported client metadata).
+- **Audit:** a registration is recorded as `CLIENT_REGISTERED` with `via=federation`, the Entity ID and the trust anchor.
+
+#### When the trust chain expires
+
+Every statement in a chain has an `exp`, and the chain expires with the earliest one. Authlete then updates clients registered with `automatic`. If an RP sends a fresh `trust_chain` with a request, Authlete always tries the update, and a failure leaves the client in place. Without one, Authlete re-resolves the chain only after it expires, and **deletes the client** if the chain can't be rebuilt. Clients registered only with `explicit` aren't updated automatically.
+
+#### Not handled by Lattice
+
+- **The other federation endpoints:** Lattice is a leaf, so it doesn't serve the fetch, list or resolve endpoints that Trust Anchors and Intermediates do. Authlete doesn't host them either.
+- **Trust marks:** Authlete's guide doesn't describe how it handles them.
 
 Federation trust chains work like X.509 certificate chains. [crypto-notes.md](crypto-notes.md#appendix-how-certificate-validation-works-x509) shows how the JDK builds and verifies those.
+
+
+DCR stands for Dynamic Client Registration and, depending on the context, refers to OpenID Connect Dynamic Client Registration 1.0, RFC 7591 OAuth 2.0 Dynamic Client Registration Protocol, or both.
+
+[cimd-metadata-policy](https://darutk.medium.com/cimd-metadata-policy-c25969b538b6)
+
+ a mechanism that allows a client ID to be shared across all authorization servers has already been realized in the OpenID Federation 1.0 specification. In this specification, a client ID is a globally unique URL starting with `https://`. The client’s metadata is then provided at the location obtained by appending `/.well-known/openid-federation` to that URL
+
+ A new specification called the `OAuth Client ID Metadata Document (CIMD)` has been proposed in a landscape where a prior specification already exists. In this specification as well, the client ID is a URL starting with `https://`, and the client metadata is provided from the location indicated by that URL.
+
+ [protocol-extensions/oauth-client-id-metadata-document-cimd)](https://developers.authlete.com/protocols-and-flows/protocol-extensions/oauth-client-id-metadata-document-cimd)
+
+ ![alt text](image-13.png)
+
+ The authorization request includes the client_id request parameter, and the value of that parameter is a URL beginning with `https://`.

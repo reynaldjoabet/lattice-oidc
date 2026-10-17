@@ -26,7 +26,8 @@ public record AuthorizationInteraction(
     String sectorIdentifier,
     String shownSubject,
     String[] scopes,
-    boolean consentPrompted) {
+    boolean consentPrompted,
+    String grantSubject) {
 
   public static AuthorizationInteraction from(
       AuthorizationResponse info, AuthorizationPage page, String shownSubject) {
@@ -54,7 +55,9 @@ public record AuthorizationInteraction(
         info.getScopes() == null
             ? new String[0]
             : Arrays.stream(info.getScopes()).map(Scope::getName).toArray(String[]::new),
-        info.getPrompts() != null && Arrays.asList(info.getPrompts()).contains(Prompt.CONSENT));
+        info.getPrompts() != null && Arrays.asList(info.getPrompts()).contains(Prompt.CONSENT),
+        // Grant Management: the user whose grant a merge or replace would change.
+        info.getGrantSubject());
   }
 
   /** The requested scopes. */
@@ -85,7 +88,7 @@ public record AuthorizationInteraction(
     return new AuthorizationInteraction(
         ticket, newPage, claimNames, claimLocales, idTokenClaims, requestedClaimsForTx,
         requestedVerifiedClaimsForTx, acrs, acrEssential, requestedSubject, clientId,
-        clientIdentifier, subjectType, sectorIdentifier, shownSubject, scopes, consentPrompted);
+        clientIdentifier, subjectType, sectorIdentifier, shownSubject, scopes, consentPrompted, grantSubject);
   }
 
   /**
@@ -107,6 +110,6 @@ public record AuthorizationInteraction(
     return new AuthorizationInteraction(
         ticket, page, claimNames, claimLocales, idTokenClaims, requestedClaimsForTx,
         requestedVerifiedClaimsForTx, acrs, acrEssential, requestedSubject, clientId,
-        clientIdentifier, subjectType, sectorIdentifier, subject, scopes, consentPrompted);
+        clientIdentifier, subjectType, sectorIdentifier, subject, scopes, consentPrompted, grantSubject);
   }
 }

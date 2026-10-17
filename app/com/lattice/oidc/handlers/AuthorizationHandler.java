@@ -100,6 +100,12 @@ public final class AuthorizationHandler {
     if (interaction.requestedSubject() != null && !interaction.requestedSubject().equals(user.getSubject())) {
       return fail(interaction.ticket(), AuthorizationFailRequest.Reason.DIFFERENT_SUBJECT);
     }
+    // Grant Management: a merge or replace of another user's grant. Authlete would skip grant
+    // management silently and issue tokens outside the grant the client asked to change; refuse
+    // instead, as for a different requested subject.
+    if (interaction.grantSubject() != null && !interaction.grantSubject().equals(user.getSubject())) {
+      return fail(interaction.ticket(), AuthorizationFailRequest.Reason.DIFFERENT_SUBJECT);
+    }
     String acr = acr(interaction.ticket(), interaction.acrs(), interaction.acrEssential(), grant.acr());
 
     // Collect claim values. Values of verified claims ("verified_claims", OpenID Connect for
@@ -132,6 +138,9 @@ public final class AuthorizationHandler {
             .setSessionId(grant.sessionId());
     if (claims != null && !claims.isEmpty()) {
       request.setClaims(claims);
+      // The claims the user consented to (Grant Management keeps them with the grant). Without
+      // them, Authlete infers them from the scopes and the "claims" parameter, which can be wrong.
+      request.setConsentedClaims(claims.keySet().toArray(String[]::new));
     }
 
     // Generate a redirect response containing an authorization code, an access token and/or an ID
