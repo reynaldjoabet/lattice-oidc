@@ -15,6 +15,8 @@ public final class Responses {
   public static final String JWT = "application/jwt";
   public static final String JAVASCRIPT = "application/javascript;charset=UTF-8";
   public static final String ENTITY_STATEMENT = "application/entity-statement+jwt";
+  /** OpenID Federation 1.0 §12.2.3: the media type of a successful explicit registration response. */
+  public static final String EXPLICIT_REGISTRATION_RESPONSE = "application/explicit-registration-response+jwt";
   public static final String TOKEN_INTROSPECTION = "application/token-introspection+jwt";
 
   private Responses() {}
