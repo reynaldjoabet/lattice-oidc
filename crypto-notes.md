@@ -474,6 +474,324 @@ The raw result of ECDH isn't used directly as an encryption key. By the standard
 
 The outputs are symmetric keys for an AEAD cipher such as AES-GCM or ChaCha20-Poly1305. After that, both sides use fast symmetric encryption for the data.
 
+### The TLS 1.3 key schedule
+
+How TLS 1.3 turns the ECDHE shared secret into the keys it encrypts with (RFC 8446 §7.1), and where the JDK does each step. The JDK excerpts are from `sun.security.ssl`; line numbers are JDK 25's.
+
+#### Both sides derive the same keys
+
+```sh
+ECDHE shared secret  ──┐
+                       ▼
+  HKDF-Extract(salt, shared secret)  =  handshake secret      (both sides compute the same)
+                       │
+         HKDF-Expand with label, mixed with the transcript hash
+          ┌────────────┴─────────────┐
+   "c hs traffic"             "s hs traffic"                  ← different secrets
+          │                          │
+   client→server key/iv       server→client key/iv           ← different keys
+```
+
+After the key exchange, client and server hold the same inputs:
+- The shared secret $Z$, the same on both sides.
+- The salt and labels, fixed by the protocol.
+- In TLS 1.3, a hash of the handshake messages, which both sides have seen.
+
+HKDF is deterministic, so both compute the same result:
+
+```sh
+Client:  Z ──HKDF-Extract──► PRK ──HKDF-Expand("c hs traffic")──► client key ┐
+                                  └─HKDF-Expand("s hs traffic")──► server key │ identical
+Server:  Z ──HKDF-Extract──► PRK ──HKDF-Expand("c hs traffic")──► client key │ on both
+                                  └─HKDF-Expand("s hs traffic")──► server key ┘ sides
+```
+
+The output is completely different from $Z$, and different for each label, but the same on both sides for the same label.
+
+#### The whole schedule
+
+```sh
+ ══►  HKDF-Extract: builds the chain, one per stage
+ ──►  HKDF-Expand: label → derived secret
+ [ ]  root secret: only ever the key for expands, never used directly
+ { }  working keys: what actually encrypts or MACs
+
+ PSK or zeros ══IKM══► [ EARLY SECRET ] ◄── salt: zeros
+                              ├──► "ext binder" / "res binder" → binder key ──► {binder MAC key}   PSK only
+                              ├──► "c e traffic"  → client early traffic ──► {key, iv}               0-RTT only
+                              ├──► "e exp master" → early exporter secret                            PSK only
+                              │
+                              └──► "derived"      → salt₁
+                                                    │ salt
+ ECDHE secret ══IKM══► [ HANDSHAKE SECRET ] ◄───────┘
+ (zeros in psk_ke)            ├──► "c hs traffic" → client handshake traffic ──► {key, iv, finished key}
+                              ├──► "s hs traffic" → server handshake traffic ──► {key, iv, finished key}
+                              │
+                              └──► "derived"      → salt₂
+                                                    │ salt
+ zeros ═════════IKM══► [ MASTER SECRET ] ◄──────────┘
+                              ├──► "c ap traffic" → client application traffic ──► {key, iv}
+                              ├──► "s ap traffic" → server application traffic ──► {key, iv}
+                              ├──► "exp master"   → exporter secret
+                              └──► "res master"   → resumption secret ──► one PSK per ticket
+```
+
+- **Binder labels:** `"ext binder"` is for an external PSK (set up outside TLS), and `"res binder"` for a resumption PSK.
+- **The handshake stage's IKM** is the ECDHE secret, except in `psk_ke` mode (a PSK with no key exchange), where it is zeros.
+- **Next connection's PSK:** the resumption secret isn't used directly. Each ticket's PSK is `HKDF-Expand-Label(resumption secret, "resumption", ticket_nonce, Hash.length)`.
+
+The three Extract stages:
+
+```sh
+stage             salt (from previous)        IKM (new input)
+early secret      zeros                       PSK, or zeros if none
+handshake secret  derived(early secret)       ECDHE shared secret (zeros in psk_ke)
+master secret     derived(handshake secret)   zeros          ← nothing new to add
+```
+
+Each stage's salt slot holds what was carried forward from the previous stage, and the IKM slot holds what's new.
+
+The roles of each secret:
+
+| Secret | Created by | Then used as |
+| --- | --- | --- |
+| PSK | outside, or a ticket | IKM of early extract |
+| early secret | Extract(zeros, PSK/zeros) | expand key → derived gives `salt₁` |
+| ECDHE secret | key agreement | IKM of handshake extract |
+| handshake secret | Extract(salt₁, ECDHE) | expand key → `c/s hs traffic`, and `derived` gives `salt₂` |
+| master secret | Extract(salt₂, zeros) | expand key → app, exporter and resumption secrets |
+
+#### Why the master stage's IKM is zeros
+
+`HKDF-Extract(salt = derived-from-handshake-secret, IKM = zeros)`. The ECDHE shared secret was already folded in at the handshake-secret stage, so the master secret's input is all zeros. It still depends on the ECDHE secret through the salt.
+
+The early and handshake stages each bring in fresh input. The master stage has none. The ECDHE secret is already inside the handshake secret, and the master secret inherits it through the salt. The RFC keeps the same shape for all three, so the master stage uses a block of zeros as a placeholder, as long as the hash output (`new byte[hashAlg.hashLength]`).
+
+HKDF-Extract is `PRK = HMAC(salt, IKM)`, with the salt as the HMAC key. The entropy here is in the salt, which is derived from the handshake secret, and so from the ECDHE secret. Zeros as the message don't reduce that. An attacker without the salt can't compute the PRK, whatever the message is.
+
+```sh
+early secret     ──kd.deriveKey("TlsSaltSecret")──►  salt₁ ─┐
+                                                            ├─► Extract(salt₁, ECDHE secret) = handshake secret
+                                                  ECDHE ────┘
+
+handshake secret ──kd.deriveKey("TlsSaltSecret")──►  salt₂ ─┐
+                                                            ├─► Extract(salt₂, zeros) = master secret
+                                                  zeros ────┘
+```
+
+#### Stage 1: the early secret
+
+```sh
+no PSK:    early secret = HKDF-Extract(salt = zeros, IKM = zeros)
+with PSK:  early secret = HKDF-Extract(salt = zeros, IKM = PSK)
+```
+
+The salt is always zeros, because there is no earlier stage to derive one from. Only the IKM changes. In both cases "zeros" means a block of zero bytes as long as the hash output (32 for SHA-256, 48 for SHA-384).
+
+*No PSK (`KAKeyDerivation.deriveHandshakeSecret`)*:
+
+```java
+if (kd == null) {   // No PSK is in use.
+    // If PSK is not in use, Early Secret will still be
+    // HKDF-Extract(0, 0).
+    byte[] zeros = new byte[hashAlg.hashLength];
+    earlySecret = hkdf.deriveKey("TlsEarlySecret",
+            HKDFParameterSpec.ofExtract().addSalt(zeros)
+            .addIKM(zeros).extractOnly());
+```
+
+*With a PSK (`ServerHello.java`)*:
+
+```java
+SecretKey earlySecret = hkdf.deriveKey("TlsEarlySecret",
+        HKDFParameterSpec.ofExtract().addIKM(psk)
+        .addSalt(new byte[hashAlg.hashLength]).extractOnly());
+```
+
+- **Without a PSK,** the early secret is a public constant. Everyone computes the same value for a given hash, and it carries no secret. That's fine, because the real secret (ECDHE) enters at the next stage.
+- **With a PSK** (session resumption, or a pre-shared key set up outside TLS), the early secret is secret, and the PSK flows into every later key through the salts. With `psk_dhe_ke`, ECDHE is added at the handshake stage too, so the keys depend on both.
+
+#### Stage 2: the handshake secret
+
+1. Compute the ECDHE shared secret.
+2. Early secret, then salt₁, then the handshake secret.
+
+*`KAKeyDerivation.deriveHandshakeSecret`*, annotated:
+
+```java
+SSLKeyDerivation kd = context.handshakeKeyDerivation;
+try {
+    if (kd == null) {   // No PSK is in use.
+        // Early Secret = HKDF-Extract(0, 0)
+        byte[] zeros = new byte[hashAlg.hashLength];
+        KDF hkdf = KDF.getInstance(hashAlg.hkdfAlgorithm);
+        earlySecret = hkdf.deriveKey("TlsEarlySecret",
+                HKDFParameterSpec.ofExtract().addSalt(zeros)
+                .addIKM(zeros).extractOnly());
+        kd = new SSLSecretDerivation(context, earlySecret);
+    }
+
+    // salt₁ = Expand-Label(early secret, "derived", Hash(""))
+    saltSecret = kd.deriveKey("TlsSaltSecret");
+
+    // handshake secret = HKDF-Extract(salt₁, ECDHE)
+    // NOTE (the JDK's own): do not reuse the HKDF object for "TlsEarlySecret" for
+    // the handshake secret key derivation (below) as it may not
+    // work with the "sharedSecret" obj.
+    KDF hkdf = KDF.getInstance(hashAlg.hkdfAlgorithm);
+    var spec = HKDFParameterSpec.ofExtract().addSalt(saltSecret);
+    spec = spec.addIKM(sharedSecret);
+    return hkdf.deriveKey(label, spec.extractOnly());
+} finally {
+    KeyUtil.destroySecretKeys(earlySecret, saltSecret);   // wipe early secret and salt₁
+}
+```
+
+**Hybrid key exchange (newer JDKs, not JDK 25).** JDKs with hybrid post-quantum key exchange (such as X25519 combined with ML-KEM) feed both shared secrets as IKM, in order: `spec.addIKM(hsk.k1()).addIKM(hsk.k2())` when the shared secret is a `Hybrid.SecretKeyImpl`. Their key-share code also has a KEM path:
+- **ECDHE path:** `ServerHello.java` calls `handshakeKD.deriveKey("TlsHandshakeSecret")`, which passes it as `type` to `t13DeriveKey(type)`, which passes it to `deriveHandshakeSecret(type, sharedSecret)`.
+- **KEM path:** `KeyShareExtension.java` calls `handshakeKD.encapsulate("TlsHandshakeSecret", ...)`, which calls `deriveHandshakeSecret(algorithm, sharedSecret)`.
+
+JDK 25's `KAKeyDerivation` has only the single-secret form (the extract is at line 133), and its `KeyShareExtension` has no `encapsulate`.
+
+The `TlsSaltSecret` call runs `SSLSecretDerivation.deriveKey`, which picks the empty-hash context:
+
+```java
+if (ks == SecretSchedule.TlsSaltSecret) {
+    expandContext = sha256EmptyDigest;          // or sha384EmptyDigest
+} else {
+    expandContext = transcriptHash;
+}
+byte[] hkdfInfo = createHkdfInfo(ks.label, expandContext, hashAlg.hashLength);
+return hkdf.deriveKey(type, HKDFParameterSpec.expandOnly(
+        secret, hkdfInfo, hashAlg.hashLength));
+```
+
+Within `SSLSecretDerivation`, every other secret uses the transcript hash as context, and only `TlsSaltSecret` uses the empty-string hash.
+
+Back in `ServerHello`, the server derives the handshake traffic keys and stores the handshake secret:
+
+```java
+SSLKeyDerivation kd = new SSLSecretDerivation(shc, handshakeSecret);
+
+// update the handshake traffic read keys.
+SecretKey readSecret = kd.deriveKey("TlsClientHandshakeTrafficSecret");   // "c hs traffic"
+SSLKeyDerivation readKD = kdg.createKeyDerivation(shc, readSecret);
+...                                              // then "s hs traffic" for the write side
+// Update the context for master key derivation.
+shc.handshakeKeyDerivation = kd;
+```
+
+`kd` now wraps the handshake secret. Its constructor also captured the transcript hash at this point (`ClientHello..ServerHello`), which is the context the `c hs traffic` and `s hs traffic` expansions use.
+
+#### Deriving the handshake traffic secrets
+
+Right after ServerHello, both sides derive **both** handshake traffic secrets from the handshake secret, each with HKDF-Expand-Label:
+- Label `"s hs traffic"` gives `server_handshake_traffic_secret`.
+- Label `"c hs traffic"` gives `client_handshake_traffic_secret`.
+- The context for both is the transcript hash of ClientHello..ServerHello. The label and the context are separate inputs: `"s hs traffic"` is the label, not the context.
+
+Each side needs both: its own secret to encrypt what it sends, and the peer's to decrypt what it receives. The JDK server derives the client's secret first, as its read key:
+
+```java
+// update the handshake traffic read keys.
+SecretKey readSecret = kd.deriveKey("TlsClientHandshakeTrafficSecret");   // "c hs traffic"
+SSLKeyDerivation readKD = kdg.createKeyDerivation(shc, readSecret);
+SecretKey readKey = readKD.deriveKey("TlsKey");
+IvParameterSpec readIv = new IvParameterSpec(readKD.deriveData("TlsIv"));
+```
+
+The two secrets are unrelated values because their labels differ, but both sides know both.
+
+#### From each traffic secret, the AEAD key and IV
+
+A traffic secret isn't used to encrypt directly. Two more expands, with an empty context, turn it into the actual AEAD key and IV:
+
+```sh
+handshake secret ─Expand("s hs traffic", transcript)─► server_handshake_traffic_secret
+                                                         ├─Expand("key", "")─► AEAD key
+                                                         └─Expand("iv",  "")─► IV
+```
+
+Both sides then switch to AEAD (AES-GCM or ChaCha20-Poly1305) for the rest of the handshake:
+- The server encrypts EncryptedExtensions, CertificateRequest (if mutual TLS), Certificate, CertificateVerify and Finished.
+- The client encrypts its Certificate and CertificateVerify (if mutual TLS) and Finished.
+
+Each Finished is `HMAC(finished_key, transcript hash)`, where `finished_key` is derived from the sender's handshake traffic secret with label `"finished"` and an empty context. It proves the handshake wasn't tampered with.
+
+**Privacy.** TLS 1.2 sent the server's certificate in plaintext. TLS 1.3 encrypts it, so a passive observer can't read it from the handshake. That doesn't hide which domain you're visiting:
+- The ClientHello carries the server name (SNI) in plaintext, unless Encrypted Client Hello (ECH) is used. JDK 25 doesn't implement ECH, so a Java client sends SNI in the clear.
+- DNS lookups and IP addresses can also reveal the destination.
+
+#### Stage 3: salt₂ and the master secret
+
+Separately, the handshake secret goes through Derive-Secret with label `"derived"` and an empty transcript, so the context is `Hash("")`. That output, salt₂, is the salt for the final HKDF-Extract, whose IKM is all zeros. The result is the master secret.
+
+`"s hs traffic"`, `"c hs traffic"` and `"derived"` are independent expands of the same handshake secret, so their order doesn't matter: any order gives the same results. The JDK happens to derive salt₂ late, in `Finished.java`, after the server's Finished is written:
+
+```java
+// Change client/server application traffic secrets.
+SSLKeyDerivation kd = shc.handshakeKeyDerivation;        // wraps the handshake secret
+...
+SecretKey saltSecret = null;
+try {
+    // salt₂ = Expand-Label(handshake secret, "derived", Hash(""))
+    saltSecret = kd.deriveKey("TlsSaltSecret");
+
+    // master secret = HKDF-Extract(salt₂, zeros)
+    HashAlg hashAlg = shc.negotiatedCipherSuite.hashAlg;
+    KDF hkdf = KDF.getInstance(hashAlg.hkdfAlgorithm);
+    byte[] zeros = new byte[hashAlg.hashLength];
+    SecretKey masterSecret = hkdf.deriveKey("TlsMasterSecret",
+            HKDFParameterSpec.ofExtract().addSalt(saltSecret)
+            .addIKM(zeros).extractOnly());
+    SSLKeyDerivation secretKD = new SSLSecretDerivation(shc, masterSecret);
+
+    // update the handshake traffic write keys.
+    SecretKey writeSecret = secretKD.deriveKey("TlsServerAppTrafficSecret");   // "s ap traffic"
+    SSLKeyDerivation writeKD = kdg.createKeyDerivation(shc, writeSecret);
+    SecretKey writeKey = writeKD.deriveKey("TlsKey");
+    IvParameterSpec writeIv = new IvParameterSpec(writeKD.deriveData("TlsIv"));
+    ...
+```
+
+`secretKD` is built after the server's Finished, so its transcript hash covers ClientHello through the server's Finished. That is the context for the application traffic secrets.
+
+In the code, the handshake and master extracts are the same call:
+
+```java
+// handshake (KAKeyDerivation.java:133 in JDK 25)
+HKDFParameterSpec.ofExtract().addSalt(saltSecret).addIKM(sharedSecret)   // saltSecret = salt₁
+
+// master (Finished.java:816-818 in JDK 25)
+HKDFParameterSpec.ofExtract().addSalt(saltSecret).addIKM(zeros)          // saltSecret = salt₂
+```
+
+#### From the master secret
+
+```sh
+early secret → handshake secret → MASTER SECRET
+                                      │  HKDF-Expand, label + transcript hash
+         ┌────────────────┬───────────┼────────────────┐
+   "c ap traffic"   "s ap traffic"  "exp master"   "res master"
+   client→server    server→client   exporter       resumption
+   app keys         app keys        secret         secret
+```
+
+```sh
+master secret ─► Expand(master, "c ap traffic", transcript up to server Finished)
+              ─► Expand(master, "s ap traffic", transcript up to server Finished)
+              ─► Expand(master, "exp master",   transcript up to server Finished)
+              ─► Expand(master, "res master",   transcript up to client Finished)
+```
+
+The resumption secret is the only one that waits for the client's Finished, so it also covers the client's Certificate, CertificateVerify and Finished when mutual TLS is used.
+
+Every extract is followed by one or more expands. An extract on its own never produces a usable key.
+
+That's HKDF's two-step design:
+- Extract turns its inputs into one uniform pseudorandom key (a PRK). It produces exactly one output, of hash length.
+- Expand takes that PRK and produces labeled outputs of any length, as many as needed.
+So the pattern is always extract once, then expand as many times as there are purposes.
 ### Static ECDH versus ECDHE
 
 Static ECDH reuses the same private key across many connections, for months or years. ECDHE generates a new key pair for each handshake, on **both** the client and the server, and discards the private keys after the secrets are derived.

@@ -331,3 +331,50 @@ Lattice's pairwise `sub` is the same idea: an HMAC keyed per deployment, over th
 | 12 | Constant-time comparison | `utils/ConstantTimeUtils` | Early return leaks length |
 | 13 | Domain separation | `impl/PBKDF2` | |
 | 14 | Errors that list alternatives | `impl/AlgorithmSupportMessage` | |
+
+
+![alt text](image-14.png)
+
+```java
+if (auth != null) {
+  request = request.addHeader("Authorization", auth);   // "DPoP <token>" or "Bearer <token>"
+}
+if (dpopJwk != null) {
+  request = request.addHeader("DPoP", createDpopProof(method, baseUrl + path));   // new proof each call
+}
+```
+```java
+   private String createCredentials(AuthleteConfiguration configuration)
+    {
+        if (configuration.getServiceAccessToken() != null)
+        {
+            if (isDpopEnabled())
+            {
+                return "DPoP " + configuration.getServiceAccessToken();
+            }
+            else
+            {
+                return "Bearer " + configuration.getServiceAccessToken();
+            }
+        }
+        else
+        {
+            throw new IllegalArgumentException("V3 API requires an access token, not a key and secret");
+        }
+    }
+```    
+
+```conf
+ # Optional private JWK (JSON, with "alg") for DPoP-bound access tokens.
+  dpop-key = ""
+  dpop-key = ${?AUTHLETE_DPOP_KEY}
+```  
+
+Every Authlete call goes through `prepare()` in `PlayAuthleteApiBase.java:`, which adds two headers:
+```sh
+Authorization: DPoP <service-access-token>        (instead of "Bearer ...", see PlayAuthleteApiV3.java)
+DPoP: <proof JWT>
+```
+The proof is built in `createDpopProof()`:
+`header`: `typ: dpop+jwt`, `alg`, and `the public JWK`;
+claims: `htm (POST/GET…)`, h`tu (the Authlete URL, e.g. https://us.authlete.com/api/{serviceId}/auth/token)`, a random `jti` and `iat`.
