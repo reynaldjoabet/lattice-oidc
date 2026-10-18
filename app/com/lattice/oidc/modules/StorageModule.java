@@ -31,17 +31,18 @@ import com.lattice.oidc.stores.PasskeyStore;
 import com.lattice.oidc.stores.SecondFactorStore;
 import com.lattice.oidc.stores.SessionStore;
 import com.lattice.oidc.stores.UserStore;
-import com.lattice.oidc.stores.postgres.PostgresAppConsentStore;
-import com.lattice.oidc.stores.postgres.PostgresAuditEventStore;
-import com.lattice.oidc.stores.postgres.PostgresConsentStore;
-import com.lattice.oidc.stores.postgres.PostgresCounterStore;
+import com.lattice.oidc.stores.jpa.JpaAppConsentStore;
+import com.lattice.oidc.stores.jpa.JpaAuditEventStore;
+import com.lattice.oidc.stores.jpa.JpaConsentStore;
+import com.lattice.oidc.stores.jpa.JpaCounterStore;
+import com.lattice.oidc.stores.jpa.JpaDatabase;
+import com.lattice.oidc.stores.jpa.JpaUserStore;
 import com.lattice.oidc.stores.postgres.PostgresDatabase;
-import com.lattice.oidc.stores.postgres.PostgresEphemeralStore;
-import com.lattice.oidc.stores.postgres.PostgresIdentityLinkStore;
-import com.lattice.oidc.stores.postgres.PostgresPasskeyStore;
-import com.lattice.oidc.stores.postgres.PostgresSecondFactorStore;
-import com.lattice.oidc.stores.postgres.PostgresSessionStore;
-import com.lattice.oidc.stores.postgres.PostgresUserStore;
+import com.lattice.oidc.stores.jpa.JpaEphemeralStore;
+import com.lattice.oidc.stores.jpa.JpaIdentityLinkStore;
+import com.lattice.oidc.stores.jpa.JpaPasskeyStore;
+import com.lattice.oidc.stores.jpa.JpaSecondFactorStore;
+import com.lattice.oidc.stores.jpa.JpaSessionStore;
 import com.lattice.oidc.stores.postgres.StorageCleanup;
 import com.lattice.oidc.stores.redis.RedisConnection;
 import com.lattice.oidc.stores.redis.RedisCounterStore;
@@ -104,13 +105,15 @@ public final class StorageModule extends AbstractModule {
     // Durable data.
     if (postgres) {
       bind(PostgresDatabase.class).asEagerSingleton();
+      // JPA shares PostgresDatabase's pool, and validates its entities against the schema at startup.
+      bind(JpaDatabase.class).asEagerSingleton();
       bind(StorageCleanup.class).asEagerSingleton();
-      bind(PasskeyStore.class).to(PostgresPasskeyStore.class);
-      bind(IdentityLinkStore.class).to(PostgresIdentityLinkStore.class);
-      bind(ConsentStore.class).to(PostgresConsentStore.class);
-      bind(AuditEventStore.class).to(PostgresAuditEventStore.class);
-      bind(SecondFactorStore.class).to(PostgresSecondFactorStore.class);
-      bind(AppConsentStore.class).to(PostgresAppConsentStore.class);
+      bind(PasskeyStore.class).to(JpaPasskeyStore.class);
+      bind(IdentityLinkStore.class).to(JpaIdentityLinkStore.class);
+      bind(ConsentStore.class).to(JpaConsentStore.class);
+      bind(AuditEventStore.class).to(JpaAuditEventStore.class);
+      bind(SecondFactorStore.class).to(JpaSecondFactorStore.class);
+      bind(AppConsentStore.class).to(JpaAppConsentStore.class);
     } else {
       bind(PasskeyStore.class).to(InMemoryPasskeyStore.class);
       bind(IdentityLinkStore.class).to(InMemoryIdentityLinkStore.class);
@@ -121,8 +124,8 @@ public final class StorageModule extends AbstractModule {
     }
 
     // Users and sessions, with or without the read cache in front.
-    Class<? extends UserStore> users = postgres ? PostgresUserStore.class : InMemoryUserStore.class;
-    Class<? extends SessionStore> sessions = postgres ? PostgresSessionStore.class : InMemorySessionStore.class;
+    Class<? extends UserStore> users = postgres ? JpaUserStore.class : InMemoryUserStore.class;
+    Class<? extends SessionStore> sessions = postgres ? JpaSessionStore.class : InMemorySessionStore.class;
     if (cache.equals("none")) {
       bind(UserStore.class).to(users);
       bind(SessionStore.class).to(sessions);
@@ -145,8 +148,8 @@ public final class StorageModule extends AbstractModule {
       bind(EphemeralStore.class).to(RedisEphemeralStore.class);
       bind(CounterStore.class).to(RedisCounterStore.class);
     } else if (postgres) {
-      bind(EphemeralStore.class).to(PostgresEphemeralStore.class);
-      bind(CounterStore.class).to(PostgresCounterStore.class);
+      bind(EphemeralStore.class).to(JpaEphemeralStore.class);
+      bind(CounterStore.class).to(JpaCounterStore.class);
     } else {
       bind(EphemeralStore.class).to(InMemoryEphemeralStore.class);
       bind(CounterStore.class).to(InMemoryCounterStore.class);

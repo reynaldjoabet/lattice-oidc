@@ -76,6 +76,8 @@ ThisBuild / libraryDependencies ++= Seq(
   Dependencies.database.flyway,
   Dependencies.database.flywayPostgres,
   Dependencies.database.hikaricp,
+  Dependencies.database.jakartaPersistence,
+  Dependencies.database.hibernate,
   Dependencies.cache.jedis,
   Dependencies.directory.unboundid,
   Dependencies.mail.api,
@@ -94,7 +96,7 @@ ThisBuild / libraryDependencies ++= Seq(
   Dependencies.observability.micrometerPrometheus,
   Dependencies.observability.kamon.bundle,
   Dependencies.observability.kamon.prometheus
-)
+) ++ Dependencies.testing.embeddedPostgres
 
 // Compile Java for the oldest JDK CI tests (21), whichever JDK runs sbt, so the classes also run
 // on the newer JRE in the Docker image.

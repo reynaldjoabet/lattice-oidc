@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import javax.sql.DataSource;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.flywaydb.core.Flyway;
@@ -63,6 +64,11 @@ public final class PostgresDatabase {
         });
     var result = Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").load().migrate();
     LOG.info("PostgreSQL storage ready (schema version {})", result.targetSchemaVersion);
+  }
+
+  /** The connection pool, shared with JPA ({@code JpaDatabase}), after the migrations have run. */
+  public DataSource dataSource() {
+    return dataSource;
   }
 
   /** Runs a query and maps every row. */

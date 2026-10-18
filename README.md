@@ -718,7 +718,8 @@ com.lattice.oidc
 │                  SecondFactors, LdapDirectory, JwtVerifier, PairwiseSubjects, JoseAlgorithms,
 │                  RedirectUris, Thumbprints, EcdsaSignatures, Webhooks, AuditService, ...
 ├── stores/        store interfaces with in-memory implementations
-│   ├── postgres/  PostgreSQL implementations and StorageCleanup
+│   ├── jpa/       PostgreSQL implementations: JPA entities and stores (Hibernate ORM)
+│   ├── postgres/  the connection pool and Flyway (PostgresDatabase), and StorageCleanup
 │   └── redis/     Redis short-lived state and counters
 ├── cache/         read cache for users and sessions, and its invalidation bus
 ├── client/        Authlete Play WS client, ServerMetadata
@@ -764,6 +765,7 @@ With `postgres`:
 - **Kept durably:** accounts, passkeys, identity links and Open Banking consents.
 - **Shared between servers:** login sessions, pending sign-ins, password reset links, CIBA requests, native SSO device secrets, sign-in alerts and the rate-limit counters. Any server can continue a flow another one started, so no sticky sessions are needed.
 - **Schema:** created and migrated at startup by Flyway (`conf/db/migration`). A wrong URL or password stops the server at startup, not at the first sign-in.
+- **Access:** through JPA, with Hibernate ORM on the same connection pool (`stores/jpa`). Hibernate never changes the schema; at startup it checks every entity against the tables Flyway created, and a mismatch stops the server. Operations that must be atomic stay single statements: JPQL bulk updates, or native SQL where JPQL has none (`ON CONFLICT` upserts, `DELETE … RETURNING` for single-use entries and logouts, the rate-limit counter's increment).
 - **Cleanup:** every server deletes expired rows every `lattice.postgres.cleanup-interval` (1 minute).
 - **Same secret everywhere:** every server must use the same `APPLICATION_SECRET`, because it signs the session cookie.
 
