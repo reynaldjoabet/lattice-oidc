@@ -25,14 +25,14 @@ ThisBuild / scalacOptions := Seq(
 
 Global / mcpEnabled     := true        // default: false
 Global / mcpDisableInCI := true        // default: true; set false to allow startup in CI/Heroku
-Global / mcpPort        := 5010        // default: 5010
-Global / mcpHost        := "127.0.0.1" // default: loopback only
+Global / mcpPort        := Some(5010)  // default: None (stdio only); the MCP client connects over HTTP
+Global / mcpHost        := "127.0.0.1" // default: loopback only; only with mcpPort
 
-val jacksonVersion = "2.19.4"
+val jacksonVersion = "2.22.4"
 
 // Jackson 3 moved to the tools.jackson.* org. It coexists with the Jackson 2 family above, which
 // stays pinned because Play and Pekko are still Jackson 2 libraries.
-val jackson3Version = "3.2.2"
+val jackson3Version = "3.2.4"
 
 val jacksonLibs = Seq(
   "com.fasterxml.jackson.core"       % "jackson-core",
@@ -46,8 +46,8 @@ val jacksonLibs = Seq(
   "com.fasterxml.jackson.module"    %% "jackson-module-scala"
 )
 
-// jackson-annotations is shared by both lines: Jackson 3 needs the 2.22 annotations, which stay
-// backward compatible with the 2.19 databind used by Play and Pekko.
+// jackson-annotations is shared by both lines: Jackson 3 needs the 2.22 annotations, which is also
+// the version of the Jackson 2 line Play and Pekko use here.
 val jacksonAnnotationsVersion = "2.22"
 
 val jacksonOverrides =

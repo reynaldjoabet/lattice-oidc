@@ -24,7 +24,7 @@ x-hardening: &hardening
 
 services:
   caddy:
-    image: caddy:2.10-alpine
+    image: caddy:2.11-alpine
     restart: unless-stopped
     <<: *hardening
     # Binding ports 80 and 443 needs this one capability.
@@ -154,7 +154,7 @@ services:
   # short-lived state and a read cache, so nothing is persisted: a restart loses pending sign-ins
   # and rate-limit counters, never accounts or sessions (those are in PostgreSQL).
   valkey:
-    image: valkey/valkey:8-alpine
+    image: valkey/valkey:9-alpine
     restart: unless-stopped
     <<: *hardening
     # Start as valkey directly: the entrypoint's switch from root (su-exec) needs capabilities
@@ -190,7 +190,7 @@ services:
 
   prometheus:
     profiles: ["monitoring"]
-    image: prom/prometheus:v3.5.0
+    image: prom/prometheus:v3.15.1
     restart: unless-stopped
     <<: *hardening
     command:
@@ -208,7 +208,7 @@ services:
 
   grafana:
     profiles: ["monitoring"]
-    image: grafana/grafana-oss:12.1.1
+    image: grafana/grafana-oss:12.4.3
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true

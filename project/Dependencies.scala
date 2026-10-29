@@ -5,24 +5,24 @@ object Dependencies {
   private object Versions {
 
     // --- ZIO ecosystem ---
-    val zio        = "2.1.26"
-    val zioJson    = "0.9.2"
+    val zio        = "2.1.27"
+    val zioJson    = "1.1.1"
     val zioHttp    = "3.11.6"
     val zioLogging = "2.5.3"
-    val zioConfig  = "4.0.7"
-    val zioSchema  = "1.8.5"
+    val zioConfig  = "4.1.0"
+    val zioSchema  = "1.9.0"
     val zioKafka   = "3.8.1"
 
     // --- HTTP ---
     val http4s  = "0.23.37"
-    val sttp4   = "4.0.26"
-    val tapir   = "1.13.18"
+    val sttp4   = "4.1.0"
+    val tapir   = "1.14.1"
     val jsonRpc = "0.2.0"
 
     // --- JSON ---
-    val jsoniter  = "2.40.1"
-    val circe     = "0.14.15"
-    val jackson3  = "3.2.2"
+    val jsoniter  = "2.42.1"
+    val circe     = "0.14.17"
+    val jackson3  = "3.2.4"
     val jsonSmart = "2.6.0"
 
     // --- FP ---
@@ -30,9 +30,9 @@ object Dependencies {
     val fs2             = "3.14.0"
     val fs2Kafka        = "4.1.3"
     val chimney         = "2.1.0"
-    val iron            = "3.3.1"
+    val iron            = "3.4.1"
     val uuidGenerator   = "5.2.0"
-    val hedgehog        = "0.13.0"
+    val hedgehog        = "0.15.1"
     val scalacheck      = "1.20.0"
     val munit           = "1.3.6"
     val munitCatsEffect = "2.2.1"
@@ -42,7 +42,7 @@ object Dependencies {
     val magnum   = "2.0.0-M4"
     val skunk    = "2.0.0-RC3"
     val hikaricp = "7.1.0"
-    val flyway   = "13.8.0"
+    val flyway   = "13.11.1"
     val postgres = "42.7.14"
     // Jakarta Persistence (JPA) annotations, for the Keycloak entities in docs/keycloak.
     val jakartaPersistence = "3.2.0"
@@ -53,8 +53,8 @@ object Dependencies {
     val embeddedPostgresBinaries = "18.6.0"
 
     // --- Security ---
-    val jwtScala         = "11.0.4"
-    val bouncycastle     = "1.84"
+    val jwtScala         = "12.0.0"
+    val bouncycastle     = "1.86"
     val password4j       = "1.8.4"
     val auth0            = "4.6.2"
     val nimbusJoseJwt    = "10.10"
@@ -92,15 +92,15 @@ object Dependencies {
     val micrometer = "1.17.2"
     val datadog    = "2.62.0"
     val kamon      = "2.8.1"
-    val otel4s     = "1.0.0"
+    val otel4s     = "1.1.0"
 
     // --- Config ---
-    val pureconfig = "0.17.10"
+    val pureconfig = "0.17.11"
 
     // --- Cloud ---
-    val awsV2         = "2.26.15"
+    val awsV2         = "2.57.6"
     val azureIdentity = "1.18.7"
-    val azureKv       = "4.9.4"
+    val azureKv       = "4.11.3"
 
   }
 
@@ -466,8 +466,8 @@ object Dependencies {
     // resolves the default ones to the same version). Windows and Alpine aren't needed.
     val embeddedPostgres = Seq(
       ("io.zonky.test" % "embedded-postgres" % Versions.embeddedPostgres % Test)
-        .exclude("io.zonky.test.postgres", "embedded-postgres-binaries-windows-amd64")
-        .exclude("io.zonky.test.postgres", "embedded-postgres-binaries-linux-amd64-alpine"),
+        .exclude("io.zonky.test.postgres" % "embedded-postgres-binaries-windows-amd64")
+        .exclude("io.zonky.test.postgres" % "embedded-postgres-binaries-linux-amd64-alpine"),
       "io.zonky.test.postgres" % "embedded-postgres-binaries-darwin-arm64v8" % Versions.embeddedPostgresBinaries % Test,
       "io.zonky.test.postgres" % "embedded-postgres-binaries-darwin-amd64"   % Versions.embeddedPostgresBinaries % Test,
       "io.zonky.test.postgres" % "embedded-postgres-binaries-linux-amd64"    % Versions.embeddedPostgresBinaries % Test,

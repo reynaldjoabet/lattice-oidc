@@ -747,8 +747,10 @@ AUTHLETE_SERVICE_APIKEY=<id> AUTHLETE_SERVICE_ACCESSTOKEN=<token> \
 LATTICE_STORAGE=postgres DATABASE_URL=jdbc:postgresql://db:5432/lattice \
 DATABASE_USERNAME=lattice DATABASE_PASSWORD=<password> \
 DEMO_USERS=false \
-target/universal/stage/bin/lattice-oidc -Dhttp.port=9000
+target/out/jvm/scala-3.9.0/lattice-oidc/universal/stage/bin/lattice-oidc -Dhttp.port=9000
 ```
+
+sbt 2 writes build output under `target/out/jvm/scala-<version>/<project>/`. A `target/universal/stage` left over from sbt 1 is stale: it doesn't change when you run `stage`.
 
 `DEMO_USERS=false` matters: `lattice.demo-users` is on by default, and it adds the demo accounts, with their published passwords, to an empty `users` table.
 
@@ -995,7 +997,7 @@ Inside a container, the entrypoint runs as **PID 1**, the process Linux treats a
 - **`-XX:+UseContainerSupport`:** on by default since JDK 10.
 - **`-Dfile.encoding=UTF-8`:** the default since JDK 18 (JEP 400).
 - **A fixed `-Xmx`:** it overrides `MaxRAMPercentage`, so the heap would no longer follow the container's limit.
-- **`-XX:+ZGenerational`:** Java 21 needs it for generational ZGC, but JDK 24 removed the non-generational mode and ignores the flag with a warning. G1, the default, suits a request/response server.
+- **`-XX:+ZGenerational`:** Java 21 needs it for generational ZGC, but JDK 24 removed the non-generational mode and ignores the flag with a warning. G1 suits a request/response server, but it's only the default with at least 2 CPUs and 1792 MiB of memory. At the 1 GiB limit in `deploy/`, the JVM picks Serial GC; see [JVM diagnostics](#production-troubleshooting-jvm-diagnostics).
 - **A Docker `HEALTHCHECK`:** Kubernetes ignores it, and the image has no `curl`. Point the probes at `/health/live` and `/health/ready` instead.
 
 **Running it:**
@@ -1017,6 +1019,171 @@ registry   namespace      image name     tag
 ```sh
 dockerUsername := sys.env.get("DOCKER_USERNAME")//my company
 ```
+
+### Production troubleshooting: JVM diagnostics
+
+When a replica runs out of memory, stalls or slows down, the evidence is gone once it restarts, unless the JVM was already recording. That means:
+- version and flags, printed at start;
+- GC logs, written all the time;
+- a continuous Java Flight Recorder (JFR) recording;
+- a heap dump when memory runs out.
+
+They cost little to keep on, so turn them on before you need them. Everything below was tested on Temurin 25 through Lattice's own start script, and in the `eclipse-temurin:25-jre-noble` base image, except where it says otherwise.
+
+**What's already there:**
+- **Metrics.** Prometheus metrics include the JVM's heap use and GC pauses (`JvmMemoryMetrics`, `JvmGcMetrics`). Dashboards show the trend over days; GC logs and JFR explain a particular minute.
+- **Exit on OOM.** `-XX:+ExitOnOutOfMemoryError` makes the JVM exit when memory runs out, so the orchestrator restarts it.
+- **Thread dumps.** `tini` forwards `SIGQUIT`, so a thread dump is one command away (below).
+
+#### 1. The JVM picks Serial GC at Lattice's memory limit
+
+The JVM uses G1 only on a "server-class machine": at least 2 CPUs **and** at least 1792 MiB of memory. Otherwise it picks Serial GC, which stops every thread and collects with one thread. Checked in the base image:
+
+| Container limit | 1 CPU | 2 CPUs | 4 CPUs |
+|---|---|---|---|
+| 1 GiB (the limit in `deploy/`) | Serial | Serial | Serial |
+| 1792 MiB or more | Serial | **G1** | **G1** |
+
+So Lattice runs Serial GC as deployed today. With a 768 MiB heap, an old-generation collection pauses every request, and its GC logs look different from G1's (`Pause Young (Allocation Failure)`, no concurrent phases). Add **`-XX:+UseG1GC`** to `JAVA_OPTS`, so the collector doesn't depend on the container's size.
+
+**Check what the JVM chose** by starting it with the same limits as production:
+
+```sh
+docker run --rm --memory=1g --cpus=2 --entrypoint java lattice-oidc:<version> \
+  -XX:MaxRAMPercentage=75 -XshowSettings:system -XX:+PrintFlagsFinal -version \
+  | grep -E 'Memory Limit|Effective CPU|MaxHeapSize|Use(Serial|G1|Parallel|Z)GC .*true'
+```
+
+That's the slide's `java --show-version -XX:+PrintFlagsFinal`, focused. On Linux, `-XshowSettings:system` also prints the container limits the JVM detected (`Provider: cgroupv2`, `Memory Limit: 1.00G`). In a running container, the JVM's startup output already includes the version; for full flags, add `-XX:+PrintFlagsFinal` to `JAVA_OPTS` once and read the log.
+
+#### 2. Somewhere to write: a `/diagnostics` volume
+
+The root filesystem is read-only, so the files need a volume. `/tmp` is the wrong place for them:
+- **Kubernetes:** `/tmp` is an `emptyDir` with `sizeLimit: 256Mi`. A heap dump is about as large as the heap (768 MiB at a 1 GiB limit), so writing one gets the pod **evicted**.
+- **Compose:** `/tmp` is a `tmpfs`, which is RAM. Its pages count against the container's 1 GiB memory limit, so writing a heap dump there **kills the container**.
+
+Mount a disk-backed volume at `/diagnostics`, owned by UID 1001, with room for:
+- one heap dump (the heap size);
+- the JFR repository (`maxsize`, 500 MiB below);
+- the GC logs (5 × 20 MiB).
+
+That's about 1.5 GiB at a 1 GiB limit; give it 2 GiB. In Kubernetes, an `emptyDir` without `medium: Memory` and with `sizeLimit: 2Gi` survives container restarts (an OOM exit included) but not pod deletion. Copy the files off before deleting the pod, or use a `PersistentVolumeClaim`.
+
+#### 3. The flags
+
+`JAVA_OPTS` replaces the image's default, so keep the existing two flags:
+
+```sh
+JAVA_OPTS="-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError -XX:+UseG1GC \
+  -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/diagnostics \
+  -XX:ErrorFile=/diagnostics/hs_err_pid%p.log \
+  -Xlog:gc*,gc+phases=debug:file=/diagnostics/gc-%t.log:time,uptime,level,tags:filecount=5,filesize=20m \
+  -XX:FlightRecorderOptions:repository=/diagnostics/jfr \
+  -XX:StartFlightRecording:disk=true,maxage=6h,maxsize=500m,+jdk.InitialEnvironmentVariable#enabled=false \
+  -Xlog:jfr+startup=off"
+```
+
+| Flag | What it does |
+|---|---|
+| `HeapDumpOnOutOfMemoryError`, `HeapDumpPath` | Writes `java_pid<pid>.hprof` when the heap runs out. Tested: the dump is written **before** `ExitOnOutOfMemoryError` ends the JVM, so the two work together. |
+| `ErrorFile` | Where a JVM crash writes its `hs_err` report (native frames, registers, flags). By default it goes to the working directory, which is read-only here. |
+| `-Xlog:gc*,gc+phases=debug:file=…` | GC logs with wall-clock time (`time`) and time since start (`uptime`), rotated across 5 files of 20 MiB. `gc+phases=debug` adds each pause's phases, the indented lines in the example below. |
+| `gc-%t.log` | `%t` is the start time, so each restart writes a new file instead of overwriting the one that explains the crash. The slide's `%p` (process ID) doesn't help in a container, where the JVM gets the same PID on every start. |
+| `FlightRecorderOptions:repository` | Keeps JFR's working files on the volume rather than in `/tmp`, so they survive the JVM exiting. |
+| `StartFlightRecording:disk=true,maxage=6h,maxsize=500m` | A continuous recording of the last 6 hours (or 500 MiB): GC, allocations, locks, I/O, CPU and exceptions. The default settings cost about 1% CPU. |
+| `+jdk.InitialEnvironmentVariable#enabled=false` | **Required for Lattice.** By default, JFR records every environment variable. Tested: `AUTHLETE_SERVICE_ACCESSTOKEN` appears in plain text in the recording. `APPLICATION_SECRET` and the database and SMTP passwords would too. |
+| `-Xlog:jfr+startup=off` | JFR otherwise prints three lines to stdout at start, which breaks `LOG_FORMAT=json` parsing. |
+
+**Two corrections to the commonly shown version of these flags:**
+- **The `-Xlog` syntax.** `-Xlog:gc*,gc+phases=debug::time,uptime:file=<%p-%t-gc.log>` stops the JVM from starting: `Invalid option 'file' for log output (stdout)`. The order is `-Xlog:<what>:<output>:<decorators>:<output options>`, so `file=` goes in the second field, as above.
+- **Core files (`ulimit -c unlimited`).** These are rarely worth it in a container. Where a core file goes is set by the **host's** `kernel.core_pattern`, not the container. The file is the size of the whole process. The `hs_err` report and the heap dump cover what you need for Java problems; a core matters only for crashes in native code.
+
+#### 4. During an incident
+
+The image is a JRE: it has `java` and `jfr`, but no `jcmd`, `jstack` or `jmap`.
+
+**Thread dump** (what is every thread doing, and what is it waiting for?): take two or three, 5–10 seconds apart. A thread stuck in the same place in each is the one to read. The dump goes to stdout, so it appears in `kubectl logs`.
+
+```sh
+kubectl exec <pod> -c lattice -- kill -QUIT 1   # tini forwards SIGQUIT to the JVM
+```
+
+**The JFR recording:** copy it off and join the pieces. The newest piece may be unreadable after an OOM exit (tested: `Recording file is stuck in locked stream state`); the earlier ones are complete.
+
+```sh
+kubectl cp <pod>:/diagnostics/jfr ./jfr -c lattice
+jfr assemble ./jfr/<directory> recording.jfr
+```
+
+**Using `jcmd` anyway** (an on-demand `JFR.dump`, `GC.heap_info`, `Thread.print`): attach an ephemeral container with a full JDK, sharing the process namespace:
+
+```sh
+kubectl debug -it <pod> --target=lattice --image=eclipse-temurin:25-jdk-noble -- bash
+```
+
+Run it as UID 1001, since attaching needs the same user as the JVM. This step isn't tested here.
+
+#### 5. Reading a GC log
+
+These are G1 lines (with `-XX:+UseG1GC`), as the flags above write them:
+
+```
+[2023-09-12T18:45:47.705+0000][0.187s] GC(0) Pause Young (Concurrent Start) (G1 Humongous Allocation)
+[2023-09-12T18:45:47.705+0000][0.188s] GC(0) Using 2 workers of 2 for evacuation
+[2023-09-12T18:45:47.710+0000][0.192s] GC(0)   Evacuate Collection Set: 3.6ms
+[2023-09-12T18:45:47.710+0000][0.192s] GC(0) Eden regions: 1->0(4)
+[2023-09-12T18:45:47.710+0000][0.192s] GC(0) Humongous regions: 40->0
+[2023-09-12T18:45:47.710+0000][0.192s] GC(0) User=0.00s Sys=0.00s Real=0.00s
+```
+
+- **`[…+0000][0.187s]`**: the wall-clock time, to match against request logs and the audit trail, and the time since the JVM started.
+- **`GC(0)`**: the collection's number. All lines with the same number belong to one collection.
+- **`Pause Young`**: G1 stopped the application to collect the young generation.
+- **`(Concurrent Start)`**: this pause also started background marking of the old generation.
+- **`(G1 Humongous Allocation)`**: the reason, and the one to watch. A *humongous* object is at least half a G1 region. At Lattice's 768 MiB heap a region is 1 MiB (checked with `PrintFlagsFinal`), so it's any single object of 512 KiB or more, such as a large byte array or a big JSON response being built. Humongous objects skip the young generation, and many of them cause frequent collections and fragmentation.
+- **`Eden regions: 1->0(4)`**, **`Humongous regions: 40->0`**: regions before and after the collection, with the target in brackets. 40 humongous regions freed in one go means a burst of large, short-lived objects; find where they come from with `jfr view allocation-by-site`.
+- **`User/Sys/Real`**: CPU time and elapsed time. If `Real` is much larger than `User`, the pause waited for CPU (throttling, or too few cores) rather than doing GC work.
+
+#### 6. Reading heap charts: the four shapes
+
+Load the GC log into a viewer, such as [GCViewer](https://github.com/chewiebug/GCViewer) (offline), or use the heap panels from Prometheus. Then compare two lines: heap used **before** GC (the peaks) and heap used **after** GC (the troughs). The after-GC line is the live data, what the application really holds. Its shape tells you the problem:
+
+| Shape | What it means | What to do |
+|---|---|---|
+| **A steady sawtooth.** Peaks rise to a limit and fall back; the after-GC line stays flat. | Healthy. | Nothing. |
+| **Steps.** The after-GC line jumps to a new level, stays there for minutes, then drops back. | A sudden spike in allocations: a burst of work holding memory, such as a cache filling, a large batch, or a slow dependency causing a backlog of requests. | Match the time of the step against request logs and `lattice_dependency_up`; run `jfr view allocation-by-site` for that window. |
+| **A climb.** The after-GC line rises steadily, each GC frees less, until it reaches the heap size. | A memory leak: something keeps references it no longer needs. It ends in an `OutOfMemoryError`. | Read the heap dump in [Eclipse MAT](https://eclipse.dev/mat/) (dominator tree, leak suspects). If there's no dump yet, `jfr view memory-leaks-by-class` gives candidates. |
+| **A plateau near the top.** Before and after GC are close together, near the heap size, with collections back to back. | The live data barely fits. The JVM spends its time collecting: CPU goes up, every request slows down, and an OOM is near. Often the end of a climb. | Short term: raise the memory limit (the heap follows it). Then find out whether it's a leak (a climb before) or the steady-state need has grown. |
+
+#### 7. JFR's built-in reports
+
+`jfr view` (JDK 21 and later) prints a summary from a recording, with no GUI. For the full picture, open the recording in [JDK Mission Control](https://adoptium.net/jmc/).
+
+| Question | Command |
+|---|---|
+| How long are the GC pauses? | `jfr view gc-pauses recording.jfr` |
+| Where is CPU spent? | `jfr view hot-methods recording.jfr` |
+| Who allocates the most? | `jfr view allocation-by-site recording.jfr` |
+| Which locks do threads wait on? | `jfr view contention-by-site recording.jfr` |
+| Are virtual threads stuck to their carriers? | `jfr view pinned-threads recording.jfr` |
+| Is the container throttling the CPU? | `jfr view container-cpu-throttling recording.jfr` |
+| Which exceptions are thrown, and how often? | `jfr view exception-count recording.jfr` |
+
+#### 8. The files hold secrets
+
+Lattice is an authorization server, so its memory holds what an attacker most wants:
+- session IDs, the Authlete access token and client secrets;
+- private signing keys;
+- passwords while they're being checked.
+
+| File | Contains secrets? | Handling |
+|---|---|---|
+| GC logs | No: sizes and times only. | Safe to share and to upload to online analysers. |
+| JFR recording | Command-line arguments, system properties, thread names and stack traces. With the flag above, no environment variables. | Before sharing, strip the startup values (tested): `jfr scrub --exclude-events jdk.InitialEnvironmentVariable,jdk.InitialSystemProperty in.jfr out.jfr`. |
+| Heap dump, core file | **Yes, everything** that was in memory. | Treat it as a credential: never upload it to an online analyser, keep it encrypted and access-controlled, and delete it after the investigation. If it may have leaked, rotate the Authlete token, `APPLICATION_SECRET` and the signing keys. |
+| `hs_err` report | Registers and some memory around the crash. | Treat it like a heap dump. |
+
+Restrict access to the `/diagnostics` volume as you would the secrets themselves.
 
 ## Tickets: a handle for pending requests
 
@@ -1670,3 +1837,6 @@ DCR stands for Dynamic Client Registration and, depending on the context, refers
  ![alt text](image-13.png)
 
  The authorization request includes the client_id request parameter, and the value of that parameter is a URL beginning with `https://`.
+
+ ## JVM Settings for Troubleshooting
+ ![alt text](image-15.png)
