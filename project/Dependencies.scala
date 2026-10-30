@@ -48,9 +48,8 @@ object Dependencies {
     val jakartaPersistence = "3.2.0"
     // Hibernate ORM: the JPA implementation.
     val hibernate = "7.4.14.Final"
-    // A real PostgreSQL for the storage tests, downloaded as Maven artifacts (no Docker needed).
-    val embeddedPostgres         = "2.2.2"
-    val embeddedPostgresBinaries = "18.6.0"
+    // A real PostgreSQL for the storage tests, in Docker.
+    val testcontainers = "2.0.5"
 
     // --- Security ---
     val jwtScala         = "12.0.0"
@@ -461,18 +460,9 @@ object Dependencies {
 
     val zioJsonGolden = "dev.zio" %% "zio-json-golden" % Versions.zioJson % Test
 
-    // A real PostgreSQL for the storage tests. The library's default binaries are for Intel Macs,
-    // Linux, Alpine and Windows; these add Apple Silicon and Linux ARM, at PostgreSQL 18 (sbt then
-    // resolves the default ones to the same version). Windows and Alpine aren't needed.
-    val embeddedPostgres = Seq(
-      ("io.zonky.test" % "embedded-postgres" % Versions.embeddedPostgres % Test)
-        .exclude("io.zonky.test.postgres" % "embedded-postgres-binaries-windows-amd64")
-        .exclude("io.zonky.test.postgres" % "embedded-postgres-binaries-linux-amd64-alpine"),
-      "io.zonky.test.postgres" % "embedded-postgres-binaries-darwin-arm64v8" % Versions.embeddedPostgresBinaries % Test,
-      "io.zonky.test.postgres" % "embedded-postgres-binaries-darwin-amd64"   % Versions.embeddedPostgresBinaries % Test,
-      "io.zonky.test.postgres" % "embedded-postgres-binaries-linux-amd64"    % Versions.embeddedPostgresBinaries % Test,
-      "io.zonky.test.postgres" % "embedded-postgres-binaries-linux-arm64v8"  % Versions.embeddedPostgresBinaries % Test
-    )
+    // A real PostgreSQL in Docker for the storage tests; the module brings Testcontainers itself.
+    val testcontainersPostgres =
+      "org.testcontainers" % "testcontainers-postgresql" % Versions.testcontainers % Test
 
   }
 
