@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<!--
+  Logging for the tests; takes the place of conf/logback.xml when they run. Only warnings and errors,
+  to the console, and nothing to logs/application.log. Messages every test app logs because of how
+  the tests are set up (demo users, the short rs0 secret, no default database) are left out, so what
+  remains points at a real problem. To follow a test in detail, set "access", "audit" or
+  "com.lattice.oidc" to INFO.
+-->
+
+<!DOCTYPE configuration>
+
+<configuration>
+  <import class="ch.qos.logback.classic.encoder.PatternLayoutEncoder"/>
+  <import class="ch.qos.logback.core.ConsoleAppender"/>
+
+  <!-- Synchronous, so nothing is lost when the forked test JVM exits and lines stay in order. -->
+  <appender name="STDOUT" class="ConsoleAppender">
+    <encoder class="PatternLayoutEncoder">
+      <charset>UTF-8</charset>
+      <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <!-- Testcontainers, the Docker client it uses, and Logback itself. "tc" stays at INFO: it reports
+       pulling an image, which can take minutes and otherwise looks like a hung test run. -->
+  <logger name="org.testcontainers" level="WARN"/>
+  <logger name="com.github.dockerjava" level="WARN"/>
+  <logger name="tc" level="INFO"/>
+  <logger name="ch.qos.logback" level="WARN"/>
+
+  <!-- Migrations and the ORM run for every PostgreSQL test app. -->
+  <logger name="org.flywaydb" level="WARN"/>
+  <logger name="org.hibernate" level="WARN"/>
+  <logger name="com.zaxxer.hikari" level="WARN"/>
+
+  <!-- Startup lines, once per test app: version, error handlers, the HTTP server. -->
+  <logger name="play" level="WARN"/>
+  <logger name="com.lattice.oidc" level="WARN"/>
+
+  <!-- One line per request and per security event: hundreds per run. -->
+  <logger name="access" level="WARN"/>
+  <logger name="audit" level="WARN"/>
+
+  <!-- Warnings about the test setup itself, repeated for every test app. -->
+  <!-- play.filters.headers.contentSecurityPolicy is deprecated; production still logs it once at
+       startup. -->
+  <logger name="play.filters.headers.SecurityHeadersConfig" level="ERROR"/>
+  <!-- No play.db default database: Lattice configures its own pool. -->
+  <logger name="play.db.DBModule" level="ERROR"/>
+  <!-- The demo users are what the tests sign in with. -->
+  <logger name="com.lattice.oidc.stores.InMemoryUserStore" level="ERROR"/>
+  <!-- The rs0 resource server's secret is a short, fixed test value. -->
+  <logger name="com.lattice.oidc.controllers.IntrospectionController" level="ERROR"/>
+  <!-- password4j (tests only) has no psw4j.properties and uses its defaults. -->
+  <logger name="com.password4j" level="ERROR"/>
+  <!-- Pekko can't read the JDK's virtual-thread scheduler without add-opens; it only loses the
+       load metrics of a dispatcher Lattice doesn't use, but logs a stack trace per actor system. -->
+  <logger name="org.apache.pekko.dispatch.VirtualThreadExecutorConfigurator" level="ERROR"/>
+
+  <root level="WARN">
+    <appender-ref ref="STDOUT"/>
+  </root>
+
+</configuration>

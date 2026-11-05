@@ -23,6 +23,8 @@ final class PostgresApp {
   static Application start() {
     Map<String, Object> config = new HashMap<>(TestPostgres.newDatabase());
     config.put("lattice.demo-users", false);
+    // Tests run the cleanup themselves; a scheduled run could delete rows while they count them.
+    config.put("lattice.postgres.cleanup-interval", "1 day");
     Application app = app(new FakeAuthleteApi(), config);
     Helpers.start(app);
     return app;

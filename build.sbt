@@ -145,6 +145,11 @@ lazy val root = (project in file("."))
     // unpackaged assets (Play doesn't cache digests in dev mode anyway).
     pipelineStages := Seq(digest, gzip),
 
+    // Run the tests in a separate JVM (already Play's default; set here so it can't be lost). The
+    // storage tests' PostgreSQL container is removed by Testcontainers when that JVM exits; inside
+    // the long-running sbt server, every test run would leave another container behind.
+    Test / fork := true,
+
     // Nothing reads the Scaladoc/Javadoc jar, so don't build it for `stage`, `dist` or the image.
     Compile / doc / skip                   := true,
     Compile / packageDoc / publishArtifact := false,

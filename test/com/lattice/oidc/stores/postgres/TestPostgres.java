@@ -6,15 +6,20 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Map;
 import java.util.UUID;
+import org.testcontainers.DockerClientFactory;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * A real PostgreSQL for the storage tests: one Docker container per test JVM (Testcontainers,
- * PostgreSQL 18), and a fresh, empty database for every caller of {@link #newDatabase}. Lattice's own
- * startup then applies the Flyway migrations to it, as in production. Needs a running Docker;
- * Testcontainers removes the container when the JVM exits (sbt forks a JVM for each test run).
+ * A real PostgreSQL for the storage tests: one Docker container per test JVM (Testcontainers), and a
+ * fresh, empty database for every caller of {@link #newDatabase}. Lattice's own startup then applies
+ * the Flyway migrations to it, as in production. Needs a running Docker;
+ * Testcontainers removes the container when the JVM exits ({@code Test / fork := true} in build.sbt
+ * gives each test run its own JVM).
  */
 public final class TestPostgres {
+
+  /** The image deploy/compose/compose.yaml runs; change both together. */
+  private static final String IMAGE = "postgres:18";
 
   private static PostgreSQLContainer server;
 
@@ -22,7 +27,11 @@ public final class TestPostgres {
 
   private static synchronized PostgreSQLContainer server() {
     if (server == null) {
-      PostgreSQLContainer container = new PostgreSQLContainer("postgres:18-alpine");
+      if (!DockerClientFactory.instance().isDockerAvailable()) {
+        throw new IllegalStateException(
+            "The PostgreSQL store tests need Docker, and no Docker daemon answered. Start Docker.");
+      }
+      PostgreSQLContainer container = new PostgreSQLContainer(IMAGE);
       container.start();
       server = container;
     }

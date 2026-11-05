@@ -784,7 +784,9 @@ With `lattice.demo-users` on, the demo accounts are added only to an empty `user
 
 #### Testing against PostgreSQL
 
-The PostgreSQL store tests (`test/com/lattice/oidc/stores/postgres`) run against a real PostgreSQL 18 in Docker, started by [Testcontainers](https://testcontainers.com). Docker must be running; the other tests don't need it.
+The PostgreSQL store tests (`test/com/lattice/oidc/stores/postgres`) run against a real PostgreSQL in Docker, started by [Testcontainers](https://testcontainers.com). Docker must be running, or they fail with a message saying so; the other tests don't need it.
+
+- **Same PostgreSQL as production.** `TestPostgres.IMAGE` is `postgres:18`, the image `deploy/compose/compose.yaml` runs. Change both together.
 
 - **One container per test run.** `TestPostgres` keeps the container in a `static` field and starts it on first use, so every test class in the run shares it:
 
@@ -801,8 +803,8 @@ The PostgreSQL store tests (`test/com/lattice/oidc/stores/postgres`) run against
   }
   ```
 
-- **One database per test.** `TestPostgres.newDatabase()` runs `CREATE DATABASE lattice_<random>` in that container. Each test app gets an empty database and runs the Flyway migrations on it at startup, as in production, so no test sees another's rows. A new database takes milliseconds; a new container takes a few seconds.
-- **Not shared between runs.** sbt 2 runs each `sbt --client test` in a new, forked JVM, which starts its own container. Testcontainers' reuse mode could keep one container across runs, but it has to be enabled on each machine and nothing ever removes the container, which isn't worth a few seconds for two test classes.
+- **One database per test app.** `TestPostgres.newDatabase()` runs `CREATE DATABASE lattice_<random>` in that container. Each test app gets an empty database and runs the Flyway migrations on it at startup, as in production. Test classes that share an app use their own keys (`PostgresApp.unique`), so they don't interfere. A new database takes milliseconds; a new container takes a few seconds.
+- **Not shared between runs.** `Test / fork := true` in `build.sbt` runs each `sbt --client test` in a new JVM, which starts its own container. Testcontainers' reuse mode could keep one container across runs, but it has to be enabled on each machine and nothing ever removes the container, which isn't worth the few seconds it saves.
 
 Testcontainers removes the container through Ryuk (`testcontainers/ryuk`), a small container it starts first:
 
@@ -810,7 +812,7 @@ Testcontainers removes the container through Ryuk (`testcontainers/ryuk`), a sma
 2. The test JVM labels every container it creates with its session id (`org.testcontainers.sessionId`), sends Ryuk that label, and keeps a TCP connection to Ryuk open.
 3. When the test JVM exits, the connection closes. Ryuk waits about 10 seconds in case it reconnects, then removes every container, network and volume with that label, and then itself.
 
-This doesn't rely on shutdown hooks, so it also cleans up after a crash, `kill -9` or an out-of-memory exit; a container can still show in `docker ps` for those 10 seconds. It does rely on the forked JVM: tests run inside the long-running sbt server would keep the connection open, and containers would pile up until sbt stopped. Ryuk needs access to the Docker socket. Without it (`TESTCONTAINERS_RYUK_DISABLED=true`, as some locked-down CI systems require), nothing removes the containers.
+This doesn't rely on shutdown hooks, so it also cleans up after a crash, `kill -9` or an out-of-memory exit; a container can still show in `docker ps` for those 10 seconds. It does rely on `Test / fork := true`: tests run inside the long-running sbt server would keep the connection open, and containers would pile up until sbt stopped. Ryuk needs access to the Docker socket. Without it (`TESTCONTAINERS_RYUK_DISABLED=true`, as some locked-down CI systems require), nothing removes the containers.
 
 ### Short-lived state and the read cache
 

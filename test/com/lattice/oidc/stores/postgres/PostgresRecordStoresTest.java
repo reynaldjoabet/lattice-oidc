@@ -117,7 +117,8 @@ public class PostgresRecordStoresTest {
     entries.put(ns, "live", null, null, "{}", Duration.ofMinutes(5));
     Instant now = PostgresApp.now();
     String expiredSession = unique("s");
-    sessions.create(new Session(expiredSession, "u", null, null, "password", now, now, now.minus(Duration.ofSeconds(1)), false));
+    // Long past, whatever the skew between this JVM's clock and the database's.
+    sessions.create(new Session(expiredSession, "u", null, null, "password", now, now, now.minus(Duration.ofHours(1)), false));
     String liveSession = unique("s");
     sessions.create(new Session(liveSession, "u", null, null, "password", now, now, now.plus(Duration.ofHours(1)), false));
     Thread.sleep(150);

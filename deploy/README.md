@@ -132,6 +132,17 @@ The DNS record for `LATTICE_DOMAIN` must point at the host, with ports 80 and 44
 - **`/metrics`:** Caddy answers 404 for it. Prometheus scrapes Lattice directly, with the bearer token passed as a Compose secret.
 - **Valkey:** an open-source fork of Redis, holding only short-lived state, so nothing is persisted. A restart loses pending sign-ins and rate-limit counters, never accounts or sessions.
 - **Backups:** back up the `postgres-data` volume, for example with `docker compose exec postgres pg_dump -U lattice lattice`. Caddy's certificates are in `caddy-data`.
+- **Upgrading PostgreSQL:** a new major version can't read an older one's data, and `postgres:18` refuses a volume from 17 or earlier with an error instead of starting. To move a volume from 17 to 18, dump it while the old version is still running, then restore the dump into a new volume, before starting Lattice:
+
+  ```sh
+  docker compose exec -T postgres pg_dump -U lattice lattice > lattice.sql   # keep this safe
+  docker compose down
+  docker volume rm lattice_postgres-data                                     # deletes the old data
+  # Update compose.yaml to postgres:18, with the volume at /var/lib/postgresql.
+  docker compose up -d --no-deps postgres                                    # wait until it's healthy
+  docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U lattice -d lattice < lattice.sql
+  docker compose up -d
+  ```
 
 ## Kubernetes
 
