@@ -14,21 +14,21 @@ object Dependencies {
     val zioKafka   = "3.8.1"
 
     // --- HTTP ---
-    val http4s  = "0.23.37"
-    val sttp4   = "4.1.0"
+    val http4s  = "0.23.38"
+    val sttp4   = "4.1.1"
     val tapir   = "1.14.1"
     val jsonRpc = "0.2.0"
 
     // --- JSON ---
-    val jsoniter  = "2.42.1"
+    val jsoniter  = "2.42.2"
     val circe     = "0.14.17"
     val jackson3  = "3.2.4"
-    val jsonSmart = "2.6.0"
+    val jsonSmart = "2.6.1"
 
     // --- FP ---
     val catsEffect      = "3.7.1"
     val fs2             = "3.14.0"
-    val fs2Kafka        = "4.1.3"
+    val fs2Kafka        = "4.2.0"
     val chimney         = "2.1.0"
     val iron            = "3.4.1"
     val uuidGenerator   = "5.2.0"
@@ -42,7 +42,7 @@ object Dependencies {
     val magnum   = "2.0.0-M4"
     val skunk    = "2.0.0-RC3"
     val hikaricp = "7.1.0"
-    val flyway   = "13.11.1"
+    val flyway   = "13.12.0"
     val postgres = "42.7.14"
     // Jakarta Persistence (JPA) annotations, for the Keycloak entities in docs/keycloak.
     val jakartaPersistence = "3.2.0"
@@ -72,7 +72,7 @@ object Dependencies {
     val jedis    = "8.0.2"
 
     // --- Directory ---
-    val unboundid = "7.0.5"
+    val unboundid = "7.0.6"
 
     // --- Mail ---
     val jakartaMail = "2.1.5"
@@ -97,9 +97,9 @@ object Dependencies {
     val pureconfig = "0.17.11"
 
     // --- Cloud ---
-    val awsV2         = "2.57.6"
-    val azureIdentity = "1.18.7"
-    val azureKv       = "4.11.3"
+    val awsV2         = "2.57.9"
+    val azureIdentity = "1.19.0"
+    val azureKv       = "4.12.1"
 
   }
 
