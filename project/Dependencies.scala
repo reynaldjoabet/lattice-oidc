@@ -59,7 +59,7 @@ object Dependencies {
     val nimbusJoseJwt    = "10.10"
     val nimbusOauth2Oidc = "11.39"
     val vault            = "5.1.0"
-    val authlete         = "4.49"
+    val authlete         = "4.50"
     val webauthn         = "2.10.1"
 
     // --- Logging ---
