@@ -22,24 +22,24 @@ import java.util.regex.Pattern;
  *       4.1) require exact matching for this reason.
  *   <li><b>Any port on a loopback IP for {@code http}</b> (RFC 8252, section 7.3). A native app
  *       listens on a port the OS gives it at run time, so it can't register it in advance. Only for
- *       the IP literals {@code 127.0.0.1} and {@code [::1]}: the name {@code localhost} can be pointed
- *       elsewhere by a hosts file or a DNS resolver (RFC 8252, section 8.3).
+ *       the IP literals {@code 127.0.0.1} and {@code [::1]}: the name {@code localhost} can be
+ *       pointed elsewhere by a hosts file or a DNS resolver (RFC 8252, section 8.3).
  *   <li><b>No {@code ..} path segments, encoded or not.</b> A URI that walks out of its registered
  *       path ({@code /cb/..%2F..%2Fopen-redirect}) can match a string check yet reach a different
- *       page once a server normalises it. Double encoding ({@code %252E}) and backslashes count too,
- *       because some servers decode twice or treat {@code \} as {@code /}.
+ *       page once a server normalises it. Double encoding ({@code %252E}) and backslashes count
+ *       too, because some servers decode twice or treat {@code \} as {@code /}.
  *   <li><b>No user info</b> ({@code https://app.example@evil.example/}). Browsers and parsers
  *       disagree about which part is the host, and the confusion has been used to steal codes.
  *   <li><b>No OAuth/OIDC response parameters already in the URI</b> ({@code ?code=...}, {@code
- *       #state=...}). The server appends its own; a URI that carries a second copy invites parameter
- *       pollution, where the client reads the attacker's value instead of the server's.
+ *       #state=...}). The server appends its own; a URI that carries a second copy invites
+ *       parameter pollution, where the client reads the attacker's value instead of the server's.
  *   <li><b>No fragment</b> (RFC 6749, section 3.1.2): the server may put the response there.
  *   <li><b>{@code https}, or {@code http} on loopback only.</b> A code sent over plain HTTP can be
  *       read on the network.
  *   <li><b>Private-use schemes must be reverse domain names</b> such as {@code com.example.app:/cb}
- *       (RFC 8252, section 7.1), so that two apps on a device are unlikely to claim the same scheme.
- *       Schemes that run code or read local files ({@code javascript:}, {@code data:}, {@code file:})
- *       are always refused.
+ *       (RFC 8252, section 7.1), so that two apps on a device are unlikely to claim the same
+ *       scheme. Schemes that run code or read local files ({@code javascript:}, {@code data:},
+ *       {@code file:}) are always refused.
  * </ul>
  */
 public final class RedirectUris {
@@ -47,16 +47,27 @@ public final class RedirectUris {
   /** Parameters the server adds to the redirect; a registered URI must not already have them. */
   static final Set<String> RESPONSE_PARAMETERS =
       Set.of(
-          "code", "state", "iss", "id_token", "access_token", "token_type", "expires_in", "scope",
-          "error", "error_description", "error_uri", "session_state", "response");
+          "code",
+          "state",
+          "iss",
+          "id_token",
+          "access_token",
+          "token_type",
+          "expires_in",
+          "scope",
+          "error",
+          "error_description",
+          "error_uri",
+          "session_state",
+          "response");
 
   private static final Set<String> DANGEROUS_SCHEMES =
       Set.of("javascript", "data", "vbscript", "file", "blob", "about", "filesystem");
 
   /**
-   * A {@code ..} segment between separators: {@code /}, {@code \}, and their percent-encodings, with
-   * the dots plain, encoded ({@code %2E}) or double-encoded ({@code %252E}); it may end the path or
-   * be followed by {@code ;} or a control character a server might strip.
+   * A {@code ..} segment between separators: {@code /}, {@code \}, and their percent-encodings,
+   * with the dots plain, encoded ({@code %2E}) or double-encoded ({@code %252E}); it may end the
+   * path or be followed by {@code ;} or a control character a server might strip.
    */
   private static final Pattern DOT_DOT_SEGMENT =
       Pattern.compile(
@@ -100,7 +111,8 @@ public final class RedirectUris {
         return Optional.of("Use https; http is only allowed for loopback addresses.");
       }
     } else if (!scheme.contains(".")) {
-      return Optional.of("A private-use scheme must be a reverse domain name, such as com.example.app.");
+      return Optional.of(
+          "A private-use scheme must be a reverse domain name, such as com.example.app.");
     }
     String path = parsed.getRawSchemeSpecificPart();
     if (path != null && DOT_DOT_SEGMENT.matcher(path).find()) {
@@ -113,9 +125,9 @@ public final class RedirectUris {
   }
 
   /**
-   * Whether {@code requested} is one of the {@code registered} redirect URIs: an exact match, or for
-   * {@code http} on a loopback IP, the same URI on another port. A requested URI that would not be
-   * accepted for registration never matches.
+   * Whether {@code requested} is one of the {@code registered} redirect URIs: an exact match, or
+   * for {@code http} on a loopback IP, the same URI on another port. A requested URI that would not
+   * be accepted for registration never matches.
    */
   public static boolean matches(Collection<String> registered, String requested) {
     if (requested == null || problem(requested).isPresent()) {
@@ -151,8 +163,10 @@ public final class RedirectUris {
     }
     for (String pair : rawQuery.split("&")) {
       int equals = pair.indexOf('=');
-      String name = java.net.URLDecoder.decode(
-          equals < 0 ? pair : pair.substring(0, equals), java.nio.charset.StandardCharsets.UTF_8);
+      String name =
+          java.net.URLDecoder.decode(
+              equals < 0 ? pair : pair.substring(0, equals),
+              java.nio.charset.StandardCharsets.UTF_8);
       if (RESPONSE_PARAMETERS.contains(name.toLowerCase(Locale.ROOT))) {
         return true;
       }

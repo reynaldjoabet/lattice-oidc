@@ -26,22 +26,24 @@ import org.bouncycastle.crypto.params.Argon2Parameters;
  * Params#encode}, a self-describing string such as {@code $argon2id$v=19$m=65536,t=3,p=1}) must be
  * stored next to the encrypted data: the same password, salt and parameters give the same key, and
  * nothing else does. {@link Params#decode} refuses a stored string it cannot honour exactly, rather
- * than adjusting it: an adjusted parameter derives a different key, so the data would silently become
- * undecryptable.
+ * than adjusting it: an adjusted parameter derives a different key, so the data would silently
+ * become undecryptable.
  *
- * <p><b>Memory.</b> Each derivation fills {@code memoryKib} of memory, by design. Derivations share a
- * memory budget (by default a quarter of the maximum heap): one that would exceed it waits until
- * others finish, so a burst of requests queues instead of exhausting the heap. Parameters larger than
- * the whole budget are refused, since they could never run.
+ * <p><b>Memory.</b> Each derivation fills {@code memoryKib} of memory, by design. Derivations share
+ * a memory budget (by default a quarter of the maximum heap): one that would exceed it waits until
+ * others finish, so a burst of requests queues instead of exhausting the heap. Parameters larger
+ * than the whole budget are refused, since they could never run.
  *
- * <p><b>Choosing the cost.</b> {@link #calibrate} picks the most memory, from {@link Params#DEFAULT}
- * up to the budget, that derives within a target time on this machine. Store the result with each
- * new key; {@link Params#isWeakerThan} tells when a stored key deserves re-deriving (possible only
- * when the password is at hand, as at unlock).
+ * <p><b>Choosing the cost.</b> {@link #calibrate} picks the most memory, from {@link
+ * Params#DEFAULT} up to the budget, that derives within a target time on this machine. Store the
+ * result with each new key; {@link Params#isWeakerThan} tells when a stored key deserves
+ * re-deriving (possible only when the password is at hand, as at unlock).
  */
 public final class Argon2idKdf {
 
-  /** Salt length for new keys: 128 bits, as RFC 9106 recommends. Shorter stored salts are refused. */
+  /**
+   * Salt length for new keys: 128 bits, as RFC 9106 recommends. Shorter stored salts are refused.
+   */
   public static final int SALT_BYTES = 16;
 
   private static final int MAX_SALT_BYTES = 64;
@@ -52,12 +54,14 @@ public final class Argon2idKdf {
    * Argon2id parameters: memory in KiB (Argon2's unit), passes over it, and lanes.
    *
    * <p>Must meet at least one of OWASP's Argon2id minimums (46 MiB and 1 pass, 19 MiB and 2, 12 MiB
-   * and 3, 9 MiB and 4, or 7 MiB and 5), and stay within bounds that keep a hostile or corrupt stored
-   * value from making one derivation allocate gigabytes or run for minutes.
+   * and 3, 9 MiB and 4, or 7 MiB and 5), and stay within bounds that keep a hostile or corrupt
+   * stored value from making one derivation allocate gigabytes or run for minutes.
    */
   public record Params(int memoryKib, int iterations, int parallelism) {
 
-    private static final int[][] OWASP_MINIMUMS = {{47_104, 1}, {19_456, 2}, {12_288, 3}, {9_216, 4}, {7_168, 5}};
+    private static final int[][] OWASP_MINIMUMS = {
+      {47_104, 1}, {19_456, 2}, {12_288, 3}, {9_216, 4}, {7_168, 5}
+    };
 
     /** 1 GiB. */
     public static final int MAX_MEMORY_KIB = 1_048_576;
@@ -66,19 +70,33 @@ public final class Argon2idKdf {
     public static final int MAX_PARALLELISM = 16;
 
     /**
-     * 64 MiB and three passes: RFC 9106's recommendation where memory is limited (§4), with one lane
-     * because this implementation computes lanes one after another, so more lanes cost time and gain
-     * nothing.
+     * 64 MiB and three passes: RFC 9106's recommendation where memory is limited (§4), with one
+     * lane because this implementation computes lanes one after another, so more lanes cost time
+     * and gain nothing.
      */
     public static final Params DEFAULT = new Params(65_536, 3, 1);
 
-    private static final Pattern ENCODED = Pattern.compile("\\$argon2id\\$v=19\\$m=(\\d{1,8}),t=(\\d{1,3}),p=(\\d{1,3})");
+    private static final Pattern ENCODED =
+        Pattern.compile("\\$argon2id\\$v=19\\$m=(\\d{1,8}),t=(\\d{1,3}),p=(\\d{1,3})");
 
     public Params {
-      if (memoryKib > MAX_MEMORY_KIB || iterations > MAX_ITERATIONS || parallelism < 1 || parallelism > MAX_PARALLELISM) {
+      if (memoryKib > MAX_MEMORY_KIB
+          || iterations > MAX_ITERATIONS
+          || parallelism < 1
+          || parallelism > MAX_PARALLELISM) {
         throw new IllegalArgumentException(
-            "Argon2id parameters out of bounds (at most " + MAX_MEMORY_KIB + " KiB, " + MAX_ITERATIONS
-                + " passes, 1 to " + MAX_PARALLELISM + " lanes): m=" + memoryKib + ", t=" + iterations + ", p=" + parallelism);
+            "Argon2id parameters out of bounds (at most "
+                + MAX_MEMORY_KIB
+                + " KiB, "
+                + MAX_ITERATIONS
+                + " passes, 1 to "
+                + MAX_PARALLELISM
+                + " lanes): m="
+                + memoryKib
+                + ", t="
+                + iterations
+                + ", p="
+                + parallelism);
       }
       boolean meetsAMinimum = false;
       for (int[] minimum : OWASP_MINIMUMS) {
@@ -87,7 +105,11 @@ public final class Argon2idKdf {
       if (!meetsAMinimum || memoryKib < 8 * parallelism) {
         throw new IllegalArgumentException(
             "Argon2id parameters below OWASP's minimum (for example 19456 KiB and 2 passes): m="
-                + memoryKib + ", t=" + iterations + ", p=" + parallelism);
+                + memoryKib
+                + ", t="
+                + iterations
+                + ", p="
+                + parallelism);
       }
     }
 
@@ -107,7 +129,8 @@ public final class Argon2idKdf {
       if (m == null || !m.matches()) {
         throw new IllegalArgumentException("Not Argon2id v19 parameters: " + encoded);
       }
-      return new Params(Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2)), Integer.parseInt(m.group(3)));
+      return new Params(
+          Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2)), Integer.parseInt(m.group(3)));
     }
 
     /** Whether these parameters cost less than {@code other}: less memory or fewer passes. */
@@ -134,12 +157,18 @@ public final class Argon2idKdf {
     this(budgetKib, null);
   }
 
-  /** With {@code timer} measuring one derivation in nanoseconds, for calibration tests; null measures for real. */
+  /**
+   * With {@code timer} measuring one derivation in nanoseconds, for calibration tests; null
+   * measures for real.
+   */
   Argon2idKdf(long budgetKib, ToLongFunction<Params> timer) {
     if (budgetKib < Params.DEFAULT.memoryKib()) {
       throw new IllegalArgumentException(
-          "The memory budget (" + budgetKib + " KiB) is below one derivation at the default cost ("
-              + Params.DEFAULT.memoryKib() + " KiB): give the JVM more heap");
+          "The memory budget ("
+              + budgetKib
+              + " KiB) is below one derivation at the default cost ("
+              + Params.DEFAULT.memoryKib()
+              + " KiB): give the JVM more heap");
     }
     this.budgetKib = (int) Math.min(budgetKib, Integer.MAX_VALUE);
     this.memory = new Semaphore(this.budgetKib, true);
@@ -174,8 +203,9 @@ public final class Argon2idKdf {
 
   /**
    * {@code keyBytes} of key material from {@code password}, which is encoded as UTF-8 without
-   * normalisation (as RFC 9106 leaves it to the application: normalise first if the same password may
-   * arrive in different Unicode forms). Blocks while other derivations hold the memory it needs.
+   * normalisation (as RFC 9106 leaves it to the application: normalise first if the same password
+   * may arrive in different Unicode forms). Blocks while other derivations hold the memory it
+   * needs.
    *
    * @throws IllegalArgumentException if the password isn't valid UTF-16 (a lone surrogate, which a
    *     lenient encoder would turn into "?", so different passwords would give the same key), the
@@ -184,10 +214,12 @@ public final class Argon2idKdf {
    */
   public byte[] deriveKey(char[] password, byte[] salt, Params params, int keyBytes) {
     if (salt == null || salt.length < SALT_BYTES || salt.length > MAX_SALT_BYTES) {
-      throw new IllegalArgumentException("The salt must be " + SALT_BYTES + " to " + MAX_SALT_BYTES + " bytes");
+      throw new IllegalArgumentException(
+          "The salt must be " + SALT_BYTES + " to " + MAX_SALT_BYTES + " bytes");
     }
     if (keyBytes < MIN_KEY_BYTES || keyBytes > MAX_KEY_BYTES) {
-      throw new IllegalArgumentException("The key must be " + MIN_KEY_BYTES + " to " + MAX_KEY_BYTES + " bytes: " + keyBytes);
+      throw new IllegalArgumentException(
+          "The key must be " + MIN_KEY_BYTES + " to " + MAX_KEY_BYTES + " bytes: " + keyBytes);
     }
     byte[] passwordBytes = utf8(password);
     try {
@@ -199,12 +231,12 @@ public final class Argon2idKdf {
 
   /**
    * The most memory, doubling from {@link Params#DEFAULT} and within the budget, for which one
-   * derivation on this machine takes at most {@code target}; never less than the default. Takes a few
-   * seconds: run it once (at startup or when creating a key), not per request.
+   * derivation on this machine takes at most {@code target}; never less than the default. Takes a
+   * few seconds: run it once (at startup or when creating a key), not per request.
    *
    * <p>Each candidate is timed three times and judged by the median, after a warm-up derivation:
-   * the first derivation in a JVM runs before the JIT compiler has optimised it and takes about
-   * 1.6 times as long (measured: 492 ms, then about 300 ms, for 128 MiB on an Apple M1).
+   * the first derivation in a JVM runs before the JIT compiler has optimised it and takes about 1.6
+   * times as long (measured: 492 ms, then about 300 ms, for 128 MiB on an Apple M1).
    */
   public Params calibrate(Duration target) {
     long targetNanos = target.toNanos();
@@ -235,7 +267,11 @@ public final class Argon2idKdf {
     int needed = params.memoryKib();
     if (needed > budgetKib) {
       throw new IllegalArgumentException(
-          "One derivation needs " + needed + " KiB, more than the whole budget of " + budgetKib + " KiB");
+          "One derivation needs "
+              + needed
+              + " KiB, more than the whole budget of "
+              + budgetKib
+              + " KiB");
     }
     try {
       memory.acquire(needed);
@@ -255,7 +291,10 @@ public final class Argon2idKdf {
     return memory.availablePermits() >= kib;
   }
 
-  /** Argon2id, version 19, with no secret or associated data. Bouncy Castle clears its memory blocks afterwards. */
+  /**
+   * Argon2id, version 19, with no secret or associated data. Bouncy Castle clears its memory blocks
+   * afterwards.
+   */
   static byte[] argon2(byte[] password, byte[] salt, Params params, int keyBytes) {
     Argon2BytesGenerator generator = new Argon2BytesGenerator();
     generator.init(

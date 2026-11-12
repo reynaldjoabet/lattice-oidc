@@ -8,11 +8,11 @@ import com.lattice.oidc.security.AuditService;
 import com.lattice.oidc.security.PasswordPolicy;
 import com.lattice.oidc.security.RecoveryService;
 import com.lattice.oidc.stores.UserStore;
+import jakarta.inject.Inject;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletionStage;
-import jakarta.inject.Inject;
 import play.mvc.Http;
 import play.mvc.Result;
 
@@ -20,8 +20,8 @@ import play.mvc.Result;
  * Forgotten password (screens 30 to 33).
  *
  * <ul>
- *   <li>{@code GET|POST /account/recover}: ask for a reset link by email or login ID. The answer
- *       is the same whether or not an account matched.
+ *   <li>{@code GET|POST /account/recover}: ask for a reset link by email or login ID. The answer is
+ *       the same whether or not an account matched.
  *   <li>{@code GET|POST /account/reset}: choose a new password with the link's {@code token}; by
  *       default every session of the account ends, with back-channel logout to its apps.
  * </ul>
@@ -42,7 +42,8 @@ public final class RecoveryController extends BaseController {
   }
 
   public Result form(Http.Request request, String next) {
-    return page(200, views.html.oidc.recoverForm.render(PasskeyController.safeNext(next), request).body());
+    return page(
+        200, views.html.oidc.recoverForm.render(PasskeyController.safeNext(next), request).body());
   }
 
   public CompletionStage<Result> send(Http.Request request) {
@@ -57,11 +58,19 @@ public final class RecoveryController extends BaseController {
                   identifier,
                   next,
                   request.remoteAddress(),
-                  token -> base + com.lattice.oidc.controllers.routes.RecoveryController.resetForm(token).url());
+                  token ->
+                      base
+                          + com.lattice.oidc.controllers.routes.RecoveryController.resetForm(token)
+                              .url());
           audit.record(request, AuditService.Event.PASSWORD_RESET_REQUESTED, "sent", sent);
           return page(
               200,
-              views.html.oidc.recoverSent.render(next, recovery.linkLifetimeMinutes(), request).body());
+              views
+                  .html
+                  .oidc
+                  .recoverSent
+                  .render(next, recovery.linkLifetimeMinutes(), request)
+                  .body());
         });
   }
 
@@ -71,7 +80,14 @@ public final class RecoveryController extends BaseController {
     if (user.isEmpty()) {
       return expired(request);
     }
-    return page(200, views.html.oidc.resetForm.render(token, user.get().displayName(), List.of(), request).body());
+    return page(
+        200,
+        views
+            .html
+            .oidc
+            .resetForm
+            .render(token, user.get().displayName(), List.of(), request)
+            .body());
   }
 
   public CompletionStage<Result> reset(Http.Request request) {
@@ -85,13 +101,20 @@ public final class RecoveryController extends BaseController {
             return expired(request);
           }
           String password = Optional.ofNullable(Requests.first(form, "password")).orElse("");
-          List<String> problems = new java.util.ArrayList<>(PasswordPolicy.problems(password, user.get()));
+          List<String> problems =
+              new java.util.ArrayList<>(PasswordPolicy.problems(password, user.get()));
           if (!password.equals(Requests.first(form, "confirmation"))) {
             problems.add("The two passwords don't match.");
           }
           if (!problems.isEmpty()) {
             return page(
-                400, views.html.oidc.resetForm.render(token, user.get().displayName(), problems, request).body());
+                400,
+                views
+                    .html
+                    .oidc
+                    .resetForm
+                    .render(token, user.get().displayName(), problems, request)
+                    .body());
           }
           Optional<User> updated = recovery.reset(token, password);
           if (updated.isEmpty()) {
@@ -113,7 +136,10 @@ public final class RecoveryController extends BaseController {
               tokensRevoked);
           return page(
               200,
-              views.html.oidc.resetDone
+              views
+                  .html
+                  .oidc
+                  .resetDone
                   .render(PasskeyController.url(pending.get().next()), signOutEverywhere, request)
                   .body());
         });

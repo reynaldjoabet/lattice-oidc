@@ -14,7 +14,8 @@ import java.util.Optional;
 public interface AuditEventStore {
 
   /** Which records to return: optional event name and subject, older than {@code beforeId}. */
-  record Query(Optional<String> event, Optional<String> subject, Optional<Long> beforeId, int limit) {}
+  record Query(
+      Optional<String> event, Optional<String> subject, Optional<Long> beforeId, int limit) {}
 
   void append(Map<String, Object> record);
 

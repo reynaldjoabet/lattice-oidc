@@ -19,32 +19,34 @@ import java.util.Map;
 import java.util.TreeMap;
 
 /**
- * SHA-256 thumbprints of public keys and certificates: the values OAuth uses to bind a token to a key.
+ * SHA-256 thumbprints of public keys and certificates: the values OAuth uses to bind a token to a
+ * key.
  *
  * <ul>
  *   <li>{@link #of(PublicKey)} and {@link #ofJwk(Map)}: the JWK thumbprint of RFC 7638. It is the
- *       {@code jkt} of DPoP (RFC 9449: {@code dpop_jkt} and {@code cnf.jkt}), and a stable {@code kid}
- *       for a key that has none.
+ *       {@code jkt} of DPoP (RFC 9449: {@code dpop_jkt} and {@code cnf.jkt}), and a stable {@code
+ *       kid} for a key that has none.
  *   <li>{@link #ofCertificate(X509Certificate)}: the {@code x5t#S256} of a certificate, the {@code
  *       cnf} value of a certificate-bound token (RFC 8705, section 3.1).
  *   <li>{@link #matches(String, String)}: compares two thumbprints in constant time.
  * </ul>
  *
- * <p>Why the RFC 7638 thumbprint is computed here, not by hashing the JWK as received: two JWKs of the
- * same key can differ in member order, whitespace, extra members ({@code kid}, {@code use}, {@code
- * alg}) and, for a private key, the private members. RFC 7638 hashes a canonical form that only has
- * the required public members, in lexicographic order, with no whitespace. So the same key always
- * has the same thumbprint, and a private JWK has the thumbprint of its public half, never one that
- * depends on (and so reveals a hash of) its private part.
+ * <p>Why the RFC 7638 thumbprint is computed here, not by hashing the JWK as received: two JWKs of
+ * the same key can differ in member order, whitespace, extra members ({@code kid}, {@code use},
+ * {@code alg}) and, for a private key, the private members. RFC 7638 hashes a canonical form that
+ * only has the required public members, in lexicographic order, with no whitespace. So the same key
+ * always has the same thumbprint, and a private JWK has the thumbprint of its public half, never
+ * one that depends on (and so reveals a hash of) its private part.
  *
  * <p>Two encoding rules that hand-written versions often get wrong, and that make the thumbprint
  * differ from every other implementation's:
  *
  * <ul>
- *   <li>RSA {@code n} and {@code e} are unsigned and minimal: {@link BigInteger#toByteArray()} adds a
- *       zero sign byte when the top bit is set, which must be dropped (RFC 7518, section 6.3.1.1).
- *   <li>EC {@code x} and {@code y} are the full size of the curve's field, left-padded with zeros: a
- *       coordinate that happens to start with a zero byte keeps it (RFC 7518, section 6.2.1.2).
+ *   <li>RSA {@code n} and {@code e} are unsigned and minimal: {@link BigInteger#toByteArray()} adds
+ *       a zero sign byte when the top bit is set, which must be dropped (RFC 7518, section
+ *       6.3.1.1).
+ *   <li>EC {@code x} and {@code y} are the full size of the curve's field, left-padded with zeros:
+ *       a coordinate that happens to start with a zero byte keeps it (RFC 7518, section 6.2.1.2).
  * </ul>
  *
  * <p>Symmetric ({@code oct}) keys are refused: a thumbprint is published, and the thumbprint of a
@@ -83,8 +85,8 @@ public final class Thumbprints {
    * header of a DPoP proof), base64url-encoded. Only the required members are used, so {@code kid},
    * {@code use} and private members make no difference.
    *
-   * @throws IllegalArgumentException if the key type is missing, symmetric or unknown, or a required
-   *     member is missing or not a string
+   * @throws IllegalArgumentException if the key type is missing, symmetric or unknown, or a
+   *     required member is missing or not a string
    */
   public static String ofJwk(Map<String, ?> jwk) {
     Object kty = jwk.get("kty");
@@ -106,7 +108,8 @@ public final class Thumbprints {
       }
       members.put(name, text);
     }
-    return Digests.base64Url(Digests.sha256(canonicalJson(members).getBytes(StandardCharsets.UTF_8)));
+    return Digests.base64Url(
+        Digests.sha256(canonicalJson(members).getBytes(StandardCharsets.UTF_8)));
   }
 
   /** The {@code x5t#S256} of a certificate: SHA-256 of its DER encoding, base64url-encoded. */
@@ -119,8 +122,8 @@ public final class Thumbprints {
   }
 
   /**
-   * Whether two thumbprints are the same, in time that does not depend on where they differ. False if
-   * either is null.
+   * Whether two thumbprints are the same, in time that does not depend on where they differ. False
+   * if either is null.
    */
   public static boolean matches(String expected, String actual) {
     if (expected == null || actual == null) {
@@ -143,10 +146,14 @@ public final class Thumbprints {
       String crv = curveName(params);
       int size = (params.getCurve().getField().getFieldSize() + 7) / 8;
       return Map.of(
-          "kty", "EC",
-          "crv", crv,
-          "x", Digests.base64Url(fixedLength(ec.getW().getAffineX(), size)),
-          "y", Digests.base64Url(fixedLength(ec.getW().getAffineY(), size)));
+          "kty",
+          "EC",
+          "crv",
+          crv,
+          "x",
+          Digests.base64Url(fixedLength(ec.getW().getAffineX(), size)),
+          "y",
+          Digests.base64Url(fixedLength(ec.getW().getAffineY(), size)));
     }
     Okp okp = Okp.from(key.getEncoded());
     if (okp != null) {
@@ -182,8 +189,9 @@ public final class Thumbprints {
   }
 
   /**
-   * {"a":"…","b":"…"} with no whitespace. The values are base64url, curve names or key types, but are
-   * still escaped as JSON strings so that an odd value from a received JWK cannot change the structure.
+   * {"a":"…","b":"…"} with no whitespace. The values are base64url, curve names or key types, but
+   * are still escaped as JSON strings so that an odd value from a received JWK cannot change the
+   * structure.
    */
   private static String canonicalJson(TreeMap<String, String> members) {
     StringBuilder json = new StringBuilder("{");
@@ -239,9 +247,9 @@ public final class Thumbprints {
   }
 
   /**
-   * An OKP public key, read from its X.509 SubjectPublicKeyInfo encoding (RFC 8410). That encoding is
-   * the same from every provider, while the JDK's EdEC interfaces hold the key in a decoded form and
-   * Bouncy Castle's keys don't implement them, so reading the encoding works for both.
+   * An OKP public key, read from its X.509 SubjectPublicKeyInfo encoding (RFC 8410). That encoding
+   * is the same from every provider, while the JDK's EdEC interfaces hold the key in a decoded form
+   * and Bouncy Castle's keys don't implement them, so reading the encoding works for both.
    */
   private record Okp(String crv, byte[] x) {
 
@@ -269,10 +277,22 @@ public final class Thumbprints {
       String crv;
       int length;
       switch (spki[8] & 0xff) {
-        case 0x6e -> { crv = "X25519"; length = 32; }
-        case 0x6f -> { crv = "X448"; length = 56; }
-        case 0x70 -> { crv = "Ed25519"; length = 32; }
-        case 0x71 -> { crv = "Ed448"; length = 57; }
+        case 0x6e -> {
+          crv = "X25519";
+          length = 32;
+        }
+        case 0x6f -> {
+          crv = "X448";
+          length = 56;
+        }
+        case 0x70 -> {
+          crv = "Ed25519";
+          length = 32;
+        }
+        case 0x71 -> {
+          crv = "Ed448";
+          length = 57;
+        }
         default -> {
           return null;
         }

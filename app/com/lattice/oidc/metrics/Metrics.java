@@ -17,13 +17,13 @@ import io.micrometer.core.instrument.binder.system.ProcessorMetrics;
 import io.micrometer.core.instrument.binder.system.UptimeMetrics;
 import io.micrometer.prometheusmetrics.PrometheusConfig;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import play.inject.ApplicationLifecycle;
@@ -52,7 +52,8 @@ public final class Metrics {
   private static final Logger LOG = LoggerFactory.getLogger(Metrics.class);
   static final Duration REFRESH_INTERVAL = Duration.ofSeconds(30);
 
-  private final PrometheusMeterRegistry registry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+  private final PrometheusMeterRegistry registry =
+      new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
   private final List<Runnable> refreshers = new CopyOnWriteArrayList<>();
   private Instant refreshedAt = Instant.EPOCH;
 
@@ -64,7 +65,8 @@ public final class Metrics {
         .tag("version", BuildInfo.version)
         .tag("revision", shortRevision())
         .register(registry);
-    LOG.info("Lattice {} (commit {}, {})", BuildInfo.version, shortRevision(), BuildInfo.gitCommitTime);
+    LOG.info(
+        "Lattice {} (commit {}, {})", BuildInfo.version, shortRevision(), BuildInfo.gitCommitTime);
     new ClassLoaderMetrics().bindTo(registry);
     new JvmMemoryMetrics().bindTo(registry);
     new JvmThreadMetrics().bindTo(registry);
@@ -105,8 +107,8 @@ public final class Metrics {
   }
 
   /**
-   * Registers work that updates gauges from storage (a query, a Redis scan). It runs before a scrape,
-   * at most every {@link #REFRESH_INTERVAL}, so frequent scrapes don't load the database.
+   * Registers work that updates gauges from storage (a query, a Redis scan). It runs before a
+   * scrape, at most every {@link #REFRESH_INTERVAL}, so frequent scrapes don't load the database.
    */
   public void beforeScrape(Runnable refresher) {
     refreshers.add(refresher);
@@ -196,7 +198,9 @@ public final class Metrics {
         .increment();
   }
 
-  /** Records an LDAP search or bind; outcome is success, not_found, invalid_credentials or error. */
+  /**
+   * Records an LDAP search or bind; outcome is success, not_found, invalid_credentials or error.
+   */
   public void ldapOperation(String operation, String outcome, Duration duration) {
     Timer.builder("lattice.ldap.operations")
         .description("LDAP searches and binds")
@@ -252,10 +256,14 @@ public final class Metrics {
         .increment();
   }
 
-  /** Counts a reconnection of the PostgreSQL cache-invalidation listener (each one clears the cache). */
+  /**
+   * Counts a reconnection of the PostgreSQL cache-invalidation listener (each one clears the
+   * cache).
+   */
   public void invalidationListenerReconnect() {
     Counter.builder("lattice.cache.invalidation.reconnects")
-        .description("Reconnections of the cache-invalidation listener; each clears the local cache")
+        .description(
+            "Reconnections of the cache-invalidation listener; each clears the local cache")
         .register(registry)
         .increment();
   }

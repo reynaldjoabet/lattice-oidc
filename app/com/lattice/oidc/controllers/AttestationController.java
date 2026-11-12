@@ -10,16 +10,18 @@ import play.mvc.Result;
  * An implementation of the challenge endpoint defined in OAuth 2.0 Attestation-Based Client
  * Authentication: {@code POST /api/challenge}.
  *
- * @see <a href="https://datatracker.ietf.org/doc/draft-ietf-oauth-attestation-based-client-auth/">OAuth 2.0 Attestation-Based Client Authentication</a>
+ * @see <a
+ *     href="https://datatracker.ietf.org/doc/draft-ietf-oauth-attestation-based-client-auth/">OAuth
+ *     2.0 Attestation-Based Client Authentication</a>
  */
 public final class AttestationController extends BaseController {
 
   /**
    * The challenge endpoint.
    *
-   * <p>From OAuth 2.0 Attestation-Based Client Authentication: "A request for a Challenge is made by
-   * sending an HTTP POST request to the URL provided in the challenge_endpoint of the Authorization
-   * Server metadata."
+   * <p>From OAuth 2.0 Attestation-Based Client Authentication: "A request for a Challenge is made
+   * by sending an HTTP POST request to the URL provided in the challenge_endpoint of the
+   * Authorization Server metadata."
    */
   public CompletionStage<Result> challenge() {
     return async(

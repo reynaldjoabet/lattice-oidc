@@ -77,7 +77,10 @@ public class DeviceFlowTest {
     Result done =
         route(
             app,
-            withCsrf(post("/api/device/complete", Map.of("userCode", "WDJB-MJHT", "authorized", "true")))
+            withCsrf(
+                    post(
+                        "/api/device/complete",
+                        Map.of("userCode", "WDJB-MJHT", "authorized", "true")))
                 .session(page.session().data()));
     assertEquals(200, done.status());
     assertTrue(contentAsString(done).contains("Device connected"));
@@ -106,7 +109,10 @@ public class DeviceFlowTest {
     Result other =
         route(
             app,
-            withCsrf(post("/api/device/complete", Map.of("userCode", "WDJB-MJHT", "authorized", "true"))));
+            withCsrf(
+                post(
+                    "/api/device/complete",
+                    Map.of("userCode", "WDJB-MJHT", "authorized", "true"))));
     assertEquals(400, other.status());
     assertEquals(0, fake.count("deviceComplete"));
   }
@@ -117,12 +123,16 @@ public class DeviceFlowTest {
     Map<String, String> session = page.session().data();
     route(
         app,
-        withCsrf(post("/api/device/complete", Map.of("userCode", "WDJB-MJHT", "authorized", "true")))
+        withCsrf(
+                post("/api/device/complete", Map.of("userCode", "WDJB-MJHT", "authorized", "true")))
             .session(session));
     Result replay =
         route(
             app,
-            withCsrf(post("/api/device/complete", Map.of("userCode", "WDJB-MJHT", "authorized", "true")))
+            withCsrf(
+                    post(
+                        "/api/device/complete",
+                        Map.of("userCode", "WDJB-MJHT", "authorized", "true")))
                 .session(session));
     assertEquals(400, replay.status());
     assertEquals(1, fake.count("deviceComplete"));
@@ -138,12 +148,14 @@ public class DeviceFlowTest {
 
   @Test
   public void expiredAndUnknownCodesAreExplained() {
-    fake.answer("deviceVerification", args -> verification(DeviceVerificationResponse.Action.EXPIRED));
+    fake.answer(
+        "deviceVerification", args -> verification(DeviceVerificationResponse.Action.EXPIRED));
     Result expired = enterCode("john");
     assertEquals(400, expired.status());
     assertTrue(contentAsString(expired).contains("expired"));
 
-    fake.answer("deviceVerification", args -> verification(DeviceVerificationResponse.Action.NOT_EXIST));
+    fake.answer(
+        "deviceVerification", args -> verification(DeviceVerificationResponse.Action.NOT_EXIST));
     Result unknown = enterCode("john");
     assertEquals(404, unknown.status());
     assertTrue(contentAsString(unknown).contains("does not exist"));
@@ -152,7 +164,8 @@ public class DeviceFlowTest {
   @Test
   public void wrongCodesFromOneAddressAreLimited() {
     Helpers.stop(app);
-    fake.answer("deviceVerification", args -> verification(DeviceVerificationResponse.Action.NOT_EXIST));
+    fake.answer(
+        "deviceVerification", args -> verification(DeviceVerificationResponse.Action.NOT_EXIST));
     app = app(fake, Map.of("lattice.device.max-attempts", 2));
     Helpers.start(app);
     assertEquals(404, enterCode("john").status());
@@ -160,9 +173,11 @@ public class DeviceFlowTest {
     Result refused =
         route(
             app,
-            withCsrf(post("/api/device/verification", Map.of("userCode", "AAAA-BBBB"))).session(session));
+            withCsrf(post("/api/device/verification", Map.of("userCode", "AAAA-BBBB")))
+                .session(session));
     assertEquals(429, refused.status());
     assertTrue(contentAsString(refused).contains("Too many wrong codes"));
-    assertEquals("Authlete isn't asked once the limit is reached", 2, fake.count("deviceVerification"));
+    assertEquals(
+        "Authlete isn't asked once the limit is reached", 2, fake.count("deviceVerification"));
   }
 }

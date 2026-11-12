@@ -1,11 +1,11 @@
 package com.lattice.oidc.stores;
 
+import jakarta.inject.Singleton;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import jakarta.inject.Singleton;
 
 /** {@link IdentityLinkStore} in memory, for one server (development and tests). */
 @Singleton
@@ -15,12 +15,14 @@ public final class InMemoryIdentityLinkStore implements IdentityLinkStore {
 
   @Override
   public void link(String providerId, String externalSubject, String localSubject) {
-    byExternal.put(key(providerId, externalSubject), new Link(providerId, externalSubject, localSubject));
+    byExternal.put(
+        key(providerId, externalSubject), new Link(providerId, externalSubject, localSubject));
   }
 
   @Override
   public Optional<String> localSubject(String providerId, String externalSubject) {
-    return Optional.ofNullable(byExternal.get(key(providerId, externalSubject))).map(Link::localSubject);
+    return Optional.ofNullable(byExternal.get(key(providerId, externalSubject)))
+        .map(Link::localSubject);
   }
 
   @Override

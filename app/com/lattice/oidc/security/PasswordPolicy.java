@@ -17,12 +17,36 @@ public final class PasswordPolicy {
   /** A short list of the most common passwords of 12 or more characters. */
   private static final Set<String> COMMON =
       Set.of(
-          "123456789012", "1234567890123", "12345678901234", "123456789abc", "1q2w3e4r5t6y",
-          "qwertyuiop12", "qwertyuiopas", "qwerty123456", "password1234", "password12345",
-          "password123!", "passwordpassword", "iloveyou1234", "abcdefghijkl", "abc123456789",
-          "aaaaaaaaaaaa", "111111111111", "000000000000", "letmein12345", "welcome12345",
-          "changeme1234", "administrator", "football1234", "baseball1234", "trustno1trustno1",
-          "qazwsxedcrfv", "1qaz2wsx3edc", "zaq12wsxcde3", "princess1234", "sunshine1234");
+          "123456789012",
+          "1234567890123",
+          "12345678901234",
+          "123456789abc",
+          "1q2w3e4r5t6y",
+          "qwertyuiop12",
+          "qwertyuiopas",
+          "qwerty123456",
+          "password1234",
+          "password12345",
+          "password123!",
+          "passwordpassword",
+          "iloveyou1234",
+          "abcdefghijkl",
+          "abc123456789",
+          "aaaaaaaaaaaa",
+          "111111111111",
+          "000000000000",
+          "letmein12345",
+          "welcome12345",
+          "changeme1234",
+          "administrator",
+          "football1234",
+          "baseball1234",
+          "trustno1trustno1",
+          "qazwsxedcrfv",
+          "1qaz2wsx3edc",
+          "zaq12wsxcde3",
+          "princess1234",
+          "sunshine1234");
 
   private PasswordPolicy() {}
 
@@ -35,7 +59,9 @@ public final class PasswordPolicy {
     }
     String lower = password.toLowerCase(Locale.ROOT);
     if (COMMON.contains(lower)
-        || (user.loginId() != null && lower.contains(user.loginId().toLowerCase(Locale.ROOT)) && lower.length() < user.loginId().length() + 6)) {
+        || (user.loginId() != null
+            && lower.contains(user.loginId().toLowerCase(Locale.ROOT))
+            && lower.length() < user.loginId().length() + 6)) {
       problems.add("Choose a password that is less common.");
     }
     if (user.passwordHash() != null && PasswordHasher.check(password, user.passwordHash())) {

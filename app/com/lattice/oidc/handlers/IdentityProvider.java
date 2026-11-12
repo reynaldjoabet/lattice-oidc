@@ -46,10 +46,10 @@ import java.net.URISyntaxException;
 import java.util.Date;
 
 /**
- * An upstream OpenID Provider (Okta, Azure AD, Google, ...) that end-users can sign in with
- * through identity brokering. Lattice acts as a relying party of this provider: authorization code
- * flow with PKCE, state and nonce; ID token validation against the provider's keys; and a UserInfo
- * call whose subject must match the ID token. Keycloak's equivalent is {@code OIDCIdentityProvider}.
+ * An upstream OpenID Provider (Okta, Azure AD, Google, ...) that end-users can sign in with through
+ * identity brokering. Lattice acts as a relying party of this provider: authorization code flow
+ * with PKCE, state and nonce; ID token validation against the provider's keys; and a UserInfo call
+ * whose subject must match the ID token. Keycloak's equivalent is {@code OIDCIdentityProvider}.
  */
 public final class IdentityProvider {
 
@@ -81,7 +81,8 @@ public final class IdentityProvider {
         httpRequest.setReadTimeout(TIMEOUT_MILLIS);
         m = OIDCProviderMetadata.parse(httpRequest.send().getContentAsJSONObject());
       } catch (ParseException e) {
-        throw new IOException("Invalid discovery document from " + issuer + ": " + e.getMessage(), e);
+        throw new IOException(
+            "Invalid discovery document from " + issuer + ": " + e.getMessage(), e);
       }
       if (!issuer.equals(m.getIssuer())) {
         throw new IOException("Discovery document issuer mismatch: " + m.getIssuer());
@@ -108,20 +109,21 @@ public final class IdentityProvider {
 
   /** Builds the authentication request to redirect the browser to. */
   public URI authenticationRequest(String state, String verifier, String nonce) throws IOException {
-    AuthenticationRequest.Builder builder = new AuthenticationRequest.Builder(
-            new ResponseType("code"),
-            new Scope(
-                OIDCScopeValue.OPENID,
-                OIDCScopeValue.PROFILE,
-                OIDCScopeValue.EMAIL,
-                OIDCScopeValue.ADDRESS,
-                OIDCScopeValue.PHONE),
-            new ClientID(config.client().clientId()),
-            redirectUri())
-        .endpointURI(metadata().getAuthorizationEndpointURI())
-        .state(new State(state))
-        .nonce(new Nonce(nonce))
-        .codeChallenge(new CodeVerifier(verifier), CodeChallengeMethod.S256);
+    AuthenticationRequest.Builder builder =
+        new AuthenticationRequest.Builder(
+                new ResponseType("code"),
+                new Scope(
+                    OIDCScopeValue.OPENID,
+                    OIDCScopeValue.PROFILE,
+                    OIDCScopeValue.EMAIL,
+                    OIDCScopeValue.ADDRESS,
+                    OIDCScopeValue.PHONE),
+                new ClientID(config.client().clientId()),
+                redirectUri())
+            .endpointURI(metadata().getAuthorizationEndpointURI())
+            .state(new State(state))
+            .nonce(new Nonce(nonce))
+            .codeChallenge(new CodeVerifier(verifier), CodeChallengeMethod.S256);
     // Ask for auth_time, so that Lattice can pass on when the user really authenticated (an
     // essential claim must be returned; OIDC Core 5.5.1). Only where the provider supports the
     // claims parameter: without it, auth_time is used if the provider sends it anyway.
@@ -129,7 +131,10 @@ public final class IdentityProvider {
       builder.claims(
           new OIDCClaimsRequest()
               .withIDTokenClaimsRequest(
-                  new ClaimsSetRequest().add(new ClaimsSetRequest.Entry("auth_time").withClaimRequirement(ClaimRequirement.ESSENTIAL))));
+                  new ClaimsSetRequest()
+                      .add(
+                          new ClaimsSetRequest.Entry("auth_time")
+                              .withClaimRequirement(ClaimRequirement.ESSENTIAL))));
     }
     return builder.build().toURI();
   }

@@ -20,10 +20,14 @@ public class SecondFactorKeyRotationTest {
   private static Config config(String key, Object previous) {
     return ConfigFactory.parseMap(
             Map.of(
-                "lattice.second-factor.encryption-key", key,
-                "lattice.second-factor.previous-encryption-keys", previous,
-                "lattice.second-factor.acr", "mfa",
-                "lattice.ui.brand-name", "Lattice"))
+                "lattice.second-factor.encryption-key",
+                key,
+                "lattice.second-factor.previous-encryption-keys",
+                previous,
+                "lattice.second-factor.acr",
+                "mfa",
+                "lattice.ui.brand-name",
+                "Lattice"))
         .resolve();
   }
 
@@ -64,7 +68,9 @@ public class SecondFactorKeyRotationTest {
   public void aRemovedKeyIsNamedInTheError() {
     SecretCipher old = cipher("old-key", List.of());
     String sealed = old.encrypt("JBSWY3DPEHPK3PXP");
-    IllegalStateException error = assertThrows(IllegalStateException.class, () -> cipher("new-key", List.of()).decrypt(sealed));
+    IllegalStateException error =
+        assertThrows(
+            IllegalStateException.class, () -> cipher("new-key", List.of()).decrypt(sealed));
     assertTrue(error.getMessage(), error.getMessage().contains(old.currentKeyId()));
   }
 
@@ -72,15 +78,24 @@ public class SecondFactorKeyRotationTest {
   public void aSecretMovesToTheNewKeyWhenItIsUsed() {
     InMemorySecondFactorStore store = new InMemorySecondFactorStore();
     String secret = Totp.newSecret();
-    assertTrue(secondFactors(store, "old-key", List.of()).finishEnrollment("alice", secret, currentCode(secret)));
+    assertTrue(
+        secondFactors(store, "old-key", List.of())
+            .finishEnrollment("alice", secret, currentCode(secret)));
     // The enrolment used the current step; the next sign-in has to wait for a later one.
-    store.saveTotp(new SecondFactorStore.Totp("alice", store.totp("alice").orElseThrow().encryptedSecret(), Instant.now(), 0));
+    store.saveTotp(
+        new SecondFactorStore.Totp(
+            "alice", store.totp("alice").orElseThrow().encryptedSecret(), Instant.now(), 0));
 
     SecondFactors rotated = secondFactors(store, "new-key", List.of("old-key"));
     assertEquals(1, rotated.status().secretsUnderPreviousKeys());
     assertTrue(rotated.verifyCode("alice", currentCode(secret)));
     assertEquals(0, rotated.status().secretsUnderPreviousKeys());
-    assertTrue(store.totp("alice").orElseThrow().encryptedSecret().startsWith(rotated.status().keyId() + ":"));
+    assertTrue(
+        store
+            .totp("alice")
+            .orElseThrow()
+            .encryptedSecret()
+            .startsWith(rotated.status().keyId() + ":"));
     assertTrue("the used step is kept", store.totp("alice").orElseThrow().lastUsedStep() > 0);
   }
 
@@ -89,7 +104,9 @@ public class SecondFactorKeyRotationTest {
     InMemorySecondFactorStore store = new InMemorySecondFactorStore();
     SecretCipher old = cipher("old-key", List.of());
     for (int index = 0; index < 1_200; index++) {
-      store.saveTotp(new SecondFactorStore.Totp("user-" + index, old.encrypt(Totp.newSecret()), Instant.now(), 0));
+      store.saveTotp(
+          new SecondFactorStore.Totp(
+              "user-" + index, old.encrypt(Totp.newSecret()), Instant.now(), 0));
     }
     SecondFactors rotated = secondFactors(store, "new-key", "old-key");
     assertEquals(1_200, rotated.reencryptAll());

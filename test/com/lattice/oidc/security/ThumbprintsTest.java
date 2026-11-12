@@ -29,8 +29,8 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.Test;
 
 /**
- * Thumbprints against the RFC test vectors, and against nimbus-jose-jwt's implementation for keys of
- * every supported type, including the encoding corner cases.
+ * Thumbprints against the RFC test vectors, and against nimbus-jose-jwt's implementation for keys
+ * of every supported type, including the encoding corner cases.
  */
 public class ThumbprintsTest {
 
@@ -110,14 +110,17 @@ public class ThumbprintsTest {
 
   @Test
   public void everyOkpCurveIsRecognised() throws Exception {
-    Map<String, String> expected = Map.of("Ed25519", "Ed25519", "Ed448", "Ed448", "X25519", "X25519", "X448", "X448");
+    Map<String, String> expected =
+        Map.of("Ed25519", "Ed25519", "Ed448", "Ed448", "X25519", "X25519", "X448", "X448");
     Map<String, Integer> sizes = Map.of("Ed25519", 32, "Ed448", 57, "X25519", 32, "X448", 56);
     for (String algorithm : expected.keySet()) {
       Map<String, String> members = Thumbprints.publicMembers(generate(algorithm, 0).getPublic());
       assertEquals("OKP", members.get("kty"));
       assertEquals(expected.get(algorithm), members.get("crv"));
       assertEquals(
-          algorithm, (int) sizes.get(algorithm), Base64.getUrlDecoder().decode(members.get("x")).length);
+          algorithm,
+          (int) sizes.get(algorithm),
+          Base64.getUrlDecoder().decode(members.get("x")).length);
     }
   }
 
@@ -142,10 +145,17 @@ public class ThumbprintsTest {
 
   @Test
   public void symmetricAndIncompleteKeysAreRefused() {
-    assertThrows(IllegalArgumentException.class, () -> Thumbprints.ofJwk(Map.of("kty", "oct", "k", "c2VjcmV0")));
-    assertThrows(IllegalArgumentException.class, () -> Thumbprints.ofJwk(Map.of("kty", "EC", "crv", "P-256", "x", "AA")));
-    assertThrows(IllegalArgumentException.class, () -> Thumbprints.ofJwk(Map.of("n", "AA", "e", "AQAB")));
-    assertThrows(IllegalArgumentException.class, () -> Thumbprints.ofJwk(Map.of("kty", "RSA", "n", 1, "e", "AQAB")));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> Thumbprints.ofJwk(Map.of("kty", "oct", "k", "c2VjcmV0")));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> Thumbprints.ofJwk(Map.of("kty", "EC", "crv", "P-256", "x", "AA")));
+    assertThrows(
+        IllegalArgumentException.class, () -> Thumbprints.ofJwk(Map.of("n", "AA", "e", "AQAB")));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> Thumbprints.ofJwk(Map.of("kty", "RSA", "n", 1, "e", "AQAB")));
   }
 
   @Test
@@ -153,7 +163,8 @@ public class ThumbprintsTest {
     X509Certificate certificate =
         (X509Certificate)
             CertificateFactory.getInstance("X.509")
-                .generateCertificate(new ByteArrayInputStream(ObbTestPki.LEAF.getBytes(StandardCharsets.US_ASCII)));
+                .generateCertificate(
+                    new ByteArrayInputStream(ObbTestPki.LEAF.getBytes(StandardCharsets.US_ASCII)));
     assertEquals(
         X509CertUtils.computeSHA256Thumbprint(certificate).toString(),
         Thumbprints.ofCertificate(certificate));
@@ -176,9 +187,12 @@ public class ThumbprintsTest {
     return generator.generateKeyPair();
   }
 
-  private static KeyPair generateEc(String curve, java.security.Provider provider) throws Exception {
+  private static KeyPair generateEc(String curve, java.security.Provider provider)
+      throws Exception {
     KeyPairGenerator generator =
-        provider == null ? KeyPairGenerator.getInstance("EC") : KeyPairGenerator.getInstance("EC", provider);
+        provider == null
+            ? KeyPairGenerator.getInstance("EC")
+            : KeyPairGenerator.getInstance("EC", provider);
     generator.initialize(new ECGenParameterSpec(curve));
     return generator.generateKeyPair();
   }
@@ -188,6 +202,9 @@ public class ThumbprintsTest {
   }
 
   private static String nimbus(ECPublicKey key) throws Exception {
-    return new ECKey.Builder(Curve.forECParameterSpec(key.getParams()), key).build().computeThumbprint().toString();
+    return new ECKey.Builder(Curve.forECParameterSpec(key.getParams()), key)
+        .build()
+        .computeThumbprint()
+        .toString();
   }
 }

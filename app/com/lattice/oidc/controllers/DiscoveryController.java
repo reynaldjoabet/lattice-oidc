@@ -4,10 +4,10 @@ import com.authlete.common.api.AuthleteApiException;
 import com.authlete.common.dto.ServiceConfigurationRequest;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.common.Responses;
+import jakarta.inject.Inject;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletionStage;
-import jakarta.inject.Inject;
 import play.mvc.Http;
 import play.mvc.Result;
 
@@ -15,8 +15,9 @@ import play.mvc.Result;
  * Discovery endpoints.
  *
  * <ul>
- *   <li>{@code /.well-known/openid-configuration} and {@code /.well-known/oauth-authorization-server}:
- *       the OpenID Provider configuration / authorization server metadata.
+ *   <li>{@code /.well-known/openid-configuration} and {@code
+ *       /.well-known/oauth-authorization-server}: the OpenID Provider configuration / authorization
+ *       server metadata.
  *   <li>{@code /api/jwks}: the JSON Web Key Set document of this server.
  *   <li>{@code /.well-known/apple-app-site-association}: lets a mobile app claim the authorization
  *       endpoint (app-to-app flows).
@@ -27,11 +28,13 @@ import play.mvc.Result;
  * the endpoint is defined in "4.1. OpenID Provider Configuration Request": Issuer Identifier +
  * {@code /.well-known/openid-configuration}. The Issuer Identifier is a URL that identifies an
  * OpenID Provider, for example {@code https://example.com}; see {@code issuer} in OpenID Connect
- * Discovery 1.0 and {@code iss} in "2. ID Token" of OpenID Connect Core 1.0. It is configured in the
- * Authlete console; the default value is not appropriate for commercial use.
+ * Discovery 1.0 and {@code iss} in "2. ID Token" of OpenID Connect Core 1.0. It is configured in
+ * the Authlete console; the default value is not appropriate for commercial use.
  *
- * @see <a href="https://openid.net/specs/openid-connect-discovery-1_0.html">OpenID Connect Discovery 1.0</a>
- * @see <a href="https://www.rfc-editor.org/rfc/rfc8414.html">RFC 8414 OAuth 2.0 Authorization Server Metadata</a>
+ * @see <a href="https://openid.net/specs/openid-connect-discovery-1_0.html">OpenID Connect
+ *     Discovery 1.0</a>
+ * @see <a href="https://www.rfc-editor.org/rfc/rfc8414.html">RFC 8414 OAuth 2.0 Authorization
+ *     Server Metadata</a>
  */
 public final class DiscoveryController extends BaseController {
 
@@ -61,7 +64,10 @@ public final class DiscoveryController extends BaseController {
                   : api()
                       .getServiceConfiguration(
                           new ServiceConfigurationRequest()
-                              .setPretty(pretty == null || pretty.isEmpty() || Boolean.parseBoolean(pretty))
+                              .setPretty(
+                                  pretty == null
+                                      || pretty.isEmpty()
+                                      || Boolean.parseBoolean(pretty))
                               .setPatch(patch));
           // Metadata is public and cacheable (unlike protocol responses).
           return ok(json).as(Responses.JSON).withHeader(CACHE_CONTROL, "public, max-age=300");
@@ -72,8 +78,8 @@ public final class DiscoveryController extends BaseController {
    * JWK Set endpoint.
    *
    * <p>An OpenID Provider is required to expose its JSON Web Key Set document (RFC 7517) so that
-   * client applications can (1) verify signatures by the OP and (2) encrypt their requests to the OP.
-   * The URI of the endpoint is the value of {@code jwks_uri} in the OpenID Provider Metadata.
+   * client applications can (1) verify signatures by the OP and (2) encrypt their requests to the
+   * OP. The URI of the endpoint is the value of {@code jwks_uri} in the OpenID Provider Metadata.
    *
    * @see <a href="https://www.rfc-editor.org/rfc/rfc7517.html">RFC 7517, JSON Web Key (JWK)</a>
    */
@@ -81,7 +87,8 @@ public final class DiscoveryController extends BaseController {
     return async(
         () -> {
           try {
-            // Call Authlete's /api/service/jwks/get API. It returns the JWK Set of the service. Of course,
+            // Call Authlete's /api/service/jwks/get API. It returns the JWK Set of the service. Of
+            // course,
             // private keys are not included.
             String jwks = api().getServiceJwks(true, false);
             if (jwks == null || jwks.isEmpty()) {
@@ -105,7 +112,9 @@ public final class DiscoveryController extends BaseController {
    * Allows a mobile app to claim the authorization endpoint (universal links), for app-to-app
    * authorization flows. The JSON is taken from {@code lattice.apple-app-site-association}.
    *
-   * @see <a href="https://openid.net/2019/10/21/guest-blog-implementing-app-to-app-authorisation-in-oauth2-openid-connect/">Implementing App-to-App Authorisation in OAuth2/OpenID Connect</a>
+   * @see <a
+   *     href="https://openid.net/2019/10/21/guest-blog-implementing-app-to-app-authorisation-in-oauth2-openid-connect/">Implementing
+   *     App-to-App Authorisation in OAuth2/OpenID Connect</a>
    */
   public Result appleAppSiteAssociation() {
     return config

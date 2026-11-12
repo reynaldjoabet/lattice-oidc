@@ -47,14 +47,24 @@ public record LockoutBackoff(
 
   /** The defaults: 5 failures, then +1 minute per failure up to 15 minutes; never permanent. */
   public static final LockoutBackoff DEFAULT =
-      new LockoutBackoff(5, Duration.ofMinutes(1), Duration.ofMinutes(15), Duration.ofHours(12),
-          Duration.ofSeconds(1), Duration.ofMinutes(1), 0);
+      new LockoutBackoff(
+          5,
+          Duration.ofMinutes(1),
+          Duration.ofMinutes(15),
+          Duration.ofHours(12),
+          Duration.ofSeconds(1),
+          Duration.ofMinutes(1),
+          0);
 
   public LockoutBackoff {
     if (failureFactor < 1 || maxTemporaryLockouts < 0) {
-      throw new IllegalArgumentException("failureFactor must be at least 1 and maxTemporaryLockouts not negative");
+      throw new IllegalArgumentException(
+          "failureFactor must be at least 1 and maxTemporaryLockouts not negative");
     }
-    for (Duration duration : new Duration[] {waitIncrement, maxWait, failureReset, quickFailureWindow, quickFailureWait}) {
+    for (Duration duration :
+        new Duration[] {
+          waitIncrement, maxWait, failureReset, quickFailureWindow, quickFailureWait
+        }) {
       if (duration == null || duration.isNegative()) {
         throw new IllegalArgumentException("Durations must be set and not negative");
       }
@@ -70,16 +80,25 @@ public record LockoutBackoff(
    * @param lockedUntil no attempt is allowed before this; null if not locked
    * @param permanentlyLocked locked until an administrator unlocks it
    */
-  public record State(int failures, int temporaryLockouts, Instant lastFailure, Instant lockedUntil, boolean permanentlyLocked) {
+  public record State(
+      int failures,
+      int temporaryLockouts,
+      Instant lastFailure,
+      Instant lockedUntil,
+      boolean permanentlyLocked) {
     public static final State NONE = new State(0, 0, null, null, false);
   }
 
   /** Whether an attempt at {@code now} must be refused without checking the password. */
   public boolean isLocked(State state, Instant now) {
-    return state.permanentlyLocked() || (state.lockedUntil() != null && now.isBefore(state.lockedUntil()));
+    return state.permanentlyLocked()
+        || (state.lockedUntil() != null && now.isBefore(state.lockedUntil()));
   }
 
-  /** How long until an attempt is allowed again; zero if it is now, null if only an administrator can unlock. */
+  /**
+   * How long until an attempt is allowed again; zero if it is now, null if only an administrator
+   * can unlock.
+   */
   public Duration remaining(State state, Instant now) {
     if (state.permanentlyLocked()) {
       return null;
@@ -98,9 +117,15 @@ public record LockoutBackoff(
     int failures = (expired ? 0 : state.failures()) + 1;
     int lockouts = expired ? 0 : state.temporaryLockouts();
 
-    Duration wait = failures < failureFactor ? Duration.ZERO : waitIncrement.multipliedBy(1L + failures - failureFactor);
+    Duration wait =
+        failures < failureFactor
+            ? Duration.ZERO
+            : waitIncrement.multipliedBy(1L + failures - failureFactor);
     boolean quick = false;
-    if (wait.isZero() && sinceLast != null && !expired && sinceLast.compareTo(quickFailureWindow) < 0) {
+    if (wait.isZero()
+        && sinceLast != null
+        && !expired
+        && sinceLast.compareTo(quickFailureWindow) < 0) {
       wait = quickFailureWait;
       quick = true;
     }

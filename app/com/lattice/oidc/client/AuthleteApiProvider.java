@@ -2,10 +2,10 @@ package com.lattice.oidc.client;
 
 import com.authlete.common.api.AuthleteApi;
 import com.authlete.common.conf.AuthleteSimpleConfiguration;
-import com.lattice.oidc.metrics.MeteredAuthleteApi;
-import com.lattice.oidc.metrics.Metrics;
 import com.lattice.oidc.client.resilience.ResilienceConfig;
 import com.lattice.oidc.client.resilience.ResilientAuthleteApi;
+import com.lattice.oidc.metrics.MeteredAuthleteApi;
+import com.lattice.oidc.metrics.Metrics;
 import com.typesafe.config.Config;
 import io.micrometer.core.instrument.Gauge;
 import jakarta.inject.Inject;
@@ -28,7 +28,8 @@ public final class AuthleteApiProvider implements Provider<AuthleteApi> {
   private final AuthleteApi api;
 
   @Inject
-  public AuthleteApiProvider(AuthleteSettings settings, WSClient ws, Metrics metrics, Config config) {
+  public AuthleteApiProvider(
+      AuthleteSettings settings, WSClient ws, Metrics metrics, Config config) {
     AuthleteSimpleConfiguration configuration =
         new AuthleteSimpleConfiguration()
             .setApiVersion("V3")

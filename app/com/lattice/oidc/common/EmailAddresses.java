@@ -20,8 +20,8 @@ import java.util.regex.Pattern;
  *   <li>Domain: converted with IDNA ({@code bücher.example} becomes {@code xn--bcher-kva.example}),
  *       then checked as a host name: labels of letters, digits and hyphens, not starting or ending
  *       with a hyphen, at most 63 characters each and 253 in all. An address literal in brackets
- *       ({@code [192.0.2.1]}, {@code [IPv6:2001:db8::1]}) is allowed only if asked for, since
- *       mail to an IP address is almost always a mistake or an attempt to reach an internal host.
+ *       ({@code [192.0.2.1]}, {@code [IPv6:2001:db8::1]}) is allowed only if asked for, since mail
+ *       to an IP address is almost always a mistake or an attempt to reach an internal host.
  *   <li>The whole address at most 254 characters (the limit of an SMTP path, RFC 5321 and errata).
  *   <li>No control characters or line breaks anywhere, which could otherwise inject mail headers.
  * </ul>
@@ -33,13 +33,19 @@ public final class EmailAddresses {
   public static final int MAX_ADDRESS = 254;
 
   /** atext of RFC 5322, plus any non-ASCII character (RFC 6531). */
-  private static final Pattern ATOM = Pattern.compile("[A-Za-z0-9!#$%&'*+/=?^_`{|}~\\u0080-\\uFFFF-]+");
+  private static final Pattern ATOM =
+      Pattern.compile("[A-Za-z0-9!#$%&'*+/=?^_`{|}~\\u0080-\\uFFFF-]+");
 
-  /** A quoted string: printable characters other than {@code "} and {@code \}, or a backslash pair. */
-  private static final Pattern QUOTED = Pattern.compile("\"(?:[\\x20\\x21\\x23-\\x5B\\x5D-\\x7E\\u0080-\\uFFFF]|\\\\[\\x20-\\x7E])*\"");
+  /**
+   * A quoted string: printable characters other than {@code "} and {@code \}, or a backslash pair.
+   */
+  private static final Pattern QUOTED =
+      Pattern.compile(
+          "\"(?:[\\x20\\x21\\x23-\\x5B\\x5D-\\x7E\\u0080-\\uFFFF]|\\\\[\\x20-\\x7E])*\"");
 
   private static final Pattern LABEL = Pattern.compile("[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?");
-  private static final Pattern IPV4_LITERAL = Pattern.compile("\\[(25[0-5]|2[0-4]\\d|1?\\d?\\d)(\\.(25[0-5]|2[0-4]\\d|1?\\d?\\d)){3}]");
+  private static final Pattern IPV4_LITERAL =
+      Pattern.compile("\\[(25[0-5]|2[0-4]\\d|1?\\d?\\d)(\\.(25[0-5]|2[0-4]\\d|1?\\d?\\d)){3}]");
   private static final Pattern IPV6_LITERAL = Pattern.compile("\\[IPv6:[0-9A-Fa-f:.]{2,45}]");
 
   private EmailAddresses() {}
@@ -49,7 +55,10 @@ public final class EmailAddresses {
     return isValid(address, false);
   }
 
-  /** Whether {@code address} is valid; {@code allowAddressLiterals} also accepts {@code user@[192.0.2.1]}. */
+  /**
+   * Whether {@code address} is valid; {@code allowAddressLiterals} also accepts {@code
+   * user@[192.0.2.1]}.
+   */
   public static boolean isValid(String address, boolean allowAddressLiterals) {
     if (address == null || address.isEmpty() || address.length() > MAX_ADDRESS) {
       return false;
@@ -64,7 +73,8 @@ public final class EmailAddresses {
     if (at <= 0 || at == address.length() - 1) {
       return false;
     }
-    return isValidLocalPart(address.substring(0, at)) && isValidDomain(address.substring(at + 1), allowAddressLiterals);
+    return isValidLocalPart(address.substring(0, at))
+        && isValidDomain(address.substring(at + 1), allowAddressLiterals);
   }
 
   static boolean isValidLocalPart(String local) {
@@ -84,7 +94,8 @@ public final class EmailAddresses {
 
   static boolean isValidDomain(String domain, boolean allowAddressLiterals) {
     if (domain.startsWith("[")) {
-      return allowAddressLiterals && (IPV4_LITERAL.matcher(domain).matches() || IPV6_LITERAL.matcher(domain).matches());
+      return allowAddressLiterals
+          && (IPV4_LITERAL.matcher(domain).matches() || IPV6_LITERAL.matcher(domain).matches());
     }
     if (domain.endsWith(".")) {
       return false; // valid in DNS, but not in an address, and IDN.toASCII would silently drop it

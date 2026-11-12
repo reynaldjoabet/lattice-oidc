@@ -1,10 +1,10 @@
 package com.lattice.oidc.stores;
 
+import jakarta.inject.Singleton;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import jakarta.inject.Singleton;
 
 /** {@link CounterStore} in memory, for one server (development and tests). */
 @Singleton

@@ -1,12 +1,12 @@
 package com.lattice.oidc.filters;
 
 import com.lattice.oidc.common.Ids;
-import java.util.regex.Pattern;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import java.util.regex.Pattern;
 import org.apache.pekko.util.ByteString;
-import play.libs.typedmap.TypedKey;
 import play.libs.streams.Accumulator;
+import play.libs.typedmap.TypedKey;
 import play.mvc.EssentialAction;
 import play.mvc.EssentialFilter;
 import play.mvc.Http;
@@ -41,7 +41,10 @@ public final class RequestIdFilter extends EssentialFilter {
     return EssentialAction.of(
         request -> {
           String id =
-              request.header(HEADER).filter(v -> VALID.matcher(v).matches()).orElseGet(Ids::timeOrdered);
+              request
+                  .header(HEADER)
+                  .filter(v -> VALID.matcher(v).matches())
+                  .orElseGet(Ids::timeOrdered);
           Accumulator<ByteString, Result> action = next.apply(request.addAttr(REQUEST_ID, id));
           return action.map(r -> r.withHeader(HEADER, id), FilterSupport.DIRECT);
         });

@@ -6,8 +6,8 @@ import jakarta.inject.Singleton;
 import java.time.Duration;
 
 /**
- * {@link CounterStore} through JPA (entity {@link CounterEntity}, table {@code counters}). Windows use
- * the database clock.
+ * {@link CounterStore} through JPA (entity {@link CounterEntity}, table {@code counters}). Windows
+ * use the database clock.
  */
 @Singleton
 public final class JpaCounterStore implements CounterStore {
@@ -47,7 +47,9 @@ public final class JpaCounterStore implements CounterStore {
     return database.transaction(
         em ->
             em.createQuery(
-                    "select c.hits from CounterEntity c where c.counterKey = :key and c.windowEndsAt > instant", Long.class)
+                    "select c.hits from CounterEntity c where c.counterKey = :key and"
+                        + " c.windowEndsAt > instant",
+                    Long.class)
                 .setParameter("key", key)
                 .getResultStream()
                 .findFirst()
@@ -57,14 +59,20 @@ public final class JpaCounterStore implements CounterStore {
   @Override
   public void reset(String key) {
     database.transaction(
-        em -> em.createQuery("delete from CounterEntity c where c.counterKey = :key").setParameter("key", key).executeUpdate());
+        em ->
+            em.createQuery("delete from CounterEntity c where c.counterKey = :key")
+                .setParameter("key", key)
+                .executeUpdate());
   }
 
   @Override
   public void resetPrefix(String prefix) {
     // Native SQL: starts_with compares the prefix literally, without LIKE's wildcards.
     database.transaction(
-        em -> em.createNativeQuery("DELETE FROM counters WHERE starts_with(key, ?1)").setParameter(1, prefix).executeUpdate());
+        em ->
+            em.createNativeQuery("DELETE FROM counters WHERE starts_with(key, ?1)")
+                .setParameter(1, prefix)
+                .executeUpdate());
   }
 
   @Override
@@ -73,7 +81,8 @@ public final class JpaCounterStore implements CounterStore {
         em ->
             ((Number)
                     em.createNativeQuery(
-                            "SELECT count(*) FROM counters WHERE starts_with(key, ?1) AND count >= ?2 AND window_ends_at > now()")
+                            "SELECT count(*) FROM counters WHERE starts_with(key, ?1) AND count >="
+                                + " ?2 AND window_ends_at > now()")
                         .setParameter(1, prefix)
                         .setParameter(2, minimum)
                         .getSingleResult())

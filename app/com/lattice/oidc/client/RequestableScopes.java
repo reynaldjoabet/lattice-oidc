@@ -1,4 +1,3 @@
-
 package com.lattice.oidc.client;
 
 import java.io.Serializable;

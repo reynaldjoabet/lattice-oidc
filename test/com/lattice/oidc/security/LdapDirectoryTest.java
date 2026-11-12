@@ -63,7 +63,8 @@ public class LdapDirectoryTest {
   }
 
   /** A directory with Ada in it, listening on {@code listener}. */
-  private static InMemoryDirectoryServer directory(InMemoryListenerConfig listener) throws Exception {
+  private static InMemoryDirectoryServer directory(InMemoryListenerConfig listener)
+      throws Exception {
     InMemoryDirectoryServerConfig config = new InMemoryDirectoryServerConfig("dc=example,dc=com");
     config.addAdditionalBindCredentials("cn=lattice,dc=example,dc=com", "service-secret");
     config.setListenerConfigs(listener);
@@ -95,9 +96,15 @@ public class LdapDirectoryTest {
   @Test
   public void aDirectoryUserSignsInAndIsCopiedIntoLattice() {
     Result signedIn =
-        route(app, withCsrf(post("/account/login", Map.of("loginId", "ada", "password", "analytical-engine", "next", "account"))));
+        route(
+            app,
+            withCsrf(
+                post(
+                    "/account/login",
+                    Map.of("loginId", "ada", "password", "analytical-engine", "next", "account"))));
     assertEquals(303, signedIn.status());
-    String account = contentAsString(route(app, get("/account").session(signedIn.session().data())));
+    String account =
+        contentAsString(route(app, get("/account").session(signedIn.session().data())));
     assertTrue(account.contains("Ada Lovelace"));
     assertTrue(account.contains("managed by your organisation"));
 
@@ -110,9 +117,15 @@ public class LdapDirectoryTest {
 
   @Test
   public void theDirectoryChecksThePassword() {
-    assertEquals(LoginService.Outcome.INVALID_CREDENTIALS, login().authenticate("ada", "wrong").outcome());
-    assertEquals(LoginService.Outcome.SUCCESS, login().authenticate("ada@example.com", "analytical-engine").outcome());
-    assertEquals("unknown in the directory too", LoginService.Outcome.INVALID_CREDENTIALS, login().authenticate("nobody", "x").outcome());
+    assertEquals(
+        LoginService.Outcome.INVALID_CREDENTIALS, login().authenticate("ada", "wrong").outcome());
+    assertEquals(
+        LoginService.Outcome.SUCCESS,
+        login().authenticate("ada@example.com", "analytical-engine").outcome());
+    assertEquals(
+        "unknown in the directory too",
+        LoginService.Outcome.INVALID_CREDENTIALS,
+        login().authenticate("nobody", "x").outcome());
   }
 
   @Test
@@ -131,18 +144,27 @@ public class LdapDirectoryTest {
     login().authenticate("ada", "analytical-engine");
     directory.modify(ADA_DN, new Modification(ModificationType.REPLACE, "cn", "Augusta Ada King"));
     login().authenticate("ada", "analytical-engine");
-    assertEquals("Augusta Ada King", app.injector().instanceOf(UserStore.class).byLoginId("ada").orElseThrow().getClaim("name", null));
+    assertEquals(
+        "Augusta Ada King",
+        app.injector()
+            .instanceOf(UserStore.class)
+            .byLoginId("ada")
+            .orElseThrow()
+            .getClaim("name", null));
   }
 
   @Test
   public void anUnreachableDirectoryIsNotAWrongPassword() {
     LoginService login = login();
     directory.shutDown(true);
-    assertEquals(LoginService.Outcome.UNAVAILABLE, login.authenticate("ada", "analytical-engine").outcome());
+    assertEquals(
+        LoginService.Outcome.UNAVAILABLE, login.authenticate("ada", "analytical-engine").outcome());
     assertEquals(
         "an outage doesn't count towards the lockout",
         0L,
-        app.injector().instanceOf(com.lattice.oidc.stores.CounterStore.class).count(LoginService.ACCOUNT_PREFIX + "ada"));
+        app.injector()
+            .instanceOf(com.lattice.oidc.stores.CounterStore.class)
+            .count(LoginService.ACCOUNT_PREFIX + "ada"));
   }
 
   @Test
@@ -152,22 +174,33 @@ public class LdapDirectoryTest {
           app(
               new FakeAuthleteApi(),
               Map.of(
-                  "lattice.ldap.enabled", true,
-                  "lattice.ldap.url", "ldap://127.0.0.1:" + directory.getListenPort(),
-                  "lattice.ldap.bind-dn", "cn=lattice,dc=example,dc=com",
-                  "lattice.ldap.bind-password", "wrong-secret",
-                  // A second app runs alongside the one from start(): it needs its own cluster port.
-                  "pekko.remote.artery.canonical.port", 0));
+                  "lattice.ldap.enabled",
+                  true,
+                  "lattice.ldap.url",
+                  "ldap://127.0.0.1:" + directory.getListenPort(),
+                  "lattice.ldap.bind-dn",
+                  "cn=lattice,dc=example,dc=com",
+                  "lattice.ldap.bind-password",
+                  "wrong-secret",
+                  // A second app runs alongside the one from start(): it needs its own cluster
+                  // port.
+                  "pekko.remote.artery.canonical.port",
+                  0));
       Helpers.stop(broken);
       org.junit.Assert.fail("startup should fail with a wrong bind password");
     } catch (com.google.inject.CreationException expected) {
-      assertTrue(expected.getMessage(), expected.getMessage().contains("Could not connect to the LDAP directory"));
+      assertTrue(
+          expected.getMessage(),
+          expected.getMessage().contains("Could not connect to the LDAP directory"));
     }
   }
 
   // ---------------------------------------------------------------- TLS
 
-  /** A directory on LDAPS with a self-signed certificate for {@code host} only, and that certificate as PEM. */
+  /**
+   * A directory on LDAPS with a self-signed certificate for {@code host} only, and that certificate
+   * as PEM.
+   */
   private record TlsDirectory(InMemoryDirectoryServer server, File certificate) {}
 
   private static TlsDirectory tlsDirectory(String host) throws Exception {
@@ -175,22 +208,47 @@ public class LdapDirectoryTest {
     File keyStore = folder.resolve("server.p12").toFile();
     File certificate = folder.resolve("server.pem").toFile();
     manageCertificates(
-        "generate-self-signed-certificate", "--keystore", keyStore.getPath(), "--keystore-password", "changeit",
-        "--keystore-type", "PKCS12", "--alias", "server-cert", "--subject-dn", "CN=" + host,
-        "--subject-alternative-name-dns", host);
+        "generate-self-signed-certificate",
+        "--keystore",
+        keyStore.getPath(),
+        "--keystore-password",
+        "changeit",
+        "--keystore-type",
+        "PKCS12",
+        "--alias",
+        "server-cert",
+        "--subject-dn",
+        "CN=" + host,
+        "--subject-alternative-name-dns",
+        host);
     manageCertificates(
-        "export-certificate", "--keystore", keyStore.getPath(), "--keystore-password", "changeit", "--alias", "server-cert",
-        "--output-format", "PEM", "--output-file", certificate.getPath());
-    SSLUtil server = new SSLUtil(new KeyStoreKeyManager(keyStore, "changeit".toCharArray(), "PKCS12", "server-cert"), null);
+        "export-certificate",
+        "--keystore",
+        keyStore.getPath(),
+        "--keystore-password",
+        "changeit",
+        "--alias",
+        "server-cert",
+        "--output-format",
+        "PEM",
+        "--output-file",
+        certificate.getPath());
+    SSLUtil server =
+        new SSLUtil(
+            new KeyStoreKeyManager(keyStore, "changeit".toCharArray(), "PKCS12", "server-cert"),
+            null);
     InMemoryDirectoryServer directory =
-        directory(InMemoryListenerConfig.createLDAPSConfig("ldaps", null, 0, server.createSSLServerSocketFactory(), null));
+        directory(
+            InMemoryListenerConfig.createLDAPSConfig(
+                "ldaps", null, 0, server.createSSLServerSocketFactory(), null));
     directory.startListening();
     return new TlsDirectory(directory, certificate);
   }
 
   private static void manageCertificates(String... arguments) {
     ByteArrayOutputStream output = new ByteArrayOutputStream();
-    ResultCode result = ManageCertificates.main(new ByteArrayInputStream(new byte[0]), output, output, arguments);
+    ResultCode result =
+        ManageCertificates.main(new ByteArrayInputStream(new byte[0]), output, output, arguments);
     assertEquals(output.toString(), ResultCode.SUCCESS, result);
   }
 
@@ -198,23 +256,32 @@ public class LdapDirectoryTest {
     return app(
         new FakeAuthleteApi(),
         Map.of(
-            "lattice.ldap.enabled", true,
-            "lattice.ldap.url", "ldaps://" + host + ":" + port,
-            "lattice.ldap.trust-store", trustStore,
-            "lattice.ldap.bind-dn", "cn=lattice,dc=example,dc=com",
-            "lattice.ldap.bind-password", "service-secret",
-            "lattice.ldap.base-dn", "ou=people,dc=example,dc=com",
-            "pekko.remote.artery.canonical.port", 0));
+            "lattice.ldap.enabled",
+            true,
+            "lattice.ldap.url",
+            "ldaps://" + host + ":" + port,
+            "lattice.ldap.trust-store",
+            trustStore,
+            "lattice.ldap.bind-dn",
+            "cn=lattice,dc=example,dc=com",
+            "lattice.ldap.bind-password",
+            "service-secret",
+            "lattice.ldap.base-dn",
+            "ou=people,dc=example,dc=com",
+            "pekko.remote.artery.canonical.port",
+            0));
   }
 
   @Test
   public void aDirectoryWithItsOwnCaIsTrustedThroughTheTrustStore() throws Exception {
     TlsDirectory tls = tlsDirectory("localhost");
-    Application secured = ldapsApp("localhost", tls.server().getListenPort(), tls.certificate().getPath());
+    Application secured =
+        ldapsApp("localhost", tls.server().getListenPort(), tls.certificate().getPath());
     try {
       Helpers.start(secured);
       LoginService login = secured.injector().instanceOf(LoginService.class);
-      assertEquals(LoginService.Outcome.SUCCESS, login.authenticate("ada", "analytical-engine").outcome());
+      assertEquals(
+          LoginService.Outcome.SUCCESS, login.authenticate("ada", "analytical-engine").outcome());
     } finally {
       Helpers.stop(secured);
       tls.server().shutDown(true);
@@ -225,8 +292,13 @@ public class LdapDirectoryTest {
   public void anUntrustedCertificateStopsStartup() throws Exception {
     TlsDirectory tls = tlsDirectory("localhost");
     try {
-      CreationException error = assertThrows(CreationException.class, () -> ldapsApp("localhost", tls.server().getListenPort(), ""));
-      assertTrue(error.getMessage(), error.getMessage().contains("Could not connect to the LDAP directory"));
+      CreationException error =
+          assertThrows(
+              CreationException.class,
+              () -> ldapsApp("localhost", tls.server().getListenPort(), ""));
+      assertTrue(
+          error.getMessage(),
+          error.getMessage().contains("Could not connect to the LDAP directory"));
     } finally {
       tls.server().shutDown(true);
     }
@@ -239,8 +311,12 @@ public class LdapDirectoryTest {
       // Trusted, but issued for ldap.example.com.
       CreationException error =
           assertThrows(
-              CreationException.class, () -> ldapsApp("localhost", tls.server().getListenPort(), tls.certificate().getPath()));
-      assertTrue(error.getMessage(), error.getMessage().contains("Could not connect to the LDAP directory"));
+              CreationException.class,
+              () ->
+                  ldapsApp("localhost", tls.server().getListenPort(), tls.certificate().getPath()));
+      assertTrue(
+          error.getMessage(),
+          error.getMessage().contains("Could not connect to the LDAP directory"));
     } finally {
       tls.server().shutDown(true);
     }
@@ -248,21 +324,31 @@ public class LdapDirectoryTest {
 
   @Test
   public void theConsoleShowsTheDirectory() {
-    LdapDirectory.Status status = app.injector().instanceOf(LdapDirectory.class).status().orElseThrow();
+    LdapDirectory.Status status =
+        app.injector().instanceOf(LdapDirectory.class).status().orElseThrow();
     assertTrue(status.reachable());
     assertEquals(0, status.signIns());
     login().authenticate("ada", "analytical-engine");
-    assertEquals(1, app.injector().instanceOf(LdapDirectory.class).status().orElseThrow().signIns());
+    assertEquals(
+        1, app.injector().instanceOf(LdapDirectory.class).status().orElseThrow().signIns());
     login().authenticate("ada", "wrong");
     String metrics = app.injector().instanceOf(com.lattice.oidc.metrics.Metrics.class).scrape();
-    assertTrue(metrics.contains("lattice_ldap_operations_seconds_count{operation=\"bind\",outcome=\"success\"} 1"));
-    assertTrue(metrics.contains("lattice_ldap_operations_seconds_count{operation=\"bind\",outcome=\"invalid_credentials\"} 1"));
-    assertTrue(metrics.contains("lattice_ldap_operations_seconds_count{operation=\"search\",outcome=\"success\"} 2"));
+    assertTrue(
+        metrics.contains(
+            "lattice_ldap_operations_seconds_count{operation=\"bind\",outcome=\"success\"} 1"));
+    assertTrue(
+        metrics.contains(
+            "lattice_ldap_operations_seconds_count{operation=\"bind\",outcome=\"invalid_credentials\"}"
+                + " 1"));
+    assertTrue(
+        metrics.contains(
+            "lattice_ldap_operations_seconds_count{operation=\"search\",outcome=\"success\"} 2"));
     assertTrue(metrics.contains("lattice_ldap_connections_maximum 10.0"));
 
     directory.shutDown(true);
     login().authenticate("ada", "analytical-engine");
-    LdapDirectory.Status down = app.injector().instanceOf(LdapDirectory.class).status().orElseThrow();
+    LdapDirectory.Status down =
+        app.injector().instanceOf(LdapDirectory.class).status().orElseThrow();
     assertFalse(down.reachable());
     assertTrue(down.lastError().orElseThrow().startsWith("LDAP search failed"));
   }

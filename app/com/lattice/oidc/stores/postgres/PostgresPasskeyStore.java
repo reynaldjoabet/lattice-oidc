@@ -3,6 +3,8 @@ package com.lattice.oidc.stores.postgres;
 import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.models.Passkey;
 import com.lattice.oidc.stores.PasskeyStore;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import java.security.SecureRandom;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -11,17 +13,18 @@ import java.util.Base64;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 
-/** {@link PasskeyStore} in PostgreSQL (tables {@code passkeys}, {@code user_handles}, {@code passkey_offers}). */
+/**
+ * {@link PasskeyStore} in PostgreSQL (tables {@code passkeys}, {@code user_handles}, {@code
+ * passkey_offers}).
+ */
 @Singleton
 public final class PostgresPasskeyStore implements PasskeyStore {
 
   private static final SecureRandom RANDOM = new SecureRandom();
   private static final String COLUMNS =
-      "id, subject, user_handle, public_key_cose, signature_count, name, created_at, last_used_at, backed_up,"
-          + " transports::text AS transports";
+      "id, subject, user_handle, public_key_cose, signature_count, name, created_at, last_used_at,"
+          + " backed_up, transports::text AS transports";
 
   private final PostgresDatabase database;
 
@@ -32,7 +35,8 @@ public final class PostgresPasskeyStore implements PasskeyStore {
 
   private static Passkey passkey(ResultSet row) throws SQLException {
     LinkedHashSet<String> transports = new LinkedHashSet<>();
-    JsonHelpers.readList(row.getString("transports")).forEach(transport -> transports.add(String.valueOf(transport)));
+    JsonHelpers.readList(row.getString("transports"))
+        .forEach(transport -> transports.add(String.valueOf(transport)));
     return new Passkey(
         row.getString("id"),
         row.getString("subject"),
@@ -49,14 +53,19 @@ public final class PostgresPasskeyStore implements PasskeyStore {
   @Override
   public List<Passkey> forSubject(String subject) {
     return database.query(
-        "SELECT " + COLUMNS + " FROM passkeys WHERE subject = ? ORDER BY created_at", PostgresPasskeyStore::passkey, subject);
+        "SELECT " + COLUMNS + " FROM passkeys WHERE subject = ? ORDER BY created_at",
+        PostgresPasskeyStore::passkey,
+        subject);
   }
 
   @Override
   public Optional<Passkey> byId(String credentialId) {
     return credentialId == null
         ? Optional.empty()
-        : database.queryOne("SELECT " + COLUMNS + " FROM passkeys WHERE id = ?", PostgresPasskeyStore::passkey, credentialId);
+        : database.queryOne(
+            "SELECT " + COLUMNS + " FROM passkeys WHERE id = ?",
+            PostgresPasskeyStore::passkey,
+            credentialId);
   }
 
   @Override
@@ -94,15 +103,19 @@ public final class PostgresPasskeyStore implements PasskeyStore {
     String candidate = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     // Keeps the existing handle if another request (on any server) created one first.
     database.update(
-        "INSERT INTO user_handles (subject, handle) VALUES (?, ?) ON CONFLICT (subject) DO NOTHING", subject, candidate);
+        "INSERT INTO user_handles (subject, handle) VALUES (?, ?) ON CONFLICT (subject) DO NOTHING",
+        subject,
+        candidate);
     return database
-        .queryOne("SELECT handle FROM user_handles WHERE subject = ?", row -> row.getString(1), subject)
+        .queryOne(
+            "SELECT handle FROM user_handles WHERE subject = ?", row -> row.getString(1), subject)
         .orElseThrow();
   }
 
   @Override
   public Optional<String> subjectForUserHandle(String userHandle) {
-    return database.queryOne("SELECT subject FROM user_handles WHERE handle = ?", row -> row.getString(1), userHandle);
+    return database.queryOne(
+        "SELECT subject FROM user_handles WHERE handle = ?", row -> row.getString(1), userHandle);
   }
 
   @Override
@@ -120,11 +133,14 @@ public final class PostgresPasskeyStore implements PasskeyStore {
         INSERT INTO passkey_offers (subject, offered_at) VALUES (?, ?)
         ON CONFLICT (subject) DO UPDATE SET offered_at = EXCLUDED.offered_at
         """,
-        subject, at);
+        subject,
+        at);
   }
 
   @Override
   public long accountsWithPasskeys() {
-    return database.queryOne("SELECT count(DISTINCT subject) FROM passkeys", row -> row.getLong(1)).orElse(0L);
+    return database
+        .queryOne("SELECT count(DISTINCT subject) FROM passkeys", row -> row.getLong(1))
+        .orElse(0L);
   }
 }

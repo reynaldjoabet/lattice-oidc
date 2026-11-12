@@ -11,78 +11,81 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.NamedQueries;
 import jakarta.persistence.NamedQuery;
 import jakarta.persistence.Table;
-
 import org.hibernate.annotations.Nationalized;
 
 @NamedQueries({
-        @NamedQuery(name = "deleteRoleAttributesByNameAndUser", query = "delete from RoleAttributeEntity attr where attr.role.id = :roleId and attr.name = :name"),
+  @NamedQuery(
+      name = "deleteRoleAttributesByNameAndUser",
+      query =
+          "delete from RoleAttributeEntity attr where attr.role.id = :roleId and attr.name ="
+              + " :name"),
 })
 @Table(name = "ROLE_ATTRIBUTE")
 @Entity
 public class RoleAttributeEntity {
 
-    @Id
-    @Column(name = "ID", length = 36)
-    @Access(AccessType.PROPERTY)
-    protected String id;
+  @Id
+  @Column(name = "ID", length = 36)
+  @Access(AccessType.PROPERTY)
+  protected String id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "ROLE_ID")
-    protected RoleEntity role;
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "ROLE_ID")
+  protected RoleEntity role;
 
-    @Column(name = "NAME")
-    protected String name;
+  @Column(name = "NAME")
+  protected String name;
 
-    @Nationalized
-    @Column(name = "VALUE")
-    protected String value;
+  @Nationalized
+  @Column(name = "VALUE")
+  protected String value;
 
-    public String getId() {
-        return id;
+  public String getId() {
+    return id;
+  }
+
+  public void setId(String id) {
+    this.id = id;
+  }
+
+  public String getName() {
+    return name;
+  }
+
+  public void setName(String name) {
+    this.name = name;
+  }
+
+  public String getValue() {
+    return value;
+  }
+
+  public void setValue(String value) {
+    this.value = value;
+  }
+
+  public RoleEntity getRole() {
+    return role;
+  }
+
+  public void setRole(RoleEntity role) {
+    this.role = role;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    boolean result = false;
+
+    if (o instanceof RoleAttributeEntity) {
+      RoleAttributeEntity otherRole = (RoleAttributeEntity) o;
+      result = id.equals(otherRole.id);
     }
 
-    public void setId(String id) {
-        this.id = id;
-    }
+    return result;
+  }
 
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public String getValue() {
-        return value;
-    }
-
-    public void setValue(String value) {
-        this.value = value;
-    }
-
-    public RoleEntity getRole() {
-        return role;
-    }
-
-    public void setRole(RoleEntity role) {
-        this.role = role;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        boolean result = false;
-
-        if (o instanceof RoleAttributeEntity) {
-            RoleAttributeEntity otherRole = (RoleAttributeEntity) o;
-            result = id.equals(otherRole.id);
-        }
-
-        return result;
-    }
-
-    @Override
-    public int hashCode() {
-        return id.hashCode();
-    }
+  @Override
+  public int hashCode() {
+    return id.hashCode();
+  }
 }

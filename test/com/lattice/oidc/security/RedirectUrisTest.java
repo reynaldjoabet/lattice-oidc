@@ -66,7 +66,8 @@ public class RedirectUrisTest {
   public void loopbackIpsMayUseAnyPort() {
     assertTrue(RedirectUris.matches(List.of("http://127.0.0.1/cb"), "http://127.0.0.1:51004/cb"));
     assertTrue(RedirectUris.matches(List.of("http://[::1]:80/cb"), "http://[::1]:61000/cb"));
-    assertFalse(RedirectUris.matches(List.of("http://127.0.0.1/cb"), "http://127.0.0.1:51004/other"));
+    assertFalse(
+        RedirectUris.matches(List.of("http://127.0.0.1/cb"), "http://127.0.0.1:51004/other"));
     assertFalse(RedirectUris.matches(List.of("http://localhost/cb"), "http://localhost:51004/cb"));
     assertFalse(RedirectUris.matches(List.of("https://127.0.0.1/cb"), "https://127.0.0.1:8443/cb"));
   }
@@ -74,6 +75,8 @@ public class RedirectUrisTest {
   /** Even a registered URI never matches if it would be refused now. */
   @Test
   public void aRegisteredButUnsafeUriNeverMatches() {
-    assertFalse(RedirectUris.matches(List.of("https://app.example/cb?code=x"), "https://app.example/cb?code=x"));
+    assertFalse(
+        RedirectUris.matches(
+            List.of("https://app.example/cb?code=x"), "https://app.example/cb?code=x"));
   }
 }

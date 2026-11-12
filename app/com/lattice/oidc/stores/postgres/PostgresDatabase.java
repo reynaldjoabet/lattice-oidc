@@ -4,6 +4,8 @@ import com.lattice.oidc.metrics.Metrics;
 import com.typesafe.config.Config;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -17,8 +19,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import javax.sql.DataSource;
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 import org.flywaydb.core.Flyway;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,7 +62,12 @@ public final class PostgresDatabase {
           dataSource.close();
           return CompletableFuture.completedFuture(null);
         });
-    var result = Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").load().migrate();
+    var result =
+        Flyway.configure()
+            .dataSource(dataSource)
+            .locations("classpath:db/migration")
+            .load()
+            .migrate();
     LOG.info("PostgreSQL storage ready (schema version {})", result.targetSchemaVersion);
   }
 
@@ -124,7 +129,9 @@ public final class PostgresDatabase {
     return value == null ? null : value.toInstant();
   }
 
-  /** A failed statement. The SQL is included; parameter values are not, since they may be secret. */
+  /**
+   * A failed statement. The SQL is included; parameter values are not, since they may be secret.
+   */
   public static final class StorageException extends RuntimeException {
     StorageException(String sql, SQLException cause) {
       super("PostgreSQL statement failed: " + sql.strip().replaceAll("\\s+", " "), cause);

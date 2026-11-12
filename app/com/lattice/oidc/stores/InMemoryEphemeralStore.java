@@ -1,5 +1,6 @@
 package com.lattice.oidc.stores;
 
+import jakarta.inject.Singleton;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
@@ -8,7 +9,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
-import jakarta.inject.Singleton;
 
 /**
  * {@link EphemeralStore} in memory, for one server. Each namespace holds at most {@link
@@ -40,7 +40,8 @@ public final class InMemoryEphemeralStore implements EphemeralStore {
   }
 
   @Override
-  public void put(String namespace, String key, String owner, String subject, String json, Duration ttl) {
+  public void put(
+      String namespace, String key, String owner, String subject, String json, Duration ttl) {
     Map<String, Entry> entries = namespace(namespace);
     entries.put(key, new Entry(namespace, key, owner, subject, json, Instant.now().plus(ttl)));
     if (entries.size() > maxPerNamespace) {
@@ -48,7 +49,9 @@ public final class InMemoryEphemeralStore implements EphemeralStore {
     }
   }
 
-  /** Set while one thread is evicting: the others carry on, and the cap holds again a moment later. */
+  /**
+   * Set while one thread is evicting: the others carry on, and the cap holds again a moment later.
+   */
   private final AtomicBoolean evicting = new AtomicBoolean();
 
   /**
@@ -96,7 +99,8 @@ public final class InMemoryEphemeralStore implements EphemeralStore {
     if (key == null) {
       return Optional.empty();
     }
-    return Optional.ofNullable(namespace(namespace).remove(key)).filter(InMemoryEphemeralStore::live);
+    return Optional.ofNullable(namespace(namespace).remove(key))
+        .filter(InMemoryEphemeralStore::live);
   }
 
   @Override
@@ -118,14 +122,16 @@ public final class InMemoryEphemeralStore implements EphemeralStore {
   public int deleteBySubject(String namespace, String subject) {
     Map<String, Entry> entries = namespace(namespace);
     int[] removed = {0};
-    entries.values().removeIf(
-        entry -> {
-          boolean match = subject != null && subject.equals(entry.subject());
-          if (match) {
-            removed[0]++;
-          }
-          return match;
-        });
+    entries
+        .values()
+        .removeIf(
+            entry -> {
+              boolean match = subject != null && subject.equals(entry.subject());
+              if (match) {
+                removed[0]++;
+              }
+              return match;
+            });
     return removed[0];
   }
 

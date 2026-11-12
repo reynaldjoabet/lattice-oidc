@@ -1,4 +1,3 @@
-
 package com.lattice.oidc.client;
 
 import com.authlete.common.api.AuthleteApi;
@@ -242,7 +241,8 @@ public abstract class PlayAuthleteApiBase implements AuthleteApi {
     }
     TResponse value = mapper.readValue(body, responseClass);
     if (value instanceof ApiResponse apiResponse) {
-      apiResponse.setResponseHeaders(new LinkedHashMap<String, List<String>>(response.getHeaders()));
+      apiResponse.setResponseHeaders(
+          new LinkedHashMap<String, List<String>>(response.getHeaders()));
     }
     return value;
   }

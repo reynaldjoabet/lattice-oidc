@@ -17,12 +17,14 @@ import play.test.Helpers;
 
 /**
  * The executor for blocking Authlete calls runs each call on a virtual thread, so that waiting for
- * Authlete does not use up a pool; what limits concurrency is {@code authlete.max-concurrent-calls}.
+ * Authlete does not use up a pool; what limits concurrency is {@code
+ * authlete.max-concurrent-calls}.
  */
 public class AuthleteExecutionContextTest {
 
   /** Runs {@code tasks} sleeping tasks on the context of an application with the given limit. */
-  private static int peakConcurrency(int limit, int tasks, AtomicBoolean allVirtual) throws Exception {
+  private static int peakConcurrency(int limit, int tasks, AtomicBoolean allVirtual)
+      throws Exception {
     Application app = app(new FakeAuthleteApi(), Map.of("authlete.max-concurrent-calls", limit));
     Helpers.start(app);
     try {

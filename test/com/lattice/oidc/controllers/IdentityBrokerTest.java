@@ -48,7 +48,9 @@ public class IdentityBrokerTest {
   public void start() throws Exception {
     upstream = new FakeUpstreamProvider();
     fake.answer("authorization", args -> AuthorizationFlowTest.interaction("ticket-1", null))
-        .answer("authorizationIssue", args -> AuthorizationFlowTest.issued("https://client.example/cb?code=abc"));
+        .answer(
+            "authorizationIssue",
+            args -> AuthorizationFlowTest.issued("https://client.example/cb?code=abc"));
     app =
         new GuiceApplicationBuilder()
             .configure(
@@ -76,7 +78,10 @@ public class IdentityBrokerTest {
   /** Starts the brokered login; returns the {@code state} sent upstream (and records the nonce). */
   private String initiate(Result page) {
     Result r =
-        route(app, get("/api/federation/initiation/upstream?ticket=ticket-1").session(page.session().data()));
+        route(
+            app,
+            get("/api/federation/initiation/upstream?ticket=ticket-1")
+                .session(page.session().data()));
     assertEquals(302, r.status());
     URI location = URI.create(r.redirectLocation().orElseThrow());
     assertTrue(location.toString().startsWith(upstream.issuer + "/authorize"));
@@ -121,12 +126,17 @@ public class IdentityBrokerTest {
         app.injector()
             .instanceOf(com.lattice.oidc.metrics.Metrics.class)
             .scrape()
-            .contains("lattice_identity_provider_sign_ins_seconds_count{outcome=\"success\",provider=\"upstream\"} 1"));
+            .contains(
+                "lattice_identity_provider_sign_ins_seconds_count{outcome=\"success\",provider=\"upstream\"}"
+                    + " 1"));
 
     Result decision =
         route(
             app,
-            withCsrf(post("/api/authorization/decision", Map.of("ticket", "ticket-1", "authorized", "true")))
+            withCsrf(
+                    post(
+                        "/api/authorization/decision",
+                        Map.of("ticket", "ticket-1", "authorized", "true")))
                 .session(back.session().data()));
     assertEquals(302, decision.status());
     AuthorizationIssueRequest issue = fake.lastRequest("authorizationIssue");
@@ -140,10 +150,18 @@ public class IdentityBrokerTest {
   public void theUpstreamRequestAsksForAuthTime() {
     Result page = consentPage();
     Result r =
-        route(app, get("/api/federation/initiation/upstream?ticket=ticket-1").session(page.session().data()));
-    Map<String, String[]> query = Requests.decode(URI.create(r.redirectLocation().orElseThrow()).getRawQuery());
+        route(
+            app,
+            get("/api/federation/initiation/upstream?ticket=ticket-1")
+                .session(page.session().data()));
+    Map<String, String[]> query =
+        Requests.decode(URI.create(r.redirectLocation().orElseThrow()).getRawQuery());
     String claims = Requests.first(query, "claims");
-    assertTrue(claims, claims != null && claims.contains("\"auth_time\"") && claims.contains("\"essential\":true"));
+    assertTrue(
+        claims,
+        claims != null
+            && claims.contains("\"auth_time\"")
+            && claims.contains("\"essential\":true"));
   }
 
   /** A sign-in the provider did an hour ago (its own session) is reported as an hour ago. */
@@ -154,7 +172,9 @@ public class IdentityBrokerTest {
     Result page = consentPage();
     Result back = callback(page, initiate(page));
     authorize(back);
-    assertEquals(anHourAgo, ((AuthorizationIssueRequest) fake.lastRequest("authorizationIssue")).getAuthTime());
+    assertEquals(
+        anHourAgo,
+        ((AuthorizationIssueRequest) fake.lastRequest("authorizationIssue")).getAuthTime());
   }
 
   @Test
@@ -166,10 +186,14 @@ public class IdentityBrokerTest {
     Result asked = callback(page, initiate(page));
     Result separate = answer(page, linkId(asked), Map.of("separate", "true"));
     authorize(separate);
-    assertEquals(anHourAgo, ((AuthorizationIssueRequest) fake.lastRequest("authorizationIssue")).getAuthTime());
+    assertEquals(
+        anHourAgo,
+        ((AuthorizationIssueRequest) fake.lastRequest("authorizationIssue")).getAuthTime());
   }
 
-  /** Without auth_time, or with one in the future, the time Lattice accepted the sign-in is used. */
+  /**
+   * Without auth_time, or with one in the future, the time Lattice accepted the sign-in is used.
+   */
   @Test
   public void aMissingOrFutureAuthTimeCountsAsNow() {
     long now = 1_800_000_000L;
@@ -180,7 +204,8 @@ public class IdentityBrokerTest {
     Result page = consentPage();
     long before = System.currentTimeMillis() / 1000L;
     authorize(callback(page, initiate(page)));
-    long reported = ((AuthorizationIssueRequest) fake.lastRequest("authorizationIssue")).getAuthTime();
+    long reported =
+        ((AuthorizationIssueRequest) fake.lastRequest("authorizationIssue")).getAuthTime();
     assertTrue(reported >= before && reported <= System.currentTimeMillis() / 1000L);
   }
 
@@ -188,7 +213,8 @@ public class IdentityBrokerTest {
   public void callbackFromAnotherBrowserIsRejectedBeforeRedeemingTheCode() {
     Result page = consentPage();
     String state = initiate(page);
-    Result r = route(app, get("/api/federation/callback/upstream?code=upstream-code&state=" + state));
+    Result r =
+        route(app, get("/api/federation/callback/upstream?code=upstream-code&state=" + state));
     assertEquals(400, r.status());
     assertEquals(0, upstream.tokenRequests.get());
   }
@@ -230,7 +256,9 @@ public class IdentityBrokerTest {
         app.injector()
             .instanceOf(com.lattice.oidc.metrics.Metrics.class)
             .scrape()
-            .contains("lattice_identity_provider_sign_ins_seconds_count{outcome=\"error\",provider=\"upstream\"} 1"));
+            .contains(
+                "lattice_identity_provider_sign_ins_seconds_count{outcome=\"error\",provider=\"upstream\"}"
+                    + " 1"));
   }
 
   @Test
@@ -247,11 +275,15 @@ public class IdentityBrokerTest {
   public void unknownProviderAndUnknownTicketAreRejected() {
     Result page = consentPage();
     Result unknownProvider =
-        route(app, get("/api/federation/initiation/nope?ticket=ticket-1").session(page.session().data()));
+        route(
+            app,
+            get("/api/federation/initiation/nope?ticket=ticket-1").session(page.session().data()));
     assertEquals(404, unknownProvider.status());
 
     Result unknownTicket =
-        route(app, get("/api/federation/initiation/upstream?ticket=other").session(page.session().data()));
+        route(
+            app,
+            get("/api/federation/initiation/upstream?ticket=other").session(page.session().data()));
     assertEquals(400, unknownTicket.status());
 
     Result otherBrowser = route(app, get("/api/federation/initiation/upstream?ticket=ticket-1"));
@@ -261,7 +293,8 @@ public class IdentityBrokerTest {
   // --- Linking an upstream sign-in to an existing account with the same email ---
 
   private static String linkId(Result page) {
-    Matcher matcher = Pattern.compile("name=\"linkId\" value=\"([^\"]+)\"").matcher(contentAsString(page));
+    Matcher matcher =
+        Pattern.compile("name=\"linkId\" value=\"([^\"]+)\"").matcher(contentAsString(page));
     assertTrue("the link page is shown", matcher.find());
     return matcher.group(1);
   }
@@ -276,7 +309,10 @@ public class IdentityBrokerTest {
     Result r =
         route(
             app,
-            withCsrf(post("/api/authorization/decision", Map.of("ticket", "ticket-1", "authorized", "true")))
+            withCsrf(
+                    post(
+                        "/api/authorization/decision",
+                        Map.of("ticket", "ticket-1", "authorized", "true")))
                 .session(signedIn.session().data()));
     assertEquals(302, r.status());
   }
@@ -302,18 +338,22 @@ public class IdentityBrokerTest {
     assertTrue(contentAsString(linked).contains("Signed in as"));
     assertTrue(audited(AuditService.Event.ACCOUNT_LINKED));
     authorize(linked);
-    assertEquals("1001", ((AuthorizationIssueRequest) fake.lastRequest("authorizationIssue")).getSubject());
+    assertEquals(
+        "1001", ((AuthorizationIssueRequest) fake.lastRequest("authorizationIssue")).getSubject());
 
     // Next time the same upstream identity signs straight in to the linked account, and the app,
     // approved last time, gets its code without the consent page.
     Result again = consentPage();
     Result direct = callback(again, initiate(again));
     assertEquals(303, direct.status());
-    assertEquals("/api/authorization/continue?ticket=ticket-1", direct.redirectLocation().orElse(null));
-    Result continued = route(app, get(direct.redirectLocation().get()).session(direct.session().data()));
+    assertEquals(
+        "/api/authorization/continue?ticket=ticket-1", direct.redirectLocation().orElse(null));
+    Result continued =
+        route(app, get(direct.redirectLocation().get()).session(direct.session().data()));
     assertEquals(302, continued.status());
     assertEquals(2, fake.count("authorizationIssue"));
-    assertEquals("1001", ((AuthorizationIssueRequest) fake.lastRequest("authorizationIssue")).getSubject());
+    assertEquals(
+        "1001", ((AuthorizationIssueRequest) fake.lastRequest("authorizationIssue")).getSubject());
   }
 
   @Test
@@ -325,7 +365,9 @@ public class IdentityBrokerTest {
     assertEquals(200, separate.status());
     assertTrue(loggedIn(separate));
     authorize(separate);
-    assertEquals("alice@upstream", ((AuthorizationIssueRequest) fake.lastRequest("authorizationIssue")).getSubject());
+    assertEquals(
+        "alice@upstream",
+        ((AuthorizationIssueRequest) fake.lastRequest("authorizationIssue")).getSubject());
   }
 
   @Test
@@ -334,7 +376,12 @@ public class IdentityBrokerTest {
     Result page = consentPage();
     String linkId = linkId(callback(page, initiate(page)));
     Result r =
-        route(app, withCsrf(post("/api/federation/link", Map.of("linkId", linkId, "link", "true", "password", "john"))));
+        route(
+            app,
+            withCsrf(
+                post(
+                    "/api/federation/link",
+                    Map.of("linkId", linkId, "link", "true", "password", "john"))));
     assertEquals(400, r.status());
   }
 
@@ -347,7 +394,13 @@ public class IdentityBrokerTest {
             withCsrf(
                     post(
                         "/api/authorization/decision",
-                        Map.of("ticket", "ticket-1", "identifier", "Ana@Partner.Example", "identify", "true")))
+                        Map.of(
+                            "ticket",
+                            "ticket-1",
+                            "identifier",
+                            "Ana@Partner.Example",
+                            "identify",
+                            "true")))
                 .session(page.session().data()));
     assertEquals(200, realm.status());
     String html = contentAsString(realm);
@@ -365,7 +418,13 @@ public class IdentityBrokerTest {
             withCsrf(
                     post(
                         "/api/authorization/decision",
-                        Map.of("ticket", "ticket-1", "identifier", "someone@elsewhere.example", "identify", "true")))
+                        Map.of(
+                            "ticket",
+                            "ticket-1",
+                            "identifier",
+                            "someone@elsewhere.example",
+                            "identify",
+                            "true")))
                 .session(page.session().data()));
     assertTrue(contentAsString(password).contains("name=\"password\""));
   }
@@ -379,7 +438,14 @@ public class IdentityBrokerTest {
     var alice = users.bySubject("alice@upstream").orElseThrow();
     Map<String, Object> attributes = new java.util.HashMap<>(alice.attributes());
     attributes.put("requiredActions", List.of("CONFIGURE_PASSKEY"));
-    users.save(new com.lattice.oidc.models.User(alice.getSubject(), alice.loginId(), alice.passwordHash(), alice.claims(), attributes, alice.verifiedClaims()));
+    users.save(
+        new com.lattice.oidc.models.User(
+            alice.getSubject(),
+            alice.loginId(),
+            alice.passwordHash(),
+            alice.claims(),
+            attributes,
+            alice.verifiedClaims()));
 
     Result page = consentPage();
     Result back = callback(page, initiate(page));

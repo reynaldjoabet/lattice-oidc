@@ -38,7 +38,8 @@ public class WebhooksTest {
     receiver.createContext(
         "/hook",
         exchange -> {
-          String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+          String body =
+              new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
           received.add(
               new Delivery(
                   exchange.getRequestHeaders().getFirst("webhook-id"),
@@ -65,7 +66,13 @@ public class WebhooksTest {
                 "lattice.webhooks.endpoints",
                 List.of(
                     Map.of("url", url, "secret", "test-secret", "events", List.of("LOGIN_FAILED")),
-                    Map.of("url", broken, "secret", "test-secret", "events", List.of("LOGIN_FAILED")))));
+                    Map.of(
+                        "url",
+                        broken,
+                        "secret",
+                        "test-secret",
+                        "events",
+                        List.of("LOGIN_FAILED")))));
     Helpers.start(app);
   }
 
@@ -77,8 +84,18 @@ public class WebhooksTest {
 
   @Test
   public void subscribedEventsArriveSignedAndOthersDoNot() throws Exception {
-    route(app, withCsrf(post("/account/login", Map.of("loginId", "john", "password", "john", "next", "account"))));
-    route(app, withCsrf(post("/account/login", Map.of("loginId", "john", "password", "wrong", "next", "account"))));
+    route(
+        app,
+        withCsrf(
+            post(
+                "/account/login",
+                Map.of("loginId", "john", "password", "john", "next", "account"))));
+    route(
+        app,
+        withCsrf(
+            post(
+                "/account/login",
+                Map.of("loginId", "john", "password", "wrong", "next", "account"))));
 
     Delivery delivery = received.poll(10, TimeUnit.SECONDS);
     assertTrue("a delivery arrived", delivery != null);
@@ -94,18 +111,25 @@ public class WebhooksTest {
             delivery.id(),
             Long.parseLong(delivery.timestamp()),
             delivery.body());
-    assertEquals("the signature verifies with the shared secret", "v1," + expected, delivery.signature());
+    assertEquals(
+        "the signature verifies with the shared secret", "v1," + expected, delivery.signature());
 
     assertTrue("LOGIN_SUCCEEDED isn't subscribed", received.poll(1, TimeUnit.SECONDS) == null);
   }
 
   @Test
   public void theConsoleShowsDeliveriesAndErrorsPerEndpoint() throws Exception {
-    route(app, withCsrf(post("/account/login", Map.of("loginId", "john", "password", "wrong", "next", "account"))));
+    route(
+        app,
+        withCsrf(
+            post(
+                "/account/login",
+                Map.of("loginId", "john", "password", "wrong", "next", "account"))));
     Webhooks webhooks = app.injector().instanceOf(Webhooks.class);
     long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
     List<Webhooks.EndpointStatus> status = webhooks.status();
-    while ((status.get(0).delivered() == 0 || status.get(1).retrying() == 0) && System.nanoTime() < deadline) {
+    while ((status.get(0).delivered() == 0 || status.get(1).retrying() == 0)
+        && System.nanoTime() < deadline) {
       Thread.sleep(50);
       status = webhooks.status();
     }
@@ -119,9 +143,20 @@ public class WebhooksTest {
 
     String metrics = app.injector().instanceOf(com.lattice.oidc.metrics.Metrics.class).scrape();
     String host = "127.0.0.1:" + receiver.getAddress().getPort();
-    assertTrue(metrics, metrics.contains("lattice_webhook_deliveries_total{endpoint=\"1\",host=\"" + host + "\",outcome=\"delivered\"} 1.0"));
-    assertTrue(metrics.contains("lattice_webhook_deliveries_total{endpoint=\"2\",host=\"" + host + "\",outcome=\"retry\"} 1.0"));
-    assertTrue(metrics.contains("lattice_webhook_retries_waiting{endpoint=\"2\",host=\"" + host + "\"} 1.0"));
+    assertTrue(
+        metrics,
+        metrics.contains(
+            "lattice_webhook_deliveries_total{endpoint=\"1\",host=\""
+                + host
+                + "\",outcome=\"delivered\"} 1.0"));
+    assertTrue(
+        metrics.contains(
+            "lattice_webhook_deliveries_total{endpoint=\"2\",host=\""
+                + host
+                + "\",outcome=\"retry\"} 1.0"));
+    assertTrue(
+        metrics.contains(
+            "lattice_webhook_retries_waiting{endpoint=\"2\",host=\"" + host + "\"} 1.0"));
     assertTrue("no paths, which can hold secrets", !metrics.contains("/broken"));
   }
 }

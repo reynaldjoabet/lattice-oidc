@@ -5,10 +5,10 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * A CIBA request waiting for the end-user's decision on Lattice's own approval page
- * ({@code lattice.ciba.mode = builtin}): which app asks, its binding message, what it gets and,
- * for a payment (RFC 9396 {@code authorization_details} of type {@code payment_initiation}), the
- * payment itself.
+ * A CIBA request waiting for the end-user's decision on Lattice's own approval page ({@code
+ * lattice.ciba.mode = builtin}): which app asks, its binding message, what it gets and, for a
+ * payment (RFC 9396 {@code authorization_details} of type {@code payment_initiation}), the payment
+ * itself.
  */
 public record CibaApproval(
     String id,
@@ -20,22 +20,30 @@ public record CibaApproval(
     String authorizationDetails) {
 
   /** A payment to approve, as the request described it. Missing fields are empty. */
-  public record Payment(String amount, String currency, String payee, String payeeAccount, String reference) {
+  public record Payment(
+      String amount, String currency, String payee, String payeeAccount, String reference) {
 
     @SuppressWarnings("unchecked")
     static Optional<Payment> from(List<Object> details) {
       for (Object element : details) {
         if (element instanceof Map<?, ?> map && "payment_initiation".equals(map.get("type"))) {
           Map<String, Object> amount =
-              map.get("instructedAmount") instanceof Map<?, ?> found ? (Map<String, Object>) found : Map.of();
+              map.get("instructedAmount") instanceof Map<?, ?> found
+                  ? (Map<String, Object>) found
+                  : Map.of();
           Map<String, Object> account =
-              map.get("creditorAccount") instanceof Map<?, ?> found ? (Map<String, Object>) found : Map.of();
+              map.get("creditorAccount") instanceof Map<?, ?> found
+                  ? (Map<String, Object>) found
+                  : Map.of();
           return Optional.of(
               new Payment(
                   text(amount.get("amount")),
                   text(amount.get("currency")),
                   text(map.get("creditorName")),
-                  text(account.containsKey("iban") ? account.get("iban") : account.get("accountNumber")),
+                  text(
+                      account.containsKey("iban")
+                          ? account.get("iban")
+                          : account.get("accountNumber")),
                   text(map.get("remittanceInformationUnstructured"))));
         }
       }

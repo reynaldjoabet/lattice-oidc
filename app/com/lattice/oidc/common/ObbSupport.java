@@ -28,19 +28,30 @@ public final class ObbSupport {
       return FapiUtils.computeOutgoingInteractionId(incoming);
     } catch (IllegalArgumentException e) {
       throw new WebException(
-          error(400, null, code, "Bad Request", "The format of the incoming 'x-fapi-interaction-id' is wrong."));
+          error(
+              400,
+              null,
+              code,
+              "Bad Request",
+              "The format of the incoming 'x-fapi-interaction-id' is wrong."));
     }
   }
 
   public static Result json(int status, String interactionId, Object body) {
-    Result r = body == null ? Results.status(status) : Results.status(status, JsonHelpers.pretty(body)).as("application/json");
+    Result r =
+        body == null
+            ? Results.status(status)
+            : Results.status(status, JsonHelpers.pretty(body)).as("application/json");
     return interactionId == null ? r : r.withHeader(X_FAPI_INTERACTION_ID, interactionId);
   }
 
-  public static Result error(int status, String interactionId, String code, String title, String detail) {
+  public static Result error(
+      int status, String interactionId, String code, String title, String detail) {
     Map<String, Object> body =
         Map.of(
-            "errors", List.of(Map.of("code", code, "title", title, "detail", detail == null ? "" : detail)),
+            "errors",
+                List.of(
+                    Map.of("code", code, "title", title, "detail", detail == null ? "" : detail)),
             "meta", meta());
     return json(status, interactionId, body);
   }
@@ -65,5 +76,4 @@ public final class ObbSupport {
     }
     return null;
   }
-
 }

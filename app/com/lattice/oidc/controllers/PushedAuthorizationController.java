@@ -18,7 +18,8 @@ import play.mvc.Result;
  * on the token endpoint. The {@code request_uri} it returns is then used at the authorization
  * endpoint.
  *
- * @see <a href="https://www.rfc-editor.org/rfc/rfc9126.html">RFC 9126 OAuth 2.0 Pushed Authorization Requests</a>
+ * @see <a href="https://www.rfc-editor.org/rfc/rfc9126.html">RFC 9126 OAuth 2.0 Pushed
+ *     Authorization Requests</a>
  */
 public final class PushedAuthorizationController extends BaseController {
 
@@ -40,7 +41,8 @@ public final class PushedAuthorizationController extends BaseController {
                           .setDpop(Requests.header(request, "DPoP"))
                           .setHtm("POST")
                           .setHtu(requests.htu(request))
-                          .setOauthClientAttestation(Requests.header(request, "OAuth-Client-Attestation"))
+                          .setOauthClientAttestation(
+                              Requests.header(request, "OAuth-Client-Attestation"))
                           .setOauthClientAttestationPop(
                               Requests.header(request, "OAuth-Client-Attestation-PoP")));
           Map<String, String> headers = new LinkedHashMap<>();

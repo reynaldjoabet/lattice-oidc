@@ -12,8 +12,8 @@ import static org.junit.Assert.assertTrue;
 import static play.test.Helpers.contentAsString;
 
 import com.authlete.common.dto.AuthorizedClientListResponse;
-import com.authlete.common.dto.ClientAuthorizationGetListRequest;
 import com.authlete.common.dto.Client;
+import com.authlete.common.dto.ClientAuthorizationGetListRequest;
 import com.lattice.oidc.client.FakeAuthleteApi;
 import java.util.List;
 import java.util.Map;
@@ -56,7 +56,9 @@ public class AccountAndAdminTest {
 
   private Result signIn(String loginId, String next) {
     return route(
-        app, withCsrf(post("/account/login", Map.of("loginId", loginId, "password", loginId, "next", next))));
+        app,
+        withCsrf(
+            post("/account/login", Map.of("loginId", loginId, "password", loginId, "next", next))));
   }
 
   @Test
@@ -87,7 +89,9 @@ public class AccountAndAdminTest {
   public void removingAnAppDeletesItsAuthorizationForThisUser() {
     Result login = signIn("john", "account");
     Result r =
-        route(app, withCsrf(post("/account/apps/42/remove", Map.of())).session(login.session().data()));
+        route(
+            app,
+            withCsrf(post("/account/apps/42/remove", Map.of())).session(login.session().data()));
     assertEquals(303, r.status());
     assertArrayEquals(new Object[] {42L, "1001"}, fake.lastArgs.get("deleteClientAuthorization"));
   }
@@ -109,7 +113,12 @@ public class AccountAndAdminTest {
   @Test
   public void wrongPasswordStaysOnTheSignInPage() {
     Result r =
-        route(app, withCsrf(post("/account/login", Map.of("loginId", "john", "password", "nope", "next", "account"))));
+        route(
+            app,
+            withCsrf(
+                post(
+                    "/account/login",
+                    Map.of("loginId", "john", "password", "nope", "next", "account"))));
     assertEquals(401, r.status());
     assertTrue(contentAsString(r).contains("Invalid login ID or password."));
   }
@@ -140,8 +149,12 @@ public class AccountAndAdminTest {
   @Test
   public void accountPageLinksAdminsToTheConsole() {
     Result john = signIn("john", "account");
-    assertTrue(contentAsString(route(app, get("/account").session(john.session().data()))).contains("Operator console"));
+    assertTrue(
+        contentAsString(route(app, get("/account").session(john.session().data())))
+            .contains("Operator console"));
     Result jane = signIn("jane", "account");
-    assertTrue(!contentAsString(route(app, get("/account").session(jane.session().data()))).contains("Operator console"));
+    assertTrue(
+        !contentAsString(route(app, get("/account").session(jane.session().data())))
+            .contains("Operator console"));
   }
 }

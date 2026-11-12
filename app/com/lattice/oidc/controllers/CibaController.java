@@ -8,11 +8,11 @@ import com.lattice.oidc.common.Requests;
 import com.lattice.oidc.common.Responses;
 import com.lattice.oidc.handlers.AuthenticationDevice;
 import com.lattice.oidc.handlers.CibaHandler;
+import jakarta.inject.Inject;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.CompletionStage;
-import jakarta.inject.Inject;
 import play.mvc.BodyParser;
 import play.mvc.Http;
 import play.mvc.Result;
@@ -27,7 +27,9 @@ import play.mvc.Result;
  *   <li>{@code POST /api/backchannel/authentication/callback}
  * </ul>
  *
- * @see <a href="https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html">OpenID Connect Client-Initiated Backchannel Authentication Flow - Core 1.0</a>
+ * @see <a
+ *     href="https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html">OpenID
+ *     Connect Client-Initiated Backchannel Authentication Flow - Core 1.0</a>
  */
 public final class CibaController extends BaseController {
 
@@ -40,9 +42,7 @@ public final class CibaController extends BaseController {
     this.ciba = ciba;
   }
 
-  /**
-   * The backchannel authentication endpoint.
-   */
+  /** The backchannel authentication endpoint. */
   public CompletionStage<Result> authenticate(Http.Request request) {
     return async(
         () -> {
@@ -58,17 +58,24 @@ public final class CibaController extends BaseController {
                           .setClientSecret(basic == null ? null : basic.getPassword())
                           .setClientCertificate(chain == null ? null : chain[0])
                           .setClientCertificatePath(
-                              chain == null || chain.length < 2 ? null : Arrays.copyOfRange(chain, 1, chain.length))
-                          .setOauthClientAttestation(Requests.header(request, "OAuth-Client-Attestation"))
-                          .setOauthClientAttestationPop(Requests.header(request, "OAuth-Client-Attestation-PoP")));
+                              chain == null || chain.length < 2
+                                  ? null
+                                  : Arrays.copyOfRange(chain, 1, chain.length))
+                          .setOauthClientAttestation(
+                              Requests.header(request, "OAuth-Client-Attestation"))
+                          .setOauthClientAttestationPop(
+                              Requests.header(request, "OAuth-Client-Attestation-PoP")));
           Map<String, String> headers = new LinkedHashMap<>();
           if (backchannelResponse.getAttestationChallenge() != null) {
-            headers.put("OAuth-Client-Attestation-Challenge", backchannelResponse.getAttestationChallenge());
+            headers.put(
+                "OAuth-Client-Attestation-Challenge",
+                backchannelResponse.getAttestationChallenge());
           }
           String content = backchannelResponse.getResponseContent();
           return switch (backchannelResponse.getAction()) {
             // Process user identification.
-            case USER_IDENTIFICATION -> Responses.ok(ciba.identifyAndIssue(backchannelResponse), headers);
+            case USER_IDENTIFICATION ->
+                Responses.ok(ciba.identifyAndIssue(backchannelResponse), headers);
             // 400 Bad Request
             case BAD_REQUEST -> Responses.badRequest(content, headers);
             // 401 Unauthorized
@@ -76,16 +83,17 @@ public final class CibaController extends BaseController {
             // 500 Internal Server Error
             case INTERNAL_SERVER_ERROR -> Responses.serverError(content, headers);
             // This never happens.
-            default -> throw unknownAction("/backchannel/authentication", backchannelResponse.getAction());
+            default ->
+                throw unknownAction("/backchannel/authentication", backchannelResponse.getAction());
           };
         });
   }
 
   /**
-   * The callback endpoint called back from the authentication device when it is used in asynchronous
-   * mode. The result of the end-user authentication and authorization is expected to be contained in
-   * the request. It is assumed that this server has made a request to the authentication device in
-   * {@link CibaHandler#start} before this endpoint is called back.
+   * The callback endpoint called back from the authentication device when it is used in
+   * asynchronous mode. The result of the end-user authentication and authorization is expected to
+   * be contained in the request. It is assumed that this server has made a request to the
+   * authentication device in {@link CibaHandler#start} before this endpoint is called back.
    */
   @BodyParser.Of(BodyParser.TolerantText.class)
   public CompletionStage<Result> callback(Http.Request request) {
@@ -96,11 +104,13 @@ public final class CibaController extends BaseController {
           try {
             json = JsonHelpers.readMap(body);
           } catch (RuntimeException e) {
-            return Responses.badRequest(Responses.error("invalid_request", "The body must be JSON."));
+            return Responses.badRequest(
+                Responses.error("invalid_request", "The body must be JSON."));
           }
           Object requestId = json.get("request_id");
           if (!(requestId instanceof String id) || id.isEmpty() || json.get("result") == null) {
-            return Responses.badRequest(Responses.error("invalid_request", "request_id and result are required."));
+            return Responses.badRequest(
+                Responses.error("invalid_request", "request_id and result are required."));
           }
           boolean known = ciba.callback(id, AuthenticationDevice.outcome(json.get("result")));
           return known

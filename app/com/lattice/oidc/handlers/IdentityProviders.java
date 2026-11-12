@@ -3,6 +3,8 @@ package com.lattice.oidc.handlers;
 import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.models.IdentityProviderConfig;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -10,8 +12,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -75,11 +75,14 @@ public final class IdentityProviders {
     if (email == null || email.indexOf('@') < 0) {
       return Optional.empty();
     }
-    String domain = email.substring(email.lastIndexOf('@') + 1).trim().toLowerCase(java.util.Locale.ROOT);
+    String domain =
+        email.substring(email.lastIndexOf('@') + 1).trim().toLowerCase(java.util.Locale.ROOT);
     return Optional.ofNullable(byDomain.get(domain));
   }
 
   public List<Link> links() {
-    return providers.values().stream().map(provider -> new Link(provider.id(), provider.name())).toList();
+    return providers.values().stream()
+        .map(provider -> new Link(provider.id(), provider.name()))
+        .toList();
   }
 }

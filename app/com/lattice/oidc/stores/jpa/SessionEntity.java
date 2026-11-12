@@ -42,7 +42,16 @@ public class SessionEntity {
   /** For JPA. */
   protected SessionEntity() {}
 
-  SessionEntity(String id, String subject, String userAgent, String ip, String method, Instant createdAt, Instant lastSeenAt, Instant expiresAt, boolean rememberMe) {
+  SessionEntity(
+      String id,
+      String subject,
+      String userAgent,
+      String ip,
+      String method,
+      Instant createdAt,
+      Instant lastSeenAt,
+      Instant expiresAt,
+      boolean rememberMe) {
     this.id = id;
     this.subject = subject;
     this.userAgent = userAgent;

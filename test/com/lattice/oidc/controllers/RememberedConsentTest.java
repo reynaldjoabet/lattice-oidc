@@ -35,7 +35,9 @@ public class RememberedConsentTest {
   @Before
   public void start() {
     asks(AuthorizationFlowTest.interaction("ticket-1", null));
-    fake.answer("authorizationIssue", args -> AuthorizationFlowTest.issued("https://client.example/cb?code=abc"))
+    fake.answer(
+            "authorizationIssue",
+            args -> AuthorizationFlowTest.issued("https://client.example/cb?code=abc"))
         .answer("deleteClientAuthorization", args -> null)
         .answer(
             "authorizationFail",
@@ -60,7 +62,8 @@ public class RememberedConsentTest {
   }
 
   private Result authorize(Map<String, String> session) {
-    return route(app, withCsrf(get("/api/authorization?response_type=code&client_id=42")).session(session));
+    return route(
+        app, withCsrf(get("/api/authorization?response_type=code&client_id=42")).session(session));
   }
 
   /** Signs john in on the consent page and approves; returns the signed-in session. */
@@ -72,7 +75,15 @@ public class RememberedConsentTest {
             withCsrf(
                     post(
                         "/api/authorization/decision",
-                        Map.of("ticket", "ticket-1", "loginId", "john", "password", "john", "authorized", "true")))
+                        Map.of(
+                            "ticket",
+                            "ticket-1",
+                            "loginId",
+                            "john",
+                            "password",
+                            "john",
+                            "authorized",
+                            "true")))
                 .session(page.session().data()));
     assertEquals(302, approved.status());
     return approved.session().data();
@@ -81,7 +92,8 @@ public class RememberedConsentTest {
   private long audited(String event) {
     return app.injector()
         .instanceOf(AuditEventStore.class)
-        .search(new AuditEventStore.Query(Optional.of(event), Optional.empty(), Optional.empty(), 100))
+        .search(
+            new AuditEventStore.Query(Optional.of(event), Optional.empty(), Optional.empty(), 100))
         .size();
   }
 
@@ -100,14 +112,23 @@ public class RememberedConsentTest {
     approveAsJohn();
     asks(AuthorizationFlowTest.interaction("ticket-2", null));
     Result page = authorize(Map.of());
-    assertTrue("signed out: the sign-in page", contentAsString(page).contains("name=\"identifier\""));
+    assertTrue(
+        "signed out: the sign-in page", contentAsString(page).contains("name=\"identifier\""));
     Result signedIn =
         route(
             app,
             withCsrf(
                     post(
                         "/api/authorization/decision",
-                        Map.of("ticket", "ticket-2", "loginId", "john", "password", "john", "login", "true")))
+                        Map.of(
+                            "ticket",
+                            "ticket-2",
+                            "loginId",
+                            "john",
+                            "password",
+                            "john",
+                            "login",
+                            "true")))
                 .session(page.session().data()));
     assertEquals("no consent page after signing in", 302, signedIn.status());
     assertTrue(signedIn.session().get("session_id").isPresent());
@@ -118,7 +139,12 @@ public class RememberedConsentTest {
   public void askingForMoreShowsThePageAgain() {
     Map<String, String> session = approveAsJohn();
     AuthorizationResponse more = AuthorizationFlowTest.interaction("ticket-2", null);
-    more.setScopes(new Scope[] {new Scope().setName("openid"), new Scope().setName("profile"), new Scope().setName("email")});
+    more.setScopes(
+        new Scope[] {
+          new Scope().setName("openid"),
+          new Scope().setName("profile"),
+          new Scope().setName("email")
+        });
     asks(more);
     Result page = authorize(session);
     assertEquals(200, page.status());
@@ -126,12 +152,20 @@ public class RememberedConsentTest {
     assertEquals(1, fake.count("authorizationIssue"));
   }
 
-  /** Asked for more, the page shows only what's new as the question, and the rest as already allowed. */
+  /**
+   * Asked for more, the page shows only what's new as the question, and the rest as already
+   * allowed.
+   */
   @Test
   public void askingForMoreShowsOnlyWhatIsNew() {
     Map<String, String> session = approveAsJohn();
     AuthorizationResponse more = AuthorizationFlowTest.interaction("ticket-2", null);
-    more.setScopes(new Scope[] {new Scope().setName("openid"), new Scope().setName("profile"), new Scope().setName("email")});
+    more.setScopes(
+        new Scope[] {
+          new Scope().setName("openid"),
+          new Scope().setName("profile"),
+          new Scope().setName("email")
+        });
     asks(more);
     String html = contentAsString(authorize(session));
     assertTrue(html, html.contains("more access?"));
@@ -155,7 +189,15 @@ public class RememberedConsentTest {
             withCsrf(
                     post(
                         "/api/authorization/decision",
-                        Map.of("ticket", "ticket-1", "loginId", "john", "password", "john", "login", "true")))
+                        Map.of(
+                            "ticket",
+                            "ticket-1",
+                            "loginId",
+                            "john",
+                            "password",
+                            "john",
+                            "login",
+                            "true")))
                 .session(page.session().data()));
     String consent = contentAsString(signedIn);
     assertTrue(consent, consent.contains("will be able to"));
@@ -186,8 +228,14 @@ public class RememberedConsentTest {
   public void silentSignInNeedsAnApproval() {
     // Signed in, but never approved this app: consent_required.
     Result signedIn =
-        route(app, withCsrf(post("/account/login", Map.of("loginId", "john", "password", "john", "next", "account"))));
-    asks(AuthorizationFlowTest.interaction("ticket-2", AuthorizationResponse.Action.NO_INTERACTION));
+        route(
+            app,
+            withCsrf(
+                post(
+                    "/account/login",
+                    Map.of("loginId", "john", "password", "john", "next", "account"))));
+    asks(
+        AuthorizationFlowTest.interaction("ticket-2", AuthorizationResponse.Action.NO_INTERACTION));
     authorize(signedIn.session().data());
     AuthorizationFailRequest failed = fake.lastRequest("authorizationFail");
     assertEquals(AuthorizationFailRequest.Reason.CONSENT_REQUIRED, failed.getReason());
@@ -196,7 +244,8 @@ public class RememberedConsentTest {
     // After an approval, prompt=none is issued.
     asks(AuthorizationFlowTest.interaction("ticket-1", null));
     Map<String, String> session = approveAsJohn();
-    AuthorizationResponse silent = AuthorizationFlowTest.interaction("ticket-3", AuthorizationResponse.Action.NO_INTERACTION);
+    AuthorizationResponse silent =
+        AuthorizationFlowTest.interaction("ticket-3", AuthorizationResponse.Action.NO_INTERACTION);
     silent.setClaims(null); // Authlete reports no claims for prompt=none.
     asks(silent);
     assertEquals(302, authorize(session).status());

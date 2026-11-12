@@ -7,11 +7,11 @@ import com.lattice.oidc.security.Interactions;
 import com.lattice.oidc.security.RequiredActions;
 import com.lattice.oidc.security.SecondFactors;
 import com.lattice.oidc.security.UserSessions;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 import play.mvc.Http;
 import play.mvc.Result;
 import play.mvc.Results;
@@ -59,7 +59,10 @@ public final class SignInFlow {
 
   @Inject
   public SignInFlow(
-      UserSessions sessions, Interactions interactions, SecondFactors secondFactors, RequiredActions actions) {
+      UserSessions sessions,
+      Interactions interactions,
+      SecondFactors secondFactors,
+      RequiredActions actions) {
     this.sessions = sessions;
     this.interactions = interactions;
     this.secondFactors = secondFactors;
@@ -72,7 +75,12 @@ public final class SignInFlow {
 
   /** Asks for a code from the authenticator app (or a recovery code) before signing in. */
   public Result challenge(
-      Http.Request request, User user, String method, boolean rememberMe, String next, Optional<String[]> link) {
+      Http.Request request,
+      User user,
+      String method,
+      boolean rememberMe,
+      String next,
+      Optional<String[]> link) {
     String id = UserSessions.randomId();
     String browserId = sessions.browserId(request);
     interactions.put(
@@ -89,8 +97,15 @@ public final class SignInFlow {
     return sessions.withBrowserId(
         Responses.of(
             200,
-            views.html.oidc.secondFactor
-                .render(id, secondFactors.remainingRecoveryCodes(user.getSubject()) > 0, Optional.empty(), request)
+            views
+                .html
+                .oidc
+                .secondFactor
+                .render(
+                    id,
+                    secondFactors.remainingRecoveryCodes(user.getSubject()) > 0,
+                    Optional.empty(),
+                    request)
                 .body(),
             Responses.HTML,
             null),
@@ -105,7 +120,8 @@ public final class SignInFlow {
   public Started start(
       Http.Request request, User user, String method, String acr, boolean rememberMe, String next) {
     Map<String, String> sessionOut = new HashMap<>();
-    sessions.login(user, System.currentTimeMillis() / 1000L, acr, sessionOut, request, method, rememberMe);
+    sessions.login(
+        user, System.currentTimeMillis() / 1000L, acr, sessionOut, request, method, rememberMe);
     String safe = PasskeyController.safeNext(next);
     if (safe.startsWith("authz:")) {
       showSignedIn(safe.substring(6), sessionOut.get(UserSessions.BROWSER_ID), user);
@@ -130,7 +146,8 @@ public final class SignInFlow {
                     AuthorizationController.KIND,
                     ticket,
                     browserId,
-                    interaction.shownTo(user, appConsents.find(user.getSubject(), interaction.clientId()))));
+                    interaction.shownTo(
+                        user, appConsents.find(user.getSubject(), interaction.clientId()))));
   }
 
   /** Where a signed-in user goes: their required actions first, otherwise {@code next}. */
@@ -140,10 +157,14 @@ public final class SignInFlow {
 
   /** A redirect to the required actions, if the user has any pending. */
   public Optional<Result> gate(User user, String next) {
-    return actions.pending(user).isEmpty() ? Optional.empty() : Optional.of(Results.seeOther(actionsUrl(next)));
+    return actions.pending(user).isEmpty()
+        ? Optional.empty()
+        : Optional.of(Results.seeOther(actionsUrl(next)));
   }
 
   static String actionsUrl(String next) {
-    return com.lattice.oidc.controllers.routes.RequiredActionsController.page(PasskeyController.safeNext(next)).url();
+    return com.lattice.oidc.controllers.routes.RequiredActionsController.page(
+            PasskeyController.safeNext(next))
+        .url();
   }
 }

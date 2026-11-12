@@ -9,13 +9,13 @@ import com.authlete.common.dto.Scope;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.models.DeviceApproval;
 import com.lattice.oidc.security.UserSessions.LoginState;
+import jakarta.inject.Inject;
+import jakarta.inject.Provider;
+import jakarta.inject.Singleton;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import jakarta.inject.Inject;
-import jakarta.inject.Provider;
-import jakarta.inject.Singleton;
 
 /** Protocol logic of the user-facing part of OAuth 2.0 Device Authorization Grant (RFC 8628). */
 @Singleton
@@ -44,14 +44,16 @@ public final class DeviceHandler {
     String clientName =
         info.getClientName() != null
             ? info.getClientName()
-            : info.isClientIdAliasUsed() ? info.getClientIdAlias() : String.valueOf(info.getClientId());
+            : info.isClientIdAliasUsed()
+                ? info.getClientIdAlias()
+                : String.valueOf(info.getClientId());
     return new DeviceApproval(userCode, clientName, scopes, info.getClaimNames(), info.getAcrs());
   }
 
   /**
-   * Completes the device flow by calling Authlete's /api/device/complete API. On authorization,
-   * the subject, the authentication time, the acr value that was actually used and the user's
-   * claims are passed; otherwise the result is access_denied.
+   * Completes the device flow by calling Authlete's /api/device/complete API. On authorization, the
+   * subject, the authentication time, the acr value that was actually used and the user's claims
+   * are passed; otherwise the result is access_denied.
    */
   public DeviceCompleteResponse.Action complete(
       DeviceApproval approval, Optional<LoginState> user, boolean authorized) {
@@ -68,7 +70,8 @@ public final class DeviceHandler {
           .setSubject(loginState.user().getSubject())
           .setAuthTime(loginState.authTime())
           .setAcr(acr(approval.acrs()));
-      Map<String, Object> claims = new ClaimsCollector(loginState.user()).collect(approval.claimNames(), null);
+      Map<String, Object> claims =
+          new ClaimsCollector(loginState.user()).collect(approval.claimNames(), null);
       if (claims != null) {
         request.setClaims(claims);
         // The claims the user consented to, kept with the grant (Grant Management).
@@ -81,6 +84,9 @@ public final class DeviceHandler {
   private String acr(String[] requested) {
     return requested == null
         ? null
-        : Arrays.stream(requested).filter(config.satisfiedAcrs()::contains).findFirst().orElse(null);
+        : Arrays.stream(requested)
+            .filter(config.satisfiedAcrs()::contains)
+            .findFirst()
+            .orElse(null);
   }
 }

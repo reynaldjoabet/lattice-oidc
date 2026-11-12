@@ -19,6 +19,7 @@ import com.lattice.oidc.security.UserSessions;
 import com.lattice.oidc.security.UserSessions.LoginState;
 import com.lattice.oidc.stores.PasskeyStore;
 import com.lattice.oidc.stores.UserStore;
+import jakarta.inject.Inject;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -30,7 +31,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Function;
-import jakarta.inject.Inject;
 import play.mvc.Http;
 import play.mvc.Result;
 import play.mvc.Results;
@@ -39,11 +39,11 @@ import play.mvc.Results;
  * Operator console pages beyond the overview (admins only, like {@link AdminController}).
  *
  * <ul>
- *   <li>{@code GET /admin/clients}: registered clients, searchable and filterable by how they
- *       were registered (screen 34).
+ *   <li>{@code GET /admin/clients}: registered clients, searchable and filterable by how they were
+ *       registered (screen 34).
  *   <li>{@code GET|POST /admin/clients/:id}: view and edit a client (screen 35).
- *   <li>{@code POST /admin/clients/:id/secret}: rotate the client secret; the new one is shown
- *       once (screen 36). Authlete replaces the secret immediately.
+ *   <li>{@code POST /admin/clients/:id/secret}: rotate the client secret; the new one is shown once
+ *       (screen 36). Authlete replaces the secret immediately.
  *   <li>{@code POST /admin/clients/:id/delete}: delete the client.
  *   <li>{@code GET|POST /admin/identity}: an account's identity-verification data ({@code
  *       verified_claims}), recorded from a KYC check made outside Lattice.
@@ -55,7 +55,13 @@ public final class ConsoleController extends BaseController {
 
   /** Token endpoint authentication methods offered in the editor. */
   static final List<String> AUTH_METHODS =
-      List.of("client_secret_basic", "client_secret_post", "private_key_jwt", "tls_client_auth", "self_signed_tls_client_auth", "none");
+      List.of(
+          "client_secret_basic",
+          "client_secret_post",
+          "private_key_jwt",
+          "tls_client_auth",
+          "self_signed_tls_client_auth",
+          "none");
 
   private static final int PAGE_SIZE = 200;
 
@@ -107,14 +113,23 @@ public final class ConsoleController extends BaseController {
             }
           }
           return html(
-              views.html.oidc.consoleClients
-                  .render(clients, query, registration, response.getTotalCount() > PAGE_SIZE, request)
+              views
+                  .html
+                  .oidc
+                  .consoleClients
+                  .render(
+                      clients, query, registration, response.getTotalCount() > PAGE_SIZE, request)
                   .body());
         });
   }
 
   public CompletionStage<Result> client(Http.Request request, Long id) {
-    return admin(request, state -> found(id).map(client -> editor(request, client, List.of(), false, 200)).orElseGet(ConsoleController::backToClients));
+    return admin(
+        request,
+        state ->
+            found(id)
+                .map(client -> editor(request, client, List.of(), false, 200))
+                .orElseGet(ConsoleController::backToClients));
   }
 
   public CompletionStage<Result> update(Http.Request request, Long id) {
@@ -128,7 +143,8 @@ public final class ConsoleController extends BaseController {
           Client client = found.get();
           Map<String, String[]> form = Requests.form(request);
           List<String> problems = new ArrayList<>();
-          String name = Optional.ofNullable(Requests.first(form, "name")).map(String::trim).orElse("");
+          String name =
+              Optional.ofNullable(Requests.first(form, "name")).map(String::trim).orElse("");
           if (name.isEmpty()) {
             problems.add("Enter a name.");
           }
@@ -136,13 +152,18 @@ public final class ConsoleController extends BaseController {
           URI privacy = uri(form, "privacyPolicy", problems, "Privacy policy");
           URI logo = uri(form, "logo", problems, "Logo URL");
           List<String> redirectUris = new ArrayList<>();
-          for (String line : Optional.ofNullable(Requests.first(form, "redirectUris")).orElse("").split("\\R")) {
+          for (String line :
+              Optional.ofNullable(Requests.first(form, "redirectUris")).orElse("").split("\\R")) {
             String value = line.trim();
             if (value.isEmpty()) {
               continue;
             }
             if (!validRedirect(value)) {
-              problems.add("Redirect URI " + value + " must be an absolute HTTPS URL (http only for localhost) without a fragment.");
+              problems.add(
+                  "Redirect URI "
+                      + value
+                      + " must be an absolute HTTPS URL (http only for localhost) without a"
+                      + " fragment.");
             }
             redirectUris.add(value);
           }
@@ -154,9 +175,12 @@ public final class ConsoleController extends BaseController {
             return editor(request, client, problems, false, 400);
           }
           List<String> supported = supportedScopes(client);
-          Set<String> chosen = new LinkedHashSet<>(Arrays.asList(Optional.ofNullable(form.get("scope")).orElse(new String[0])));
+          Set<String> chosen =
+              new LinkedHashSet<>(
+                  Arrays.asList(Optional.ofNullable(form.get("scope")).orElse(new String[0])));
           chosen.retainAll(supported);
-          ClientExtension extension = client.getExtension() != null ? client.getExtension() : new ClientExtension();
+          ClientExtension extension =
+              client.getExtension() != null ? client.getExtension() : new ClientExtension();
           boolean limited = !chosen.isEmpty() && chosen.size() < supported.size();
           extension.setRequestableScopesEnabled(limited);
           extension.setRequestableScopes(limited ? chosen.toArray(String[]::new) : null);
@@ -175,9 +199,16 @@ public final class ConsoleController extends BaseController {
           try {
             updated = api().updateClient(client);
           } catch (AuthleteApiException e) {
-            return editor(request, client, List.of("Authlete rejected the change: " + reason(e)), false, 400);
+            return editor(
+                request, client, List.of("Authlete rejected the change: " + reason(e)), false, 400);
           }
-          audit.record(request, AuditService.Event.CLIENT_UPDATED, "client_id", id, "subject", state.user().getSubject());
+          audit.record(
+              request,
+              AuditService.Event.CLIENT_UPDATED,
+              "client_id",
+              id,
+              "subject",
+              state.user().getSubject());
           return editor(request, updated, List.of(), true, 200);
         });
   }
@@ -191,9 +222,21 @@ public final class ConsoleController extends BaseController {
             return backToClients();
           }
           ClientSecretRefreshResponse response = api().refreshClientSecret(id);
-          audit.record(request, AuditService.Event.CLIENT_SECRET_ROTATED, "client_id", id, "subject", state.user().getSubject());
+          audit.record(
+              request,
+              AuditService.Event.CLIENT_SECRET_ROTATED,
+              "client_id",
+              id,
+              "subject",
+              state.user().getSubject());
           ConsoleClient client = ConsoleClient.of(found.get());
-          return html(views.html.oidc.consoleSecret.render(client, response.getNewClientSecret(), request).body());
+          return html(
+              views
+                  .html
+                  .oidc
+                  .consoleSecret
+                  .render(client, response.getNewClientSecret(), request)
+                  .body());
         });
   }
 
@@ -204,17 +247,25 @@ public final class ConsoleController extends BaseController {
           if (found(id).isPresent()) {
             api().deleteClient(id);
             appConsents.deleteClient(id);
-            audit.record(request, AuditService.Event.CLIENT_DELETED, "client_id", id, "subject", state.user().getSubject());
+            audit.record(
+                request,
+                AuditService.Event.CLIENT_DELETED,
+                "client_id",
+                id,
+                "subject",
+                state.user().getSubject());
           }
-          return Results.seeOther(com.lattice.oidc.controllers.routes.ConsoleController.clients("", "all"));
+          return Results.seeOther(
+              com.lattice.oidc.controllers.routes.ConsoleController.clients("", "all"));
         });
   }
 
   // ---------------------------------------------------------------- identity verification
 
   /**
-   * {@code GET /admin/identity}: an account's identity-verification data (the {@code verified_claims}
-   * datasets of OpenID Connect for Identity Assurance), found by sign-in name, email or subject.
+   * {@code GET /admin/identity}: an account's identity-verification data (the {@code
+   * verified_claims} datasets of OpenID Connect for Identity Assurance), found by sign-in name,
+   * email or subject.
    */
   public CompletionStage<Result> identity(Http.Request request, String account) {
     return admin(
@@ -223,11 +274,19 @@ public final class ConsoleController extends BaseController {
           String wanted = account == null ? "" : account.trim();
           Optional<User> user = wanted.isEmpty() ? Optional.empty() : findAccount(wanted);
           String json = user.map(u -> VerifiedClaimsData.pretty(u.verifiedClaims())).orElse("");
-          return html(views.html.oidc.consoleIdentity.render(wanted, user, json, List.of(), false, request).body());
+          return html(
+              views
+                  .html
+                  .oidc
+                  .consoleIdentity
+                  .render(wanted, user, json, List.of(), false, request)
+                  .body());
         });
   }
 
-  /** {@code POST /admin/identity}: replaces the account's datasets, after checking their structure. */
+  /**
+   * {@code POST /admin/identity}: replaces the account's datasets, after checking their structure.
+   */
   public CompletionStage<Result> saveIdentity(Http.Request request) {
     return admin(
         request,
@@ -237,50 +296,88 @@ public final class ConsoleController extends BaseController {
           String json = Optional.ofNullable(Requests.first(form, "verifiedClaims")).orElse("");
           Optional<User> user = subject.isEmpty() ? Optional.empty() : users.bySubject(subject);
           if (user.isEmpty()) {
-            return html(views.html.oidc.consoleIdentity.render(subject, user, "", List.of(), false, request).body());
+            return html(
+                views
+                    .html
+                    .oidc
+                    .consoleIdentity
+                    .render(subject, user, "", List.of(), false, request)
+                    .body());
           }
           VerifiedClaimsData.Parsed parsed = VerifiedClaimsData.parse(json);
           if (!parsed.ok()) {
-            return html(views.html.oidc.consoleIdentity.render(subject, user, json, parsed.problems(), false, request).body());
+            return html(
+                views
+                    .html
+                    .oidc
+                    .consoleIdentity
+                    .render(subject, user, json, parsed.problems(), false, request)
+                    .body());
           }
           User updated = user.get().withVerifiedClaims(parsed.datasets());
           users.save(updated);
           audit.record(
               request,
               AuditService.Event.VERIFIED_CLAIMS_UPDATED,
-              "subject", state.user().getSubject(),
-              "account", subject,
-              "datasets", parsed.datasets().size());
+              "subject",
+              state.user().getSubject(),
+              "account",
+              subject,
+              "datasets",
+              parsed.datasets().size());
           String saved = VerifiedClaimsData.pretty(parsed.datasets());
-          return html(views.html.oidc.consoleIdentity.render(subject, Optional.of(updated), saved, List.of(), true, request).body());
+          return html(
+              views
+                  .html
+                  .oidc
+                  .consoleIdentity
+                  .render(subject, Optional.of(updated), saved, List.of(), true, request)
+                  .body());
         });
   }
 
   private Optional<User> findAccount(String account) {
-    return users.byLoginId(account).or(() -> users.byEmail(account)).or(() -> users.bySubject(account));
+    return users
+        .byLoginId(account)
+        .or(() -> users.byEmail(account))
+        .or(() -> users.bySubject(account));
   }
 
   // ---------------------------------------------------------------- audit log
 
   /** {@code GET /admin/audit}: stored audit events, newest first, filterable, 50 per page. */
-  public CompletionStage<Result> audit(Http.Request request, String event, String subject, Long before) {
+  public CompletionStage<Result> audit(
+      Http.Request request, String event, String subject, Long before) {
     return admin(
         request,
         state -> {
-          Optional<String> eventFilter = Optional.of(event.trim()).filter(value -> !value.isEmpty());
-          Optional<String> subjectFilter = Optional.of(subject.trim()).filter(value -> !value.isEmpty());
+          Optional<String> eventFilter =
+              Optional.of(event.trim()).filter(value -> !value.isEmpty());
+          Optional<String> subjectFilter =
+              Optional.of(subject.trim()).filter(value -> !value.isEmpty());
           List<Map<String, Object>> records =
               audit.search(
                   new com.lattice.oidc.stores.AuditEventStore.Query(
-                      eventFilter, subjectFilter, Optional.ofNullable(before).filter(id -> id > 0), AUDIT_PAGE + 1));
+                      eventFilter,
+                      subjectFilter,
+                      Optional.ofNullable(before).filter(id -> id > 0),
+                      AUDIT_PAGE + 1));
           boolean more = records.size() > AUDIT_PAGE;
           List<Map<String, Object>> page = more ? records.subList(0, AUDIT_PAGE) : records;
           Optional<Long> older =
-              more ? Optional.of(((Number) page.get(page.size() - 1).get("id")).longValue()) : Optional.empty();
+              more
+                  ? Optional.of(((Number) page.get(page.size() - 1).get("id")).longValue())
+                  : Optional.empty();
           List<String> events =
-              java.util.Arrays.stream(AuditService.Event.values()).map(Enum::name).sorted().toList();
+              java.util.Arrays.stream(AuditService.Event.values())
+                  .map(Enum::name)
+                  .sorted()
+                  .toList();
           return html(
-              views.html.oidc.consoleAudit
+              views
+                  .html
+                  .oidc
+                  .consoleAudit
                   .render(
                       page.stream().map(AdminController::event).toList(),
                       events,
@@ -304,19 +401,36 @@ public final class ConsoleController extends BaseController {
           long withPasskeys = passkeys.accountsWithPasskeys();
           int adoption = accounts == 0 ? 0 : (int) Math.round(100.0 * withPasskeys / accounts);
           return html(
-              views.html.oidc.consoleSecurity
-                  .render(stats.summary(), stats.lockedAccounts(config.loginLockout()), adoption, request)
+              views
+                  .html
+                  .oidc
+                  .consoleSecurity
+                  .render(
+                      stats.summary(),
+                      stats.lockedAccounts(config.loginLockout()),
+                      adoption,
+                      request)
                   .body());
         });
   }
 
   // ---------------------------------------------------------------- helpers
 
-  private Result editor(Http.Request request, Client client, List<String> problems, boolean saved, int status) {
+  private Result editor(
+      Http.Request request, Client client, List<String> problems, boolean saved, int status) {
     return Responses.of(
             status,
-            views.html.oidc.consoleClient
-                .render(ConsoleClient.of(client), supportedScopes(client), AUTH_METHODS, problems, saved, request)
+            views
+                .html
+                .oidc
+                .consoleClient
+                .render(
+                    ConsoleClient.of(client),
+                    supportedScopes(client),
+                    AUTH_METHODS,
+                    problems,
+                    saved,
+                    request)
                 .body(),
             Responses.HTML,
             null)
@@ -351,10 +465,12 @@ public final class ConsoleController extends BaseController {
   }
 
   private static Result backToClients() {
-    return Results.seeOther(com.lattice.oidc.controllers.routes.ConsoleController.clients("", "all"));
+    return Results.seeOther(
+        com.lattice.oidc.controllers.routes.ConsoleController.clients("", "all"));
   }
 
-  private static URI uri(Map<String, String[]> form, String field, List<String> problems, String label) {
+  private static URI uri(
+      Map<String, String[]> form, String field, List<String> problems, String label) {
     String value = Optional.ofNullable(Requests.first(form, field)).map(String::trim).orElse("");
     if (value.isEmpty()) {
       return null;
@@ -381,7 +497,9 @@ public final class ConsoleController extends BaseController {
         return uri.getHost() != null;
       }
       if ("http".equals(uri.getScheme())) {
-        return "localhost".equals(uri.getHost()) || "127.0.0.1".equals(uri.getHost()) || "[::1]".equals(uri.getHost());
+        return "localhost".equals(uri.getHost())
+            || "127.0.0.1".equals(uri.getHost())
+            || "[::1]".equals(uri.getHost());
       }
       // Private-use URI schemes of native apps (RFC 8252), e.g. com.example.app:/callback.
       return uri.getScheme().contains(".");
@@ -404,7 +522,8 @@ public final class ConsoleController extends BaseController {
             return AccountController.loginPage(request, "admin", Optional.empty(), 200);
           }
           if (!AdminController.isAdmin(current.get().user(), config)) {
-            return Pages.message(request, 403, "No access", "Your account can't open the operator console.");
+            return Pages.message(
+                request, 403, "No access", "Your account can't open the operator console.");
           }
           return action.apply(current.get());
         });

@@ -5,17 +5,17 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.lattice.oidc.metrics.Metrics;
 import com.typesafe.config.Config;
 import io.micrometer.core.instrument.binder.cache.CaffeineCacheMetrics;
-import java.util.Optional;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import java.util.Optional;
 
 /**
  * {@code lattice.cache = local}: a bounded cache in each server's memory (Caffeine). Changes are
  * announced on the {@link InvalidationBus}, so every server drops its copy; with PostgreSQL storage
  * the bus is PostgreSQL's {@code LISTEN}/{@code NOTIFY}.
  *
- * <p>One race remains, as with any invalidated cache: a server that read the old value just before a
- * change can store it just after the announcement. {@code lattice.cache.ttl} bounds how long that
+ * <p>One race remains, as with any invalidated cache: a server that read the old value just before
+ * a change can store it just after the announcement. {@code lattice.cache.ttl} bounds how long that
  * stale copy can live.
  */
 @Singleton

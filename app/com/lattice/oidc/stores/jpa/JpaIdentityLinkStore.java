@@ -6,7 +6,10 @@ import jakarta.inject.Singleton;
 import java.util.List;
 import java.util.Optional;
 
-/** {@link IdentityLinkStore} through JPA (entity {@link IdentityLinkEntity}, table {@code identity_links}). */
+/**
+ * {@link IdentityLinkStore} through JPA (entity {@link IdentityLinkEntity}, table {@code
+ * identity_links}).
+ */
 @Singleton
 public final class JpaIdentityLinkStore implements IdentityLinkStore {
 
@@ -37,7 +40,10 @@ public final class JpaIdentityLinkStore implements IdentityLinkStore {
   public Optional<String> localSubject(String providerId, String externalSubject) {
     return database.transaction(
         em ->
-            Optional.ofNullable(em.find(IdentityLinkEntity.class, new IdentityLinkEntity.Key(providerId, externalSubject)))
+            Optional.ofNullable(
+                    em.find(
+                        IdentityLinkEntity.class,
+                        new IdentityLinkEntity.Key(providerId, externalSubject)))
                 .map(link -> link.localSubject));
   }
 
@@ -46,7 +52,9 @@ public final class JpaIdentityLinkStore implements IdentityLinkStore {
     return database.transaction(
         em ->
             em.createQuery(
-                    "select l from IdentityLinkEntity l where l.localSubject = :subject order by l.createdAt", IdentityLinkEntity.class)
+                    "select l from IdentityLinkEntity l where l.localSubject = :subject order by"
+                        + " l.createdAt",
+                    IdentityLinkEntity.class)
                 .setParameter("subject", localSubject)
                 .getResultStream()
                 .map(l -> new Link(l.providerId, l.externalSubject, l.localSubject))
@@ -57,7 +65,9 @@ public final class JpaIdentityLinkStore implements IdentityLinkStore {
   public void unlink(String providerId, String externalSubject) {
     database.transaction(
         em ->
-            em.createQuery("delete from IdentityLinkEntity l where l.providerId = :provider and l.externalSubject = :external")
+            em.createQuery(
+                    "delete from IdentityLinkEntity l where l.providerId = :provider and"
+                        + " l.externalSubject = :external")
                 .setParameter("provider", providerId)
                 .setParameter("external", externalSubject)
                 .executeUpdate());

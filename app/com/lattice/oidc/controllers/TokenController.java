@@ -14,25 +14,27 @@ import com.lattice.oidc.handlers.NativeSsoHandler;
 import com.lattice.oidc.handlers.ObbTokenHandler;
 import com.lattice.oidc.handlers.TokenGrantHandler;
 import com.lattice.oidc.security.LoginService;
+import jakarta.inject.Inject;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.CompletionStage;
-import jakarta.inject.Inject;
 import play.mvc.Http;
 import play.mvc.Result;
 
 /**
- * An implementation of the OAuth 2.0 token endpoint with OpenID Connect support:
- * {@code POST /api/token}.
+ * An implementation of the OAuth 2.0 token endpoint with OpenID Connect support: {@code POST
+ * /api/token}.
  *
  * <p>Besides the grant types Authlete completes by itself (authorization code, refresh token,
  * client credentials, CIBA, device code, pre-authorized code), this endpoint handles the grants
  * Authlete delegates to the authorization server: resource owner password credentials, token
  * exchange (RFC 8693), JWT authorization grants (RFC 7523) and Native SSO.
  *
- * @see <a href="https://www.rfc-editor.org/rfc/rfc6749.html#section-3.2">RFC 6749, 3.2. Token Endpoint</a>
- * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#TokenEndpoint">OpenID Connect Core 1.0, 3.1.3. Token Endpoint</a>
+ * @see <a href="https://www.rfc-editor.org/rfc/rfc6749.html#section-3.2">RFC 6749, 3.2. Token
+ *     Endpoint</a>
+ * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#TokenEndpoint">OpenID Connect
+ *     Core 1.0, 3.1.3. Token Endpoint</a>
  */
 public final class TokenController extends BaseController {
 
@@ -70,7 +72,8 @@ public final class TokenController extends BaseController {
    * 8705), private_key_jwt and OAuth 2.0 Attestation-Based Client Authentication, which Authlete
    * validates.
    *
-   * @see <a href="https://www.rfc-editor.org/rfc/rfc6749.html#section-3.2">RFC 6749, 3.2. Token Endpoint</a>
+   * @see <a href="https://www.rfc-editor.org/rfc/rfc6749.html#section-3.2">RFC 6749, 3.2. Token
+   *     Endpoint</a>
    */
   public CompletionStage<Result> token(Http.Request request) {
     return async(() -> process(request));
@@ -156,15 +159,18 @@ public final class TokenController extends BaseController {
   private Result password(
       Http.Request request, TokenResponse response, Map<String, String> headers) {
     // Validate the credentials of the resource owner (with brute-force protection).
-    LoginService.Result auth = login.authenticate(response.getUsername(), response.getPassword(), request.remoteAddress());
+    LoginService.Result auth =
+        login.authenticate(response.getUsername(), response.getPassword(), request.remoteAddress());
     auditLogin(request, response.getUsername(), auth);
     // The password grant can't ask for an authenticator code or run required actions, so accounts
     // that need either can't use it.
     boolean needsInteraction =
         auth.outcome() == LoginService.Outcome.SUCCESS
-            && (flow.needsSecondFactor(auth.user().get()) || flow.gate(auth.user().get(), "account").isPresent());
+            && (flow.needsSecondFactor(auth.user().get())
+                || flow.gate(auth.user().get(), "account").isPresent());
     if (auth.outcome() != LoginService.Outcome.SUCCESS || needsInteraction) {
-      // The credentials are invalid (or not enough on their own). An access token is not issued; Authlete's /api/auth/token/fail
+      // The credentials are invalid (or not enough on their own). An access token is not issued;
+      // Authlete's /api/auth/token/fail
       // API generates the error response.
       TokenFailResponse fail =
           api()

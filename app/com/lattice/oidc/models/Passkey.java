@@ -33,11 +33,31 @@ public record Passkey(
       DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH).withZone(ZoneOffset.UTC);
 
   public Passkey withName(String newName) {
-    return new Passkey(id, subject, userHandle, publicKeyCose, signatureCount, newName, createdAt, lastUsedAt, backedUp, transports);
+    return new Passkey(
+        id,
+        subject,
+        userHandle,
+        publicKeyCose,
+        signatureCount,
+        newName,
+        createdAt,
+        lastUsedAt,
+        backedUp,
+        transports);
   }
 
   public Passkey used(long newSignatureCount, Instant at) {
-    return new Passkey(id, subject, userHandle, publicKeyCose, newSignatureCount, name, createdAt, Optional.of(at), backedUp, transports);
+    return new Passkey(
+        id,
+        subject,
+        userHandle,
+        publicKeyCose,
+        newSignatureCount,
+        name,
+        createdAt,
+        Optional.of(at),
+        backedUp,
+        transports);
   }
 
   /** "Synced passkey" or "This device only" / "Security key". */
@@ -45,7 +65,9 @@ public record Passkey(
     if (backedUp) {
       return "Synced passkey";
     }
-    return transports.contains("usb") || transports.contains("nfc") ? "Security key" : "This device only";
+    return transports.contains("usb") || transports.contains("nfc")
+        ? "Security key"
+        : "This device only";
   }
 
   public String created() {

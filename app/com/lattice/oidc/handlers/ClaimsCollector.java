@@ -51,11 +51,13 @@ public final class ClaimsCollector {
       if (name.isEmpty()) {
         continue;
       }
-      // Get the claim value: with the specific language tag if one is appended, otherwise trying the
+      // Get the claim value: with the specific language tag if one is appended, otherwise trying
+      // the
       // requested claim locales in order of preference.
       Object value = tag != null ? user.getClaim(name, tag) : localized(name, locales);
       if (value != null) {
-        // Add the pair of the claim name and the claim value ("name" also covers the edge case where the
+        // Add the pair of the claim name and the claim value ("name" also covers the edge case
+        // where the
         // claim name ends with "#").
         claims.put(tag == null ? name : claimName, value);
       }
@@ -64,8 +66,8 @@ public final class ClaimsCollector {
   }
 
   /**
-   * The claim value for the first claim locale that has one; the last resort is the value without any
-   * language tag.
+   * The claim value for the first claim locale that has one; the last resort is the value without
+   * any language tag.
    */
   private Object localized(String name, String[] locales) {
     if (locales != null) {
@@ -83,8 +85,8 @@ public final class ClaimsCollector {
    * Drops empty and duplicate claim locales.
    *
    * <p>From 5.2. Claims Languages and Scripts in OpenID Connect Core 1.0: "However, since BCP47
-   * language tag values are case insensitive, implementations SHOULD interpret the language tag values
-   * supplied in a case insensitive manner."
+   * language tag values are case insensitive, implementations SHOULD interpret the language tag
+   * values supplied in a case insensitive manner."
    */
   private static String[] normalizeLocales(String[] locales) {
     if (locales == null) {

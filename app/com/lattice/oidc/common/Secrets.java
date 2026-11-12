@@ -11,8 +11,9 @@ import java.security.SecureRandom;
  * <ul>
  *   <li><b>No modulo bias.</b> Picking a character with {@code alphabet[randomByte % size]} makes
  *       some characters more likely when 256 is not a multiple of the size (with 36 characters, the
- *       first 4 come up 8/7 as often), which lowers the real entropy. {@link SecureRandom#nextInt(int)}
- *       rejects and redraws instead, so every character is equally likely.
+ *       first 4 come up 8/7 as often), which lowers the real entropy. {@link
+ *       SecureRandom#nextInt(int)} rejects and redraws instead, so every character is equally
+ *       likely.
  *   <li><b>Length from entropy.</b> A secret should be sized by the bits it must carry, not by a
  *       round number of characters: 128 bits is 22 base64url characters, 26 characters from a
  *       32-letter alphabet, or 39 decimal digits. {@link #lengthFor(int, int)} computes it exactly
@@ -44,7 +45,9 @@ public final class Secrets {
     return bytes;
   }
 
-  /** A random base64url token (no padding) carrying {@code bits} bits, rounded up to whole bytes. */
+  /**
+   * A random base64url token (no padding) carrying {@code bits} bits, rounded up to whole bytes.
+   */
   public static String token(int bits) {
     return Digests.base64Url(bytes((bits + 7) / 8));
   }
@@ -54,13 +57,19 @@ public final class Secrets {
     return token(DEFAULT_BITS);
   }
 
-  /** {@code length} characters drawn uniformly from {@code alphabet}, which must not repeat a character. */
+  /**
+   * {@code length} characters drawn uniformly from {@code alphabet}, which must not repeat a
+   * character.
+   */
   public static String string(int length, String alphabet) {
     if (length < 1) {
       throw new IllegalArgumentException("length must be at least 1: " + length);
     }
-    if (alphabet == null || alphabet.length() < 2 || alphabet.chars().distinct().count() != alphabet.length()) {
-      throw new IllegalArgumentException("The alphabet needs at least 2 distinct characters, each once");
+    if (alphabet == null
+        || alphabet.length() < 2
+        || alphabet.chars().distinct().count() != alphabet.length()) {
+      throw new IllegalArgumentException(
+          "The alphabet needs at least 2 distinct characters, each once");
     }
     char[] out = new char[length];
     for (int i = 0; i < length; i++) {
@@ -80,7 +89,8 @@ public final class Secrets {
    */
   public static int lengthFor(int bits, int alphabetSize) {
     if (bits < 1 || alphabetSize < 2) {
-      throw new IllegalArgumentException("bits must be positive and the alphabet at least 2 characters");
+      throw new IllegalArgumentException(
+          "bits must be positive and the alphabet at least 2 characters");
     }
     BigInteger target = BigInteger.ONE.shiftLeft(bits);
     BigInteger size = BigInteger.valueOf(alphabetSize);
@@ -93,7 +103,10 @@ public final class Secrets {
     return length;
   }
 
-  /** The entropy, in bits, of {@code length} uniform characters from an alphabet of {@code alphabetSize}. */
+  /**
+   * The entropy, in bits, of {@code length} uniform characters from an alphabet of {@code
+   * alphabetSize}.
+   */
   public static double bits(int length, int alphabetSize) {
     return length * (Math.log(alphabetSize) / Math.log(2));
   }

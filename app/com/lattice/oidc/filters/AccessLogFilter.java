@@ -1,9 +1,9 @@
 package com.lattice.oidc.filters;
 
 import com.lattice.oidc.metrics.Metrics;
-import java.time.Duration;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import java.time.Duration;
 import org.apache.pekko.util.ByteString;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,7 +38,9 @@ public final class AccessLogFilter extends EssentialFilter {
     return EssentialAction.of(
         request -> {
           String path = request.path();
-          if (path.startsWith("/health/") || path.startsWith("/assets/") || path.equals("/metrics")) {
+          if (path.startsWith("/health/")
+              || path.startsWith("/assets/")
+              || path.equals("/metrics")) {
             return next.apply(request);
           }
           long start = System.nanoTime();
@@ -47,8 +49,13 @@ public final class AccessLogFilter extends EssentialFilter {
               result -> {
                 long elapsed = System.nanoTime() - start;
                 String route =
-                    request.attrs().getOptional(Router.Attrs.HANDLER_DEF).map(handler -> handler.path()).orElse("unmatched");
-                metrics.httpRequest(request.method(), route, result.status(), Duration.ofNanos(elapsed));
+                    request
+                        .attrs()
+                        .getOptional(Router.Attrs.HANDLER_DEF)
+                        .map(handler -> handler.path())
+                        .orElse("unmatched");
+                metrics.httpRequest(
+                    request.method(), route, result.status(), Duration.ofNanos(elapsed));
                 ACCESS.info(
                     "{} {} {} {}ms rid={} ip={}",
                     request.method(),

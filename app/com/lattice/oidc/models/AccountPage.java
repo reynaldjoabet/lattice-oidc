@@ -25,7 +25,6 @@ public record AccountPage(
   /** Two-step verification: whether an authenticator app is set up, and recovery codes left. */
   public record TwoStep(boolean authenticatorApp, int recoveryCodesLeft, boolean hasPassword) {}
 
-
   /** An app the user has authorized (Authlete client authorization). */
   public record App(long clientId, String name, Optional<String> logoUri, Optional<String> uri) {
     public String initials() {

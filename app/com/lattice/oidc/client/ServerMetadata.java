@@ -3,12 +3,12 @@ package com.lattice.oidc.client;
 import com.authlete.common.api.AuthleteApi;
 import com.lattice.oidc.common.JsonHelpers;
 import com.nimbusds.jose.jwk.JWKSet;
-import java.text.ParseException;
-import java.time.Duration;
-import java.util.Map;
 import jakarta.inject.Inject;
 import jakarta.inject.Provider;
 import jakarta.inject.Singleton;
+import java.text.ParseException;
+import java.time.Duration;
+import java.util.Map;
 
 /** This server's issuer identifier and signing keys, as configured in Authlete (cached). */
 @Singleton
@@ -32,7 +32,8 @@ public final class ServerMetadata {
       synchronized (this) {
         s = snapshot;
         if (s == null || System.currentTimeMillis() >= s.expiresAt()) {
-          Map<String, Object> configuration = JsonHelpers.readMap(api.get().getServiceConfiguration(false));
+          Map<String, Object> configuration =
+              JsonHelpers.readMap(api.get().getServiceConfiguration(false));
           JWKSet jwks;
           try {
             String json = api.get().getServiceJwks(false, false);

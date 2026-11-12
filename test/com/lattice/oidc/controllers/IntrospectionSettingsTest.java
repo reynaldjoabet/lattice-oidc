@@ -7,10 +7,13 @@ import com.lattice.oidc.common.LatticeConfig.ResourceServer;
 import java.util.Optional;
 import org.junit.Test;
 
-/** Resource-server settings for JWT introspection responses are checked when the application starts. */
+/**
+ * Resource-server settings for JWT introspection responses are checked when the application starts.
+ */
 public class IntrospectionSettingsTest {
 
-  private static final String SECRET = "x".repeat(IntrospectionController.RECOMMENDED_SECRET_LENGTH);
+  private static final String SECRET =
+      "x".repeat(IntrospectionController.RECOMMENDED_SECRET_LENGTH);
 
   private static ResourceServer server(String signAlg, String encryptionAlg, String sharedKey) {
     return new ResourceServer(
@@ -44,7 +47,8 @@ public class IntrospectionSettingsTest {
   }
 
   private static void assertMessage(ResourceServer server, String expected) {
-    IllegalStateException e = assertThrows(IllegalStateException.class, () -> IntrospectionController.check(server));
+    IllegalStateException e =
+        assertThrows(IllegalStateException.class, () -> IntrospectionController.check(server));
     assertTrue(e.getMessage(), e.getMessage().contains(expected));
     assertTrue(e.getMessage(), e.getMessage().contains("rs1"));
   }

@@ -54,7 +54,9 @@ public final class ResilienceConfig {
     this(ConfigFactory.empty());
   }
 
-  /** {@code resilience} is the {@code authlete.resilience} section; missing keys take the defaults. */
+  /**
+   * {@code resilience} is the {@code authlete.resilience} section; missing keys take the defaults.
+   */
   public ResilienceConfig(Config resilience) {
     this.c = resilience.withFallback(ConfigFactory.parseString(DEFAULTS)).resolve();
   }

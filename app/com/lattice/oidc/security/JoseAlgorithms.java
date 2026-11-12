@@ -15,13 +15,14 @@ import java.util.Optional;
  * introspection responses (RFC 9701). Everything not refused here is left to the authorization
  * server's own supported lists.
  *
- * <p><b>{@code none} is refused where it removes a protection, and allowed where it doesn't.</b> Each
- * specification rules on it per member:
+ * <p><b>{@code none} is refused where it removes a protection, and allowed where it doesn't.</b>
+ * Each specification rules on it per member:
  *
  * <ul>
- *   <li>Refused: {@code token_endpoint_auth_signing_alg} (an unsigned client assertion authenticates
- *       nobody; OIDC Registration forbids it), {@code introspection_signed_response_alg} (RFC 9701,
- *       section 6), {@code authorization_signed_response_alg} (JARM), {@code
+ *   <li>Refused: {@code token_endpoint_auth_signing_alg} (an unsigned client assertion
+ *       authenticates nobody; OIDC Registration forbids it), {@code
+ *       introspection_signed_response_alg} (RFC 9701, section 6), {@code
+ *       authorization_signed_response_alg} (JARM), {@code
  *       backchannel_authentication_request_signing_alg} (CIBA).
  *   <li>Refused, more strictly than OIDC: {@code id_token_signed_response_alg}. OIDC allows {@code
  *       none} for a client that only uses the code flow, but an unsigned ID token that ever reaches
@@ -33,13 +34,13 @@ import java.util.Optional;
  *       object no weaker than ordinary query parameters.
  * </ul>
  *
- * <p><b>Key encryption: {@code RSA1_5} and {@code PBES2-*} are refused everywhere.</b> {@code RSA1_5}
- * (RSAES-PKCS1-v1_5) is open to Bleichenbacher's adaptive chosen-ciphertext attack, which recovers
- * the content encryption key from error or timing differences (RFC 8725, section 3.2); {@code
- * RSA-OAEP} and {@code RSA-OAEP-256} do the same job safely. {@code PBES2-*} derives the key from a
- * password, which suits a person typing a passphrase, not a server's keys; and a JWE header chooses
- * its own iteration count ({@code p2c}), so a crafted token can make the server run millions of
- * PBKDF2 rounds (CVE-2023-52428).
+ * <p><b>Key encryption: {@code RSA1_5} and {@code PBES2-*} are refused everywhere.</b> {@code
+ * RSA1_5} (RSAES-PKCS1-v1_5) is open to Bleichenbacher's adaptive chosen-ciphertext attack, which
+ * recovers the content encryption key from error or timing differences (RFC 8725, section 3.2);
+ * {@code RSA-OAEP} and {@code RSA-OAEP-256} do the same job safely. {@code PBES2-*} derives the key
+ * from a password, which suits a person typing a passphrase, not a server's keys; and a JWE header
+ * chooses its own iteration count ({@code p2c}), so a crafted token can make the server run
+ * millions of PBKDF2 rounds (CVE-2023-52428).
  *
  * <p><b>HMAC keys must be at least as long as the hash</b> (RFC 7518, section 3.2): 32 bytes for
  * HS256, 48 for HS384, 64 for HS512. A shorter key makes the MAC only as strong as the key.
@@ -105,7 +106,8 @@ public final class JoseAlgorithms {
   public static Optional<String> keyEncryptionProblem(String what, String alg) {
     JWEAlg parsed = JWEAlg.parse(alg);
     if (parsed == JWEAlg.RSA1_5) {
-      return Optional.of(what + " must not be RSA1_5 (open to padding-oracle attacks); use RSA-OAEP-256.");
+      return Optional.of(
+          what + " must not be RSA1_5 (open to padding-oracle attacks); use RSA-OAEP-256.");
     }
     if (parsed != null && PASSWORD_BASED.contains(parsed)) {
       return Optional.of(what + " must not be a password-based algorithm (" + alg + ").");
@@ -114,8 +116,8 @@ public final class JoseAlgorithms {
   }
 
   /**
-   * Why {@code key} (used as UTF-8 bytes) is too short for the HMAC algorithm {@code alg}; empty for
-   * a long enough key or an algorithm that isn't HMAC.
+   * Why {@code key} (used as UTF-8 bytes) is too short for the HMAC algorithm {@code alg}; empty
+   * for a long enough key or an algorithm that isn't HMAC.
    */
   public static Optional<String> hmacKeyProblem(String what, String alg, String key) {
     JWSAlg parsed = JWSAlg.parse(alg);
@@ -125,7 +127,15 @@ public final class JoseAlgorithms {
     int minimum = hashBytes(parsed.getHashAlg());
     int length = key == null ? 0 : key.getBytes(StandardCharsets.UTF_8).length;
     return length < minimum
-        ? Optional.of(what + " is " + length + " bytes; " + alg + " needs a key of at least " + minimum + " bytes.")
+        ? Optional.of(
+            what
+                + " is "
+                + length
+                + " bytes; "
+                + alg
+                + " needs a key of at least "
+                + minimum
+                + " bytes.")
         : Optional.empty();
   }
 

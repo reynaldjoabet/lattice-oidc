@@ -1,9 +1,9 @@
 package com.lattice.oidc.stores;
 
+import jakarta.inject.Singleton;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import jakarta.inject.Singleton;
 
 /** {@link AppConsentStore} in memory, for one server (development and tests). */
 @Singleton

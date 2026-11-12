@@ -6,12 +6,12 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
 
 /**
- * SHA-256, the one digest Lattice uses: for storing the hash of a link or secret instead of the value
- * itself, and for thumbprints.
+ * SHA-256, the one digest Lattice uses: for storing the hash of a link or secret instead of the
+ * value itself, and for thumbprints.
  *
- * <p>Every JDK must provide SHA-256 (it is in the list of required algorithms in {@link MessageDigest}),
- * so a missing algorithm is a broken runtime, not something a caller can handle: it is rethrown
- * unchecked here, once, instead of in every caller.
+ * <p>Every JDK must provide SHA-256 (it is in the list of required algorithms in {@link
+ * MessageDigest}), so a missing algorithm is a broken runtime, not something a caller can handle:
+ * it is rethrown unchecked here, once, instead of in every caller.
  */
 public final class Digests {
 

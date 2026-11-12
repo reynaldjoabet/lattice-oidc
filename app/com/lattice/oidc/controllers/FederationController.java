@@ -10,18 +10,9 @@ import com.lattice.oidc.common.Responses;
 import com.lattice.oidc.security.AuditService;
 import com.nimbusds.jose.JOSEObjectType;
 import com.nimbusds.jose.JWSObject;
-import com.nimbusds.openid.connect.sdk.claims.UserInfo;
-import java.io.IOException;
-import java.net.URI;
 import java.text.ParseException;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
-import jakarta.inject.Inject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import play.mvc.BodyParser;
@@ -51,14 +42,15 @@ public final class FederationController extends BaseController {
    * <p>An OpenID Provider that supports OpenID Federation 1.0 must provide an endpoint that returns
    * its entity configuration in JWT format. The URI of the endpoint is Entity ID + {@code
    * /.well-known/openid-federation} (or, as in RFC 8414, the host component of the Entity ID +
-   * {@code /.well-known/openid-federation} + the path component of the Entity ID). The Entity ID is a
-   * URL that identifies an OpenID Provider (and other entities including Relying Parties, Trust
+   * {@code /.well-known/openid-federation} + the path component of the Entity ID). The Entity ID is
+   * a URL that identifies an OpenID Provider (and other entities including Relying Parties, Trust
    * Anchors and Intermediate Authorities) in the context of OpenID Federation 1.0.
    */
   public CompletionStage<Result> configuration() {
     return async(
         () -> {
-          // The request to Authlete's /federation/configuration API: this server acts as an OpenID Provider
+          // The request to Authlete's /federation/configuration API: this server acts as an OpenID
+          // Provider
           // and as an OpenID Credential Issuer.
           FederationConfigurationResponse r =
               api()
@@ -83,6 +75,7 @@ public final class FederationController extends BaseController {
    *
    * <p>The endpoint accepts {@code POST} requests whose {@code Content-Type} is either of the
    * following.
+   *
    * <ul>
    *   <li>{@code application/entity-statement+jwt}: the content is the entity configuration of the
    *       relying party to be registered.
@@ -91,11 +84,11 @@ public final class FederationController extends BaseController {
    * </ul>
    *
    * <p>Authlete resolves the trust chain, applies the metadata policies, registers the client and
-   * signs the response. On success the endpoint returns that JWT with {@code 200 OK}, served with the
-   * media type its {@code typ} names: {@code application/explicit-registration-response+jwt} in the
-   * final specification (§12.2.3), or {@code application/entity-statement+jwt} from an Authlete that
-   * still types it as the drafts did. The URL of this endpoint goes in the Authlete service's {@code
-   * federation_registration_endpoint}, which the discovery document publishes.
+   * signs the response. On success the endpoint returns that JWT with {@code 200 OK}, served with
+   * the media type its {@code typ} names: {@code application/explicit-registration-response+jwt} in
+   * the final specification (§12.2.3), or {@code application/entity-statement+jwt} from an Authlete
+   * that still types it as the drafts did. The URL of this endpoint goes in the Authlete service's
+   * {@code federation_registration_endpoint}, which the discovery document publishes.
    */
   @BodyParser.Of(BodyParser.TolerantText.class)
   public CompletionStage<Result> register(Http.Request request) {
@@ -112,7 +105,8 @@ public final class FederationController extends BaseController {
               415,
               Responses.error(
                   "invalid_request",
-                  "Content-Type must be application/entity-statement+jwt or application/trust-chain+json.")));
+                  "Content-Type must be application/entity-statement+jwt or"
+                      + " application/trust-chain+json.")));
     }
     if (body == null || body.isBlank()) {
       return CompletableFuture.completedFuture(
@@ -137,8 +131,9 @@ public final class FederationController extends BaseController {
 
   /**
    * The media type for a registration response JWT, from its {@code typ}: the final specification's
-   * {@code explicit-registration-response+jwt}, otherwise the drafts' entity statement (which is also
-   * what an unreadable header falls back to: Authlete signed it, so it is served, not refused).
+   * {@code explicit-registration-response+jwt}, otherwise the drafts' entity statement (which is
+   * also what an unreadable header falls back to: Authlete signed it, so it is served, not
+   * refused).
    */
   static String registrationResponseType(String jwt) {
     try {
@@ -147,7 +142,9 @@ public final class FederationController extends BaseController {
         return Responses.EXPLICIT_REGISTRATION_RESPONSE;
       }
     } catch (ParseException | RuntimeException e) {
-      log.warn("Federation registration response is not a readable JWS; serving it as an entity statement");
+      log.warn(
+          "Federation registration response is not a readable JWS; serving it as an entity"
+              + " statement");
     }
     return Responses.ENTITY_STATEMENT;
   }

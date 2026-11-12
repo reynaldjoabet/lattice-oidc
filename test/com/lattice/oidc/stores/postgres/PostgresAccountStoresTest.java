@@ -49,9 +49,11 @@ public class PostgresAccountStoresTest {
 
   // ----------------------------------------------------------------------------- sessions
 
-  private static Session session(String id, String subject, Instant lastSeen, Instant expires, boolean rememberMe) {
+  private static Session session(
+      String id, String subject, Instant lastSeen, Instant expires, boolean rememberMe) {
     Instant created = now().minus(Duration.ofHours(1));
-    return new Session(id, subject, "Firefox", "203.0.113.7", "password", created, lastSeen, expires, rememberMe);
+    return new Session(
+        id, subject, "Firefox", "203.0.113.7", "password", created, lastSeen, expires, rememberMe);
   }
 
   @Test
@@ -77,7 +79,10 @@ public class PostgresAccountStoresTest {
 
     Instant soon = now();
     sessions.touch(id, soon, Duration.ofMinutes(1));
-    assertEquals("30 s ago is within the 1-minute interval", lastSeen, sessions.find(id).orElseThrow().lastSeenAt());
+    assertEquals(
+        "30 s ago is within the 1-minute interval",
+        lastSeen,
+        sessions.find(id).orElseThrow().lastSeenAt());
     sessions.touch(id, soon, Duration.ofSeconds(10));
     assertEquals(soon, sessions.find(id).orElseThrow().lastSeenAt());
   }
@@ -91,7 +96,8 @@ public class PostgresAccountStoresTest {
     sessions.addClient(id, "app-b");
     sessions.addClient(id, "app-a");
     sessions.addClient(id, "app-a");
-    assertEquals("sorted, without duplicates", List.of("app-a", "app-b"), List.copyOf(sessions.clients(id)));
+    assertEquals(
+        "sorted, without duplicates", List.of("app-a", "app-b"), List.copyOf(sessions.clients(id)));
 
     assertEquals(Optional.of(session), sessions.end(id));
     assertEquals(Optional.empty(), sessions.find(id));
@@ -116,15 +122,27 @@ public class PostgresAccountStoresTest {
     Instant expires = now().plus(Duration.ofHours(1));
     sessions.create(session(older, subject, now().minus(Duration.ofMinutes(10)), expires, false));
     sessions.create(session(newer, subject, now(), expires, false));
-    sessions.create(session(unique("s"), subject, now(), now().minus(Duration.ofSeconds(1)), false));
-    assertEquals(List.of(newer, older), sessions.forSubject(subject).stream().map(Session::id).toList());
+    sessions.create(
+        session(unique("s"), subject, now(), now().minus(Duration.ofSeconds(1)), false));
+    assertEquals(
+        List.of(newer, older), sessions.forSubject(subject).stream().map(Session::id).toList());
     assertTrue(sessions.countActive() >= 2);
   }
 
   // ----------------------------------------------------------------------------- passkeys
 
-  private static Passkey passkey(String id, String subject, Instant created, long count, String name) {
-    return new Passkey(id, subject, "handle-" + subject, "cose-key", count, name, created, Optional.empty(), false,
+  private static Passkey passkey(
+      String id, String subject, Instant created, long count, String name) {
+    return new Passkey(
+        id,
+        subject,
+        "handle-" + subject,
+        "cose-key",
+        count,
+        name,
+        created,
+        Optional.empty(),
+        false,
         new LinkedHashSet<>(List.of("internal", "hybrid")));
   }
 
@@ -139,8 +157,18 @@ public class PostgresAccountStoresTest {
     assertEquals(Optional.of(passkey), passkeys.byId(id));
 
     Instant used = now();
-    Passkey updated = new Passkey(id, "someone-else", "other-handle", "other-key", 7, "Work laptop", now(),
-        Optional.of(used), true, new LinkedHashSet<>(List.of("usb")));
+    Passkey updated =
+        new Passkey(
+            id,
+            "someone-else",
+            "other-handle",
+            "other-key",
+            7,
+            "Work laptop",
+            now(),
+            Optional.of(used),
+            true,
+            new LinkedHashSet<>(List.of("usb")));
     passkeys.save(updated);
     Passkey loaded = passkeys.byId(id).orElseThrow();
     assertEquals(7, loaded.signatureCount());
@@ -161,7 +189,8 @@ public class PostgresAccountStoresTest {
     String second = unique("cred");
     passkeys.save(passkey(second, subject, now(), 0, "Phone"));
     passkeys.save(passkey(first, subject, now().minus(Duration.ofDays(2)), 0, "Laptop"));
-    assertEquals(List.of(first, second), passkeys.forSubject(subject).stream().map(Passkey::id).toList());
+    assertEquals(
+        List.of(first, second), passkeys.forSubject(subject).stream().map(Passkey::id).toList());
     passkeys.delete(first);
     assertEquals(List.of(second), passkeys.forSubject(subject).stream().map(Passkey::id).toList());
     assertEquals(Optional.empty(), passkeys.byId(null));
@@ -244,7 +273,8 @@ public class PostgresAccountStoresTest {
     SecondFactorStore factors = store(SecondFactorStore.class);
     String prefix = unique("page");
     for (String suffix : List.of("-c", "-a", "-b")) {
-      factors.saveTotp(new Totp(prefix + suffix, (suffix.equals("-c") ? "old" : "new") + ":s", now(), 0));
+      factors.saveTotp(
+          new Totp(prefix + suffix, (suffix.equals("-c") ? "old" : "new") + ":s", now(), 0));
     }
     List<String> page = factors.totps(prefix + "-a", 2).stream().map(Totp::subject).toList();
     assertEquals(List.of(prefix + "-b", prefix + "-c"), page);
@@ -264,7 +294,9 @@ public class PostgresAccountStoresTest {
 
     factors.replaceRecoveryCodes(subject, List.of("k2:h9"));
     assertEquals("replacing removes the old ones", 1, factors.remainingRecoveryCodes(subject));
-    assertTrue(factors.accountsWithRecoveryCodesNotUnderKey("k1") >= 1 || factors.accountsWithRecoveryCodesNotUnderKey("k2") >= 0);
+    assertTrue(
+        factors.accountsWithRecoveryCodesNotUnderKey("k1") >= 1
+            || factors.accountsWithRecoveryCodesNotUnderKey("k2") >= 0);
     factors.deleteRecoveryCodes(subject);
     assertEquals(0, factors.remainingRecoveryCodes(subject));
   }
@@ -299,7 +331,8 @@ public class PostgresAccountStoresTest {
     String subject = unique("user");
     links.link("idp-b", unique("ext"), subject);
     links.link("idp-a", unique("ext"), subject);
-    assertEquals(List.of("idp-b", "idp-a"), links.linksOf(subject).stream().map(Link::providerId).toList());
+    assertEquals(
+        List.of("idp-b", "idp-a"), links.linksOf(subject).stream().map(Link::providerId).toList());
   }
 
   // ------------------------------------------------------------------- remembered consent
@@ -308,10 +341,12 @@ public class PostgresAccountStoresTest {
   public void aRememberedConsentReadsBackAndIsReplaced() {
     AppConsentStore consents = store(AppConsentStore.class);
     String subject = unique("user");
-    AppConsent consent = new AppConsent(subject, 42, Set.of("openid", "profile"), Set.of("name", "email"), now());
+    AppConsent consent =
+        new AppConsent(subject, 42, Set.of("openid", "profile"), Set.of("name", "email"), now());
     consents.put(consent);
     assertEquals(Optional.of(consent), consents.find(subject, 42));
-    AppConsent wider = new AppConsent(subject, 42, Set.of("openid", "profile", "email"), Set.of(), now());
+    AppConsent wider =
+        new AppConsent(subject, 42, Set.of("openid", "profile", "email"), Set.of(), now());
     consents.put(wider);
     assertEquals(Optional.of(wider), consents.find(subject, 42));
     assertEquals(Optional.empty(), consents.find(subject, 43));

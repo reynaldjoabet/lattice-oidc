@@ -43,7 +43,10 @@ public class TestJwksTest {
     assertFalse(TestJwks.publicSet().toString(true).contains("\"d\""));
   }
 
-  /** Our thumbprints of every sample key (private or public form) are the library's, for RSA and each EC curve. */
+  /**
+   * Our thumbprints of every sample key (private or public form) are the library's, for RSA and
+   * each EC curve.
+   */
   @Test
   public void thumbprintsMatchTheLibraryForEveryKey() throws Exception {
     java.util.Set<String> seen = new java.util.HashSet<>();
@@ -59,34 +62,50 @@ public class TestJwksTest {
   @Test
   public void theSigningKeysSignAndVerify() throws Exception {
     RSAKey rsa = (RSAKey) TestJwks.parse(TestJwks.RSA_SIGNING);
-    JWSObject signed = new JWSObject(new JWSHeader.Builder(JWSAlgorithm.RS256).keyID(rsa.getKeyID()).build(), new Payload("hello"));
+    JWSObject signed =
+        new JWSObject(
+            new JWSHeader.Builder(JWSAlgorithm.RS256).keyID(rsa.getKeyID()).build(),
+            new Payload("hello"));
     signed.sign(new RSASSASigner(rsa));
-    assertTrue(JWSObject.parse(signed.serialize()).verify(new RSASSAVerifier(rsa.toRSAPublicKey())));
+    assertTrue(
+        JWSObject.parse(signed.serialize()).verify(new RSASSAVerifier(rsa.toRSAPublicKey())));
 
     ECKey ec = (ECKey) TestJwks.parse(TestJwks.EC_P256_SIGNING);
-    JWSObject es = new JWSObject(new JWSHeader.Builder(JWSAlgorithm.ES256).keyID(ec.getKeyID()).build(), new Payload("hello"));
+    JWSObject es =
+        new JWSObject(
+            new JWSHeader.Builder(JWSAlgorithm.ES256).keyID(ec.getKeyID()).build(),
+            new Payload("hello"));
     es.sign(new ECDSASigner(ec));
     assertTrue(JWSObject.parse(es.serialize()).verify(new ECDSAVerifier(ec.toECPublicKey())));
-    ECKey other = new com.nimbusds.jose.jwk.gen.ECKeyGenerator(com.nimbusds.jose.jwk.Curve.P_256).generate();
-    assertFalse("another key must not verify", JWSObject.parse(es.serialize()).verify(new ECDSAVerifier(other.toECPublicKey())));
+    ECKey other =
+        new com.nimbusds.jose.jwk.gen.ECKeyGenerator(com.nimbusds.jose.jwk.Curve.P_256).generate();
+    assertFalse(
+        "another key must not verify",
+        JWSObject.parse(es.serialize()).verify(new ECDSAVerifier(other.toECPublicKey())));
   }
 
   @Test
   public void theEncryptionKeysEncryptAndDecrypt() throws Exception {
     RSAKey rsa = (RSAKey) TestJwks.parse(TestJwks.RSA_ENCRYPTION);
-    JWEObject sealed = new JWEObject(new JWEHeader(JWEAlgorithm.RSA_OAEP, EncryptionMethod.A128GCM), new Payload("secret"));
+    JWEObject sealed =
+        new JWEObject(
+            new JWEHeader(JWEAlgorithm.RSA_OAEP, EncryptionMethod.A128GCM), new Payload("secret"));
     sealed.encrypt(new RSAEncrypter(rsa.toRSAPublicKey()));
     JWEObject opened = JWEObject.parse(sealed.serialize());
     opened.decrypt(new RSADecrypter(rsa));
     assertEquals("secret", opened.getPayload().toString());
 
     String[] ecKeys = {
-      TestJwks.EC_P384_ECDH_ES, TestJwks.EC_P384_ECDH_ES_A128KW, TestJwks.EC_P384_ECDH_ES_A192KW, TestJwks.EC_P521_ECDH_ES_A192KW
+      TestJwks.EC_P384_ECDH_ES,
+      TestJwks.EC_P384_ECDH_ES_A128KW,
+      TestJwks.EC_P384_ECDH_ES_A192KW,
+      TestJwks.EC_P521_ECDH_ES_A192KW
     };
     for (String json : ecKeys) {
       ECKey ec = (ECKey) TestJwks.parse(json);
       JWEAlgorithm alg = JWEAlgorithm.parse(ec.getAlgorithm().getName());
-      JWEObject box = new JWEObject(new JWEHeader(alg, EncryptionMethod.A256GCM), new Payload("secret"));
+      JWEObject box =
+          new JWEObject(new JWEHeader(alg, EncryptionMethod.A256GCM), new Payload("secret"));
       box.encrypt(new ECDHEncrypter(ec.toPublicJWK().toECKey()));
       JWEObject read = JWEObject.parse(box.serialize());
       read.decrypt(new ECDHDecrypter(ec));

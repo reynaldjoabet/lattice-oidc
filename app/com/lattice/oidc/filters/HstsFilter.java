@@ -13,9 +13,9 @@ import play.mvc.Results;
 /**
  * HTTP Strict Transport Security (RFC 6797), enabled with {@code lattice.security.hsts.enabled}.
  * Plain-HTTP GET/HEAD requests are redirected to HTTPS (other methods are refused, since
- * redirecting a POST would leak its body over HTTP first); HTTPS responses carry the
- * {@code Strict-Transport-Security} header. Health probes are exempt so that orchestrators can
- * check the pod over plain HTTP.
+ * redirecting a POST would leak its body over HTTP first); HTTPS responses carry the {@code
+ * Strict-Transport-Security} header. Health probes are exempt so that orchestrators can check the
+ * pod over plain HTTP.
  */
 @Singleton
 public final class HstsFilter extends EssentialFilter {
@@ -27,7 +27,9 @@ public final class HstsFilter extends EssentialFilter {
   public HstsFilter(Config config) {
     this.enabled = config.getBoolean("lattice.security.hsts.enabled");
     this.headerValue =
-        "max-age=" + config.getDuration("lattice.security.hsts.max-age").toSeconds() + "; includeSubDomains";
+        "max-age="
+            + config.getDuration("lattice.security.hsts.max-age").toSeconds()
+            + "; includeSubDomains";
   }
 
   @Override
@@ -49,7 +51,8 @@ public final class HstsFilter extends EssentialFilter {
                     : Results.status(403, "HTTPS is required."));
           }
           Accumulator<ByteString, Result> action = next.apply(request);
-          return action.map(r -> r.withHeader("Strict-Transport-Security", headerValue), FilterSupport.DIRECT);
+          return action.map(
+              r -> r.withHeader("Strict-Transport-Security", headerValue), FilterSupport.DIRECT);
         });
   }
 }

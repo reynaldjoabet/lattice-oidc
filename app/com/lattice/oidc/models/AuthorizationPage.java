@@ -15,7 +15,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-/** Everything the consent page shows. Immutable; derived variants are created with {@code with*}. */
+/**
+ * Everything the consent page shows. Immutable; derived variants are created with {@code with*}.
+ */
 public record AuthorizationPage(
     String ticket,
     String serviceName,
@@ -48,7 +50,9 @@ public record AuthorizationPage(
   public record ClaimPurpose(String claim, String purpose) {}
 
   public static AuthorizationPage from(
-      AuthorizationResponse info, Optional<String> loggedInAs, List<IdentityProviders.Link> identityProviders) {
+      AuthorizationResponse info,
+      Optional<String> loggedInAs,
+      List<IdentityProviders.Link> identityProviders) {
     Client client = info.getClient();
     String clientName =
         client.getClientName() != null
@@ -91,18 +95,56 @@ public record AuthorizationPage(
 
   public AuthorizationPage withError(String message) {
     return new AuthorizationPage(
-        ticket, serviceName, clientName, description, logoUri, clientUri, policyUri, tosUri, scopes,
-        claimsForIdToken, claimsForUserInfo, purpose, verifiedClaimsForIdToken,
-        verifiedClaimsForUserInfo, authorizationDetails, loginId, loginIdReadOnly, loggedInAs,
-        identityProviders, Optional.ofNullable(message), obbConsent, identified, approvedScopes, approvedClaims);
+        ticket,
+        serviceName,
+        clientName,
+        description,
+        logoUri,
+        clientUri,
+        policyUri,
+        tosUri,
+        scopes,
+        claimsForIdToken,
+        claimsForUserInfo,
+        purpose,
+        verifiedClaimsForIdToken,
+        verifiedClaimsForUserInfo,
+        authorizationDetails,
+        loginId,
+        loginIdReadOnly,
+        loggedInAs,
+        identityProviders,
+        Optional.ofNullable(message),
+        obbConsent,
+        identified,
+        approvedScopes,
+        approvedClaims);
   }
 
   public AuthorizationPage withLoggedInAs(Optional<String> user) {
     return new AuthorizationPage(
-        ticket, serviceName, clientName, description, logoUri, clientUri, policyUri, tosUri, scopes,
-        claimsForIdToken, claimsForUserInfo, purpose, verifiedClaimsForIdToken,
-        verifiedClaimsForUserInfo, authorizationDetails, loginId, loginIdReadOnly, user,
-        identityProviders, error, obbConsent, identified,
+        ticket,
+        serviceName,
+        clientName,
+        description,
+        logoUri,
+        clientUri,
+        policyUri,
+        tosUri,
+        scopes,
+        claimsForIdToken,
+        claimsForUserInfo,
+        purpose,
+        verifiedClaimsForIdToken,
+        verifiedClaimsForUserInfo,
+        authorizationDetails,
+        loginId,
+        loginIdReadOnly,
+        user,
+        identityProviders,
+        error,
+        obbConsent,
+        identified,
         user.isPresent() ? approvedScopes : Set.of(),
         user.isPresent() ? approvedClaims : Set.of());
   }
@@ -110,10 +152,30 @@ public record AuthorizationPage(
   /** The page for an Open Banking consent ({@code consent:...} scope). */
   public AuthorizationPage withObbConsent(Optional<ObbConsentView> consent) {
     return new AuthorizationPage(
-        ticket, serviceName, clientName, description, logoUri, clientUri, policyUri, tosUri, scopes,
-        claimsForIdToken, claimsForUserInfo, purpose, verifiedClaimsForIdToken,
-        verifiedClaimsForUserInfo, authorizationDetails, loginId, loginIdReadOnly, loggedInAs,
-        identityProviders, error, consent, identified, approvedScopes, approvedClaims);
+        ticket,
+        serviceName,
+        clientName,
+        description,
+        logoUri,
+        clientUri,
+        policyUri,
+        tosUri,
+        scopes,
+        claimsForIdToken,
+        claimsForUserInfo,
+        purpose,
+        verifiedClaimsForIdToken,
+        verifiedClaimsForUserInfo,
+        authorizationDetails,
+        loginId,
+        loginIdReadOnly,
+        loggedInAs,
+        identityProviders,
+        error,
+        consent,
+        identified,
+        approvedScopes,
+        approvedClaims);
   }
 
   /**
@@ -122,11 +184,30 @@ public record AuthorizationPage(
    */
   public AuthorizationPage withIdentifier(String identifier) {
     return new AuthorizationPage(
-        ticket, serviceName, clientName, description, logoUri, clientUri, policyUri, tosUri, scopes,
-        claimsForIdToken, claimsForUserInfo, purpose, verifiedClaimsForIdToken,
-        verifiedClaimsForUserInfo, authorizationDetails, identifier == null ? "" : identifier,
-        loginIdReadOnly, loggedInAs, identityProviders, error, obbConsent, identifier != null,
-        approvedScopes, approvedClaims);
+        ticket,
+        serviceName,
+        clientName,
+        description,
+        logoUri,
+        clientUri,
+        policyUri,
+        tosUri,
+        scopes,
+        claimsForIdToken,
+        claimsForUserInfo,
+        purpose,
+        verifiedClaimsForIdToken,
+        verifiedClaimsForUserInfo,
+        authorizationDetails,
+        identifier == null ? "" : identifier,
+        loginIdReadOnly,
+        loggedInAs,
+        identityProviders,
+        error,
+        obbConsent,
+        identifier != null,
+        approvedScopes,
+        approvedClaims);
   }
 
   /**
@@ -137,10 +218,30 @@ public record AuthorizationPage(
    */
   public AuthorizationPage withApproved(Set<String> scopes, Set<String> claims) {
     return new AuthorizationPage(
-        ticket, serviceName, clientName, description, logoUri, clientUri, policyUri, tosUri, this.scopes,
-        claimsForIdToken, claimsForUserInfo, purpose, verifiedClaimsForIdToken,
-        verifiedClaimsForUserInfo, authorizationDetails, loginId, loginIdReadOnly, loggedInAs,
-        identityProviders, error, obbConsent, identified, Set.copyOf(scopes), Set.copyOf(claims));
+        ticket,
+        serviceName,
+        clientName,
+        description,
+        logoUri,
+        clientUri,
+        policyUri,
+        tosUri,
+        this.scopes,
+        claimsForIdToken,
+        claimsForUserInfo,
+        purpose,
+        verifiedClaimsForIdToken,
+        verifiedClaimsForUserInfo,
+        authorizationDetails,
+        loginId,
+        loginIdReadOnly,
+        loggedInAs,
+        identityProviders,
+        error,
+        obbConsent,
+        identified,
+        Set.copyOf(scopes),
+        Set.copyOf(claims));
   }
 
   /** Whether the user approved something for this app before, so the page asks only for more. */
@@ -164,18 +265,28 @@ public record AuthorizationPage(
    */
   public List<String> newSharedInformation() {
     java.util.LinkedHashSet<String> labels = new java.util.LinkedHashSet<>();
-    claimsForIdToken.stream().filter(c -> !approvedClaims.contains(c)).forEach(c -> labels.add(ConsentLabels.claim(c)));
-    claimsForUserInfo.stream().filter(c -> !approvedClaims.contains(c)).forEach(c -> labels.add(ConsentLabels.claim(c)));
-    verifiedClaimsForIdToken.forEach(c -> labels.add("Verified: " + ConsentLabels.claim(c.claim())));
-    verifiedClaimsForUserInfo.forEach(c -> labels.add("Verified: " + ConsentLabels.claim(c.claim())));
+    claimsForIdToken.stream()
+        .filter(c -> !approvedClaims.contains(c))
+        .forEach(c -> labels.add(ConsentLabels.claim(c)));
+    claimsForUserInfo.stream()
+        .filter(c -> !approvedClaims.contains(c))
+        .forEach(c -> labels.add(ConsentLabels.claim(c)));
+    verifiedClaimsForIdToken.forEach(
+        c -> labels.add("Verified: " + ConsentLabels.claim(c.claim())));
+    verifiedClaimsForUserInfo.forEach(
+        c -> labels.add("Verified: " + ConsentLabels.claim(c.claim())));
     return List.copyOf(labels);
   }
 
   /** Information the app was already allowed. */
   public List<String> alreadySharedInformation() {
     java.util.LinkedHashSet<String> labels = new java.util.LinkedHashSet<>();
-    claimsForIdToken.stream().filter(approvedClaims::contains).forEach(c -> labels.add(ConsentLabels.claim(c)));
-    claimsForUserInfo.stream().filter(approvedClaims::contains).forEach(c -> labels.add(ConsentLabels.claim(c)));
+    claimsForIdToken.stream()
+        .filter(approvedClaims::contains)
+        .forEach(c -> labels.add(ConsentLabels.claim(c)));
+    claimsForUserInfo.stream()
+        .filter(approvedClaims::contains)
+        .forEach(c -> labels.add(ConsentLabels.claim(c)));
     labels.removeAll(newSharedInformation());
     return List.copyOf(labels);
   }
@@ -213,8 +324,10 @@ public record AuthorizationPage(
     java.util.LinkedHashSet<String> labels = new java.util.LinkedHashSet<>();
     claimsForIdToken.forEach(c -> labels.add(ConsentLabels.claim(c)));
     claimsForUserInfo.forEach(c -> labels.add(ConsentLabels.claim(c)));
-    verifiedClaimsForIdToken.forEach(c -> labels.add("Verified: " + ConsentLabels.claim(c.claim())));
-    verifiedClaimsForUserInfo.forEach(c -> labels.add("Verified: " + ConsentLabels.claim(c.claim())));
+    verifiedClaimsForIdToken.forEach(
+        c -> labels.add("Verified: " + ConsentLabels.claim(c.claim())));
+    verifiedClaimsForUserInfo.forEach(
+        c -> labels.add("Verified: " + ConsentLabels.claim(c.claim())));
     return List.copyOf(labels);
   }
 
@@ -249,7 +362,9 @@ public record AuthorizationPage(
     }
     if (info.getDynamicScopes() != null) {
       for (DynamicScope dynamicScope : info.getDynamicScopes()) {
-        out.add(new ScopeItem(dynamicScope.getValue(), ConsentLabels.scope(dynamicScope.getValue(), null)));
+        out.add(
+            new ScopeItem(
+                dynamicScope.getValue(), ConsentLabels.scope(dynamicScope.getValue(), null)));
       }
     }
     return out;
@@ -270,7 +385,9 @@ public record AuthorizationPage(
     }
     Object verified = JsonHelpers.readMap(claimsRequest).get("verified_claims");
     List<Object> entries =
-        verified instanceof List<?> l ? (List<Object>) l : verified == null ? List.of() : List.of(verified);
+        verified instanceof List<?> l
+            ? (List<Object>) l
+            : verified == null ? List.of() : List.of(verified);
     List<ClaimPurpose> out = new ArrayList<>();
     for (Object e : entries) {
       if (e instanceof Map<?, ?> m && m.get("claims") instanceof Map<?, ?> claims) {

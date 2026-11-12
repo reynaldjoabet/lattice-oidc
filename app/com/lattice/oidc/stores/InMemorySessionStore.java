@@ -1,5 +1,6 @@
 package com.lattice.oidc.stores;
 
+import jakarta.inject.Singleton;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
@@ -9,7 +10,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import jakarta.inject.Singleton;
 
 /** {@link SessionStore} in memory, for one server (development and tests). */
 @Singleton
@@ -30,7 +30,9 @@ public final class InMemorySessionStore implements SessionStore {
 
   @Override
   public Optional<Session> find(String id) {
-    return id == null ? Optional.empty() : Optional.ofNullable(sessions.get(id)).filter(InMemorySessionStore::live);
+    return id == null
+        ? Optional.empty()
+        : Optional.ofNullable(sessions.get(id)).filter(InMemorySessionStore::live);
   }
 
   @Override
@@ -40,8 +42,15 @@ public final class InMemorySessionStore implements SessionStore {
         (key, session) ->
             session.lastSeenAt().plus(interval).isBefore(now)
                 ? new Session(
-                    session.id(), session.subject(), session.userAgent(), session.ip(), session.method(),
-                    session.createdAt(), now, session.expiresAt(), session.rememberMe())
+                    session.id(),
+                    session.subject(),
+                    session.userAgent(),
+                    session.ip(),
+                    session.method(),
+                    session.createdAt(),
+                    now,
+                    session.expiresAt(),
+                    session.rememberMe())
                 : session);
   }
 
@@ -65,7 +74,10 @@ public final class InMemorySessionStore implements SessionStore {
   @Override
   public void addClient(String id, String clientIdentifier) {
     if (sessions.containsKey(id)) {
-      clients.computeIfAbsent(id, ignored -> java.util.Collections.synchronizedSet(new LinkedHashSet<>())).add(clientIdentifier);
+      clients
+          .computeIfAbsent(
+              id, ignored -> java.util.Collections.synchronizedSet(new LinkedHashSet<>()))
+          .add(clientIdentifier);
     }
   }
 

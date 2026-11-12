@@ -12,15 +12,15 @@ import com.lattice.oidc.models.AuthorizationInteraction;
 import com.lattice.oidc.models.User;
 import com.lattice.oidc.security.PairwiseSubjects;
 import com.lattice.oidc.security.UserSessions;
+import jakarta.inject.Inject;
+import jakarta.inject.Provider;
+import jakarta.inject.Singleton;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import jakarta.inject.Inject;
-import jakarta.inject.Provider;
-import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import play.mvc.Result;
@@ -40,9 +40,9 @@ public final class AuthorizationHandler {
    *
    * @param user The end-user who granted authorization.
    * @param authTime The time when the end-user was authenticated, in seconds since the Unix epoch.
-   * @param sessionId The session ID of the end-user's authentication session. This value is needed for the
-   *     {@code sid} claim (back-channel logout) and when "OpenID Connect Native SSO for Mobile Apps
-   *     1.0" (a.k.a. "Native SSO") needs to be supported.
+   * @param sessionId The session ID of the end-user's authentication session. This value is needed
+   *     for the {@code sid} claim (back-channel logout) and when "OpenID Connect Native SSO for
+   *     Mobile Apps 1.0" (a.k.a. "Native SSO") needs to be supported.
    * @param acr The ACR the session was authenticated with (a passkey sign-in or step-up), or null
    *     for a password sign-in.
    */
@@ -97,22 +97,26 @@ public final class AuthorizationHandler {
   public Result issue(AuthorizationInteraction interaction, Grant grant) {
     User user = grant.user();
     // The current user is different from the requested subject.
-    if (interaction.requestedSubject() != null && !interaction.requestedSubject().equals(user.getSubject())) {
+    if (interaction.requestedSubject() != null
+        && !interaction.requestedSubject().equals(user.getSubject())) {
       return fail(interaction.ticket(), AuthorizationFailRequest.Reason.DIFFERENT_SUBJECT);
     }
     // Grant Management: a merge or replace of another user's grant. Authlete would skip grant
     // management silently and issue tokens outside the grant the client asked to change; refuse
     // instead, as for a different requested subject.
-    if (interaction.grantSubject() != null && !interaction.grantSubject().equals(user.getSubject())) {
+    if (interaction.grantSubject() != null
+        && !interaction.grantSubject().equals(user.getSubject())) {
       return fail(interaction.ticket(), AuthorizationFailRequest.Reason.DIFFERENT_SUBJECT);
     }
-    String acr = acr(interaction.ticket(), interaction.acrs(), interaction.acrEssential(), grant.acr());
+    String acr =
+        acr(interaction.ticket(), interaction.acrs(), interaction.acrEssential(), grant.acr());
 
     // Collect claim values. Values of verified claims ("verified_claims", OpenID Connect for
     // Identity Assurance 1.0) are added when the "id_token" property of the "claims" request
     // parameter requests them.
     ClaimsCollector collector = new ClaimsCollector(user);
-    Map<String, Object> claims = collector.collect(interaction.claimNames(), interaction.claimLocales());
+    Map<String, Object> claims =
+        collector.collect(interaction.claimNames(), interaction.claimLocales());
     claims = customClaims(interaction, claims);
     claims = collector.withVerifiedClaims(claims, interaction.idTokenClaims());
     // Collect values of claims that are indirectly requested by transformed claims.
@@ -122,7 +126,8 @@ public final class AuthorizationHandler {
     // Values of verified claims that are used to compute values of
     // transformed claims under "verified_claims/claims".
     List<Map<String, Object>> verifiedForTx =
-        collector.verifiedClaimsForTx(interaction.idTokenClaims(), interaction.requestedVerifiedClaimsForTx());
+        collector.verifiedClaimsForTx(
+            interaction.idTokenClaims(), interaction.requestedVerifiedClaimsForTx());
 
     AuthorizationIssueRequest request =
         new AuthorizationIssueRequest()
@@ -131,10 +136,13 @@ public final class AuthorizationHandler {
             .setAuthTime(grant.authTime())
             .setAcr(acr)
             // The potentially pairwise subject of the end-user.
-            .setSub(pairwise.subFor(interaction.subjectType(), interaction.sectorIdentifier(), user.getSubject()))
+            .setSub(
+                pairwise.subFor(
+                    interaction.subjectType(), interaction.sectorIdentifier(), user.getSubject()))
             .setClaimsForTx(claimsForTx)
             .setVerifiedClaimsForTx(verifiedForTx)
-            // The session ID of the user's authentication session (used for the "sid" claim and Native SSO).
+            // The session ID of the user's authentication session (used for the "sid" claim and
+            // Native SSO).
             .setSessionId(grant.sessionId());
     if (claims != null && !claims.isEmpty()) {
       request.setClaims(claims);
@@ -149,7 +157,8 @@ public final class AuthorizationHandler {
     AuthorizationIssueResponse response = api.get().authorizationIssue(request);
     String content = response.getResponseContent();
     return switch (response.getAction()) {
-      // 302 Found. The client is recorded in the login session so that it can be notified on logout.
+      // 302 Found. The client is recorded in the login session so that it can be notified on
+      // logout.
       case LOCATION -> {
         sessions.addClient(grant.sessionId(), interaction.clientIdentifier());
         yield Responses.location(content);
@@ -175,7 +184,8 @@ public final class AuthorizationHandler {
    */
   public Result fail(String ticket, AuthorizationFailRequest.Reason reason) {
     AuthorizationFailResponse response =
-        api.get().authorizationFail(new AuthorizationFailRequest().setTicket(ticket).setReason(reason));
+        api.get()
+            .authorizationFail(new AuthorizationFailRequest().setTicket(ticket).setReason(reason));
     String content = response.getResponseContent();
     return switch (response.getAction()) {
       // 302 Found
@@ -197,21 +207,26 @@ public final class AuthorizationHandler {
    * client).
    */
   @SuppressWarnings("unchecked")
-  private Map<String, Object> customClaims(AuthorizationInteraction interaction, Map<String, Object> claims) {
-    List<String> names = interaction.claimNames() == null ? List.of() : Arrays.asList(interaction.claimNames());
+  private Map<String, Object> customClaims(
+      AuthorizationInteraction interaction, Map<String, Object> claims) {
+    List<String> names =
+        interaction.claimNames() == null ? List.of() : Arrays.asList(interaction.claimNames());
     Map<String, Object> out = claims == null ? new java.util.LinkedHashMap<>() : claims;
     boolean identityAssurance =
-        interaction.idTokenClaims() != null && interaction.idTokenClaims().contains("verified_claims");
+        interaction.idTokenClaims() != null
+            && interaction.idTokenClaims().contains("verified_claims");
     if (names.contains("txn") || identityAssurance) {
       out.put("txn", UUID.randomUUID().toString());
     }
-    // openbanking_intent_id: its value is taken from the "id_token" property of the "claims" request
+    // openbanking_intent_id: its value is taken from the "id_token" property of the "claims"
+    // request
     // parameter. When it has the form "{clientId}:...", it must belong to the requesting client.
     if (names.contains("openbanking_intent_id")) {
       Object entry =
           interaction.idTokenClaims() == null
               ? null
-              : com.lattice.oidc.common.JsonHelpers.readMap(interaction.idTokenClaims()).get("openbanking_intent_id");
+              : com.lattice.oidc.common.JsonHelpers.readMap(interaction.idTokenClaims())
+                  .get("openbanking_intent_id");
       Object value = entry instanceof Map<?, ?> m ? ((Map<String, Object>) m).get("value") : null;
       if (!(value instanceof String intentId)) {
         throw invalidRequest("The value of 'openbanking_intent_id' is not available.");

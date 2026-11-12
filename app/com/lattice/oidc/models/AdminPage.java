@@ -41,5 +41,12 @@ public record AdminPage(
    * A recent audit event; {@code tone} is good, bad or neutral (for the label colour), and {@code
    * details} the event's other fields ("method: password + totp").
    */
-  public record Event(String time, String name, String subject, String client, String ip, String details, String tone) {}
+  public record Event(
+      String time,
+      String name,
+      String subject,
+      String client,
+      String ip,
+      String details,
+      String tone) {}
 }

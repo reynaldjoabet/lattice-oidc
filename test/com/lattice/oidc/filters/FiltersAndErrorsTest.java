@@ -34,8 +34,8 @@ public class FiltersAndErrorsTest {
 
   /**
    * A cross-site form post from a logged-in victim's browser carries the victim's cookies and no
-   * CSRF token: it must be rejected before reaching the controller. (Play only checks requests
-   * with a Cookie or Authorization header; without them there is no ambient credential to abuse.)
+   * CSRF token: it must be rejected before reaching the controller. (Play only checks requests with
+   * a Cookie or Authorization header; without them there is no ambient credential to abuse.)
    */
   @Test
   public void forgedBrowserFormPostIsRejectedWithHtmlWithoutDetails() {
@@ -50,7 +50,8 @@ public class FiltersAndErrorsTest {
                       .header("Cookie", "PLAY_SESSION=anything"));
           assertEquals(contentAsString(r), 403, r.status());
           assertTrue(r.contentType().orElse("").contains("html"));
-          assertTrue("rejected requests still get a request id", r.header("X-Request-ID").isPresent());
+          assertTrue(
+              "rejected requests still get a request id", r.header("X-Request-ID").isPresent());
           assertFalse(contentAsString(r).contains("Exception"));
         });
   }
@@ -80,7 +81,8 @@ public class FiltersAndErrorsTest {
           Result redirect = route(app, get("/api/device/verification").host("localhost"));
           assertEquals(301, redirect.status());
           assertEquals(
-              "https://localhost/api/device/verification", redirect.redirectLocation().orElse(null));
+              "https://localhost/api/device/verification",
+              redirect.redirectLocation().orElse(null));
 
           Result post = route(app, post("/api/token", Map.of("grant_type", "x")).host("localhost"));
           assertEquals("POST over HTTP is refused, not redirected", 403, post.status());

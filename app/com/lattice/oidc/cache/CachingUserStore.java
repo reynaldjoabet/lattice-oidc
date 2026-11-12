@@ -4,12 +4,12 @@ import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.metrics.Metrics;
 import com.lattice.oidc.models.User;
 import com.lattice.oidc.stores.UserStore;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 import jakarta.inject.Inject;
 import jakarta.inject.Named;
 import jakarta.inject.Singleton;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 /**
  * Caches the lookup made on every signed-in request, a user by subject. Saving a user (a new
@@ -35,7 +35,12 @@ public final class CachingUserStore implements UserStore {
 
     static Cached of(User user) {
       return new Cached(
-          user.getSubject(), user.loginId(), user.passwordHash(), user.claims(), user.attributes(), user.verifiedClaims());
+          user.getSubject(),
+          user.loginId(),
+          user.passwordHash(),
+          user.claims(),
+          user.attributes(),
+          user.verifiedClaims());
     }
 
     User user() {

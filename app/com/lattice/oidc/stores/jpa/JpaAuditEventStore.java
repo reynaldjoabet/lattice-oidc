@@ -11,8 +11,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * {@link AuditEventStore} through JPA (entity {@link AuditEventEntity}, table {@code audit_events}).
- * The event name and subject have their own columns for filtering; the whole record is kept as JSON.
+ * {@link AuditEventStore} through JPA (entity {@link AuditEventEntity}, table {@code
+ * audit_events}). The event name and subject have their own columns for filtering; the whole record
+ * is kept as JSON.
  */
 @Singleton
 public final class JpaAuditEventStore implements AuditEventStore {
@@ -48,7 +49,8 @@ public final class JpaAuditEventStore implements AuditEventStore {
     jpql.append(" order by a.id desc");
     return database.transaction(
         em -> {
-          TypedQuery<AuditEventEntity> search = em.createQuery(jpql.toString(), AuditEventEntity.class);
+          TypedQuery<AuditEventEntity> search =
+              em.createQuery(jpql.toString(), AuditEventEntity.class);
           query.event().ifPresent(event -> search.setParameter("event", event));
           query.subject().ifPresent(subject -> search.setParameter("subject", subject));
           query.beforeId().ifPresent(before -> search.setParameter("before", before));

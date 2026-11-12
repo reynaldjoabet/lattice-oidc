@@ -9,17 +9,17 @@ import com.lattice.oidc.security.AuditService;
 import com.lattice.oidc.security.Passkeys;
 import com.lattice.oidc.security.UserSessions;
 import com.lattice.oidc.security.UserSessions.LoginState;
+import jakarta.inject.Inject;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletionStage;
-import jakarta.inject.Inject;
 import play.mvc.Http;
 import play.mvc.Result;
 
 /**
- * Lattice's own CIBA approval page ({@code lattice.ciba.mode = builtin}): a signed-in end-user
- * sees the sign-in requests made for them on other devices, checks the binding message and
- * approves or denies each one.
+ * Lattice's own CIBA approval page ({@code lattice.ciba.mode = builtin}): a signed-in end-user sees
+ * the sign-in requests made for them on other devices, checks the binding message and approves or
+ * denies each one.
  *
  * <ul>
  *   <li>{@code GET /ciba}: the waiting requests.
@@ -38,7 +38,8 @@ public final class CibaApprovalController extends BaseController {
   private final Passkeys passkeys;
 
   @Inject
-  public CibaApprovalController(UserSessions sessions, CibaHandler ciba, LatticeConfig config, Passkeys passkeys) {
+  public CibaApprovalController(
+      UserSessions sessions, CibaHandler ciba, LatticeConfig config, Passkeys passkeys) {
     this.sessions = sessions;
     this.ciba = ciba;
     this.config = config;
@@ -47,7 +48,11 @@ public final class CibaApprovalController extends BaseController {
 
   public Result page(Http.Request request) {
     if (config.ciba().mode() != LatticeConfig.CibaMode.BUILTIN) {
-      return Pages.message(request, 404, "Not available", "Sign-in requests are approved on your authentication device.");
+      return Pages.message(
+          request,
+          404,
+          "Not available",
+          "Sign-in requests are approved on your authentication device.");
     }
     Optional<LoginState> current = sessions.current(request);
     if (current.isEmpty()) {
@@ -56,8 +61,15 @@ public final class CibaApprovalController extends BaseController {
     String subject = current.get().user().getSubject();
     return Responses.of(
         200,
-        views.html.oidc.cibaApproval
-            .render(ciba.pendingFor(subject), current.get().user().displayName(), passkeys.hasPasskeys(subject), request)
+        views
+            .html
+            .oidc
+            .cibaApproval
+            .render(
+                ciba.pendingFor(subject),
+                current.get().user().displayName(),
+                passkeys.hasPasskeys(subject),
+                request)
             .body(),
         Responses.HTML,
         null);
@@ -78,9 +90,14 @@ public final class CibaApprovalController extends BaseController {
           boolean approve = form.containsKey("approve");
           String subject = current.get().user().getSubject();
           if (approve && passkeys.hasPasskeys(subject)) {
-            return Pages.message(request, 400, "Approve with your passkey", "Go back and choose \"Approve with passkey\".");
+            return Pages.message(
+                request,
+                400,
+                "Approve with your passkey",
+                "Go back and choose \"Approve with passkey\".");
           }
-          Optional<CibaApproval> decided = ciba.decide(subject, Requests.first(form, "id"), approve);
+          Optional<CibaApproval> decided =
+              ciba.decide(subject, Requests.first(form, "id"), approve);
           if (decided.isEmpty()) {
             return Pages.message(
                 request,
@@ -97,7 +114,11 @@ public final class CibaApprovalController extends BaseController {
               decided.get().clientName());
           return approve
               ? Pages.success(request, "Sign-in approved", "You can continue on the other device.")
-              : Pages.message(request, 200, "Request denied", decided.get().clientName() + " was not signed in.");
+              : Pages.message(
+                  request,
+                  200,
+                  "Request denied",
+                  decided.get().clientName() + " was not signed in.");
         });
   }
 }

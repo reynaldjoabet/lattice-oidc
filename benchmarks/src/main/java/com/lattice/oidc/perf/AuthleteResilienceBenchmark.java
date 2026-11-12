@@ -47,11 +47,16 @@ public class AuthleteResilienceBenchmark {
                 new Class<?>[] {AuthleteApi.class},
                 (proxy, method, args) -> {
                   if (method.getDeclaringClass() == Object.class) {
-                    return method.getName().equals("hashCode") ? 0 : method.getName().equals("equals") ? proxy == args[0] : "fake";
+                    return method.getName().equals("hashCode")
+                        ? 0
+                        : method.getName().equals("equals") ? proxy == args[0] : "fake";
                   }
-                  return method.getName().equals("getServiceConfiguration") ? "{\"issuer\":\"https://lattice.example\"}" : answer;
+                  return method.getName().equals("getServiceConfiguration")
+                      ? "{\"issuer\":\"https://lattice.example\"}"
+                      : answer;
                 });
-    resilient = ResilientAuthleteApi.wrap(direct, new ResilienceConfig(), ResilienceListener.NONE).api();
+    resilient =
+        ResilientAuthleteApi.wrap(direct, new ResilienceConfig(), ResilienceListener.NONE).api();
     request = new AuthorizationRequest();
     resilient.getServiceConfiguration(true); // fill the cache
   }

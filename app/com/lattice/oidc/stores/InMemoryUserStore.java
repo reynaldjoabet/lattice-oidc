@@ -3,6 +3,8 @@ package com.lattice.oidc.stores;
 import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.models.User;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -13,8 +15,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import play.Environment;
@@ -34,7 +34,9 @@ public final class InMemoryUserStore implements UserStore {
   public InMemoryUserStore(LatticeConfig config, Environment environment) {
     if (config.demoUsers()) {
       demoUsers(environment).forEach(this::save);
-      LOG.warn("Seeded {} DEMO user accounts; disable lattice.demo-users in production.", bySubject.size());
+      LOG.warn(
+          "Seeded {} DEMO user accounts; disable lattice.demo-users in production.",
+          bySubject.size());
     }
   }
 
@@ -88,7 +90,8 @@ public final class InMemoryUserStore implements UserStore {
       return Optional.empty();
     }
     String wanted = loginId.toLowerCase(Locale.ROOT);
-    return find(user -> user.loginId() != null && user.loginId().toLowerCase(Locale.ROOT).equals(wanted));
+    return find(
+        user -> user.loginId() != null && user.loginId().toLowerCase(Locale.ROOT).equals(wanted));
   }
 
   @Override
@@ -121,7 +124,8 @@ public final class InMemoryUserStore implements UserStore {
       return false;
     }
     boolean[] replaced = {false};
-    // Atomic per account: the comparison and the replacement happen under the map's lock for the key.
+    // Atomic per account: the comparison and the replacement happen under the map's lock for the
+    // key.
     bySubject.computeIfPresent(
         subject,
         (key, user) -> {

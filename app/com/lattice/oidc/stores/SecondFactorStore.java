@@ -28,7 +28,10 @@ public interface SecondFactorStore {
    */
   boolean replaceTotpSecret(String subject, String expected, String replacement);
 
-  /** Up to {@code limit} authenticator apps after {@code afterSubject} (null for the first), by subject. */
+  /**
+   * Up to {@code limit} authenticator apps after {@code afterSubject} (null for the first), by
+   * subject.
+   */
   List<Totp> totps(String afterSubject, int limit);
 
   /** Authenticator apps whose secret isn't under the key {@code keyId}. */
@@ -37,7 +40,9 @@ public interface SecondFactorStore {
   /** Accounts with recovery codes hashed with a key other than {@code keyId}. */
   long accountsWithRecoveryCodesNotUnderKey(String keyId);
 
-  /** Records that a code for {@code step} was used; false if that step or a later one already was. */
+  /**
+   * Records that a code for {@code step} was used; false if that step or a later one already was.
+   */
   boolean useTotpStep(String subject, long step);
 
   /** Replaces the account's recovery codes. */

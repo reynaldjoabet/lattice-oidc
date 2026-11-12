@@ -32,8 +32,8 @@ import play.test.Helpers;
 
 /**
  * Passkeys around the protocol flows: the offer after a password sign-in, the WebAuthn options
- * endpoints, step-up for apps that require a phishing-resistant sign-in, and removing a passkey.
- * (A full WebAuthn ceremony needs an authenticator, so signatures are not exercised here.)
+ * endpoints, step-up for apps that require a phishing-resistant sign-in, and removing a passkey. (A
+ * full WebAuthn ceremony needs an authenticator, so signatures are not exercised here.)
  */
 public class PasskeyFlowTest {
 
@@ -42,13 +42,16 @@ public class PasskeyFlowTest {
 
   private void start(Map<String, Object> config) {
     fake.answer("authorization", args -> AuthorizationFlowTest.interaction("ticket-1", null))
-        .answer("authorizationIssue", args -> AuthorizationFlowTest.issued("https://client.example/cb?code=abc"))
+        .answer(
+            "authorizationIssue",
+            args -> AuthorizationFlowTest.issued("https://client.example/cb?code=abc"))
         .answer(
             "authorizationFail",
             args -> {
               AuthorizationFailResponse response = new AuthorizationFailResponse();
               response.setAction(AuthorizationFailResponse.Action.LOCATION);
-              response.setResponseContent("https://client.example/cb?error=unmet_authentication_requirements");
+              response.setResponseContent(
+                  "https://client.example/cb?error=unmet_authentication_requirements");
               return response;
             });
     app = app(fake, config);
@@ -63,7 +66,9 @@ public class PasskeyFlowTest {
   }
 
   private Result authorizationPage() {
-    Result page = route(app, withCsrf(get("/api/authorization?response_type=code&client_id=42&scope=openid")));
+    Result page =
+        route(
+            app, withCsrf(get("/api/authorization?response_type=code&client_id=42&scope=openid")));
     assertEquals(200, page.status());
     return page;
   }
@@ -71,13 +76,29 @@ public class PasskeyFlowTest {
   private Result passwordSignIn(Result page) {
     return route(
         app,
-        withCsrf(post("/api/authorization/decision", Map.of("ticket", "ticket-1", "loginId", "john", "password", "john", "login", "true")))
+        withCsrf(
+                post(
+                    "/api/authorization/decision",
+                    Map.of(
+                        "ticket",
+                        "ticket-1",
+                        "loginId",
+                        "john",
+                        "password",
+                        "john",
+                        "login",
+                        "true")))
             .session(page.session().data()));
   }
 
   private Result accountSignIn() {
     Result login =
-        route(app, withCsrf(post("/account/login", Map.of("loginId", "john", "password", "john", "next", "account"))));
+        route(
+            app,
+            withCsrf(
+                post(
+                    "/account/login",
+                    Map.of("loginId", "john", "password", "john", "next", "account"))));
     assertEquals(303, login.status());
     return login;
   }
@@ -113,10 +134,16 @@ public class PasskeyFlowTest {
     String html = contentAsString(offer);
     assertTrue(html.contains("Sign in faster next time"));
     assertTrue(html.contains("data-passkey=\"register\""));
-    assertTrue("the offer can be skipped", html.contains("/api/authorization/continue?ticket=ticket-1"));
-    assertFalse("not offered again within the interval", app.injector().instanceOf(Passkeys.class).offerDue("1001"));
+    assertTrue(
+        "the offer can be skipped", html.contains("/api/authorization/continue?ticket=ticket-1"));
+    assertFalse(
+        "not offered again within the interval",
+        app.injector().instanceOf(Passkeys.class).offerDue("1001"));
 
-    Result consent = route(app, get("/api/authorization/continue?ticket=ticket-1").session(offer.session().data()));
+    Result consent =
+        route(
+            app,
+            get("/api/authorization/continue?ticket=ticket-1").session(offer.session().data()));
     assertEquals(200, consent.status());
     assertTrue(contentAsString(consent).contains("name=\"authorized\""));
     assertEquals("nothing is issued by continuing", 0, fake.count("authorizationIssue"));
@@ -125,7 +152,8 @@ public class PasskeyFlowTest {
   @Test
   public void registrationOptionsRequireASignedInUser() {
     start(Map.of());
-    Result r = route(app, withCsrf(json("/passkeys/registration/options", "{\"next\":\"account\"}")));
+    Result r =
+        route(app, withCsrf(json("/passkeys/registration/options", "{\"next\":\"account\"}")));
     assertEquals(401, r.status());
     assertTrue(contentAsString(r).contains("\"error\""));
   }
@@ -135,7 +163,10 @@ public class PasskeyFlowTest {
     start(Map.of());
     Result login = accountSignIn();
     Result r =
-        route(app, withCsrf(json("/passkeys/registration/options", "{\"next\":\"account\"}")).session(login.session().data()));
+        route(
+            app,
+            withCsrf(json("/passkeys/registration/options", "{\"next\":\"account\"}"))
+                .session(login.session().data()));
     assertEquals(200, r.status());
     assertEquals("no-store", r.header("Cache-Control").orElse(null));
     JsonNode body = Json.parse(contentAsString(r));
@@ -144,7 +175,8 @@ public class PasskeyFlowTest {
     assertEquals("localhost", publicKey.get("rp").get("id").asText());
     assertFalse(publicKey.get("challenge").asText().isEmpty());
     assertEquals("required", publicKey.get("authenticatorSelection").get("residentKey").asText());
-    assertEquals("required", publicKey.get("authenticatorSelection").get("userVerification").asText());
+    assertEquals(
+        "required", publicKey.get("authenticatorSelection").get("userVerification").asText());
   }
 
   /**
@@ -168,7 +200,13 @@ public class PasskeyFlowTest {
   @Test
   public void signInOptionsWorkWithoutAnAccountName() {
     start(Map.of());
-    Result r = route(app, withCsrf(json("/passkeys/assertion/options", "{\"purpose\":\"signin\",\"next\":\"account\"}")));
+    Result r =
+        route(
+            app,
+            withCsrf(
+                json(
+                    "/passkeys/assertion/options",
+                    "{\"purpose\":\"signin\",\"next\":\"account\"}")));
     assertEquals(200, r.status());
     JsonNode publicKey = Json.parse(contentAsString(r)).get("options").get("publicKey");
     assertFalse(publicKey.get("challenge").asText().isEmpty());
@@ -181,7 +219,10 @@ public class PasskeyFlowTest {
   @Test
   public void unknownAssertionCeremoniesAreRejected() {
     start(Map.of());
-    Result r = route(app, withCsrf(json("/passkeys/assertion", "{\"ceremony\":\"made-up\",\"credential\":{}}")));
+    Result r =
+        route(
+            app,
+            withCsrf(json("/passkeys/assertion", "{\"ceremony\":\"made-up\",\"credential\":{}}")));
     assertEquals(400, r.status());
     assertTrue(contentAsString(r).contains("/passkeys/failed"));
   }
@@ -212,7 +253,10 @@ public class PasskeyFlowTest {
     Result decided =
         route(
             app,
-            withCsrf(post("/api/authorization/decision", Map.of("ticket", "ticket-1", "authorized", "true")))
+            withCsrf(
+                    post(
+                        "/api/authorization/decision",
+                        Map.of("ticket", "ticket-1", "authorized", "true")))
                 .session(consent.session().data()));
     assertEquals(200, decided.status());
     String html = contentAsString(decided);
@@ -236,7 +280,10 @@ public class PasskeyFlowTest {
     Result decided =
         route(
             app,
-            withCsrf(post("/api/authorization/decision", Map.of("ticket", "ticket-1", "authorized", "true")))
+            withCsrf(
+                    post(
+                        "/api/authorization/decision",
+                        Map.of("ticket", "ticket-1", "authorized", "true")))
                 .session(consent.session().data()));
     assertEquals(302, decided.status());
     AuthorizationFailRequest fail = fake.lastRequest("authorizationFail");
@@ -256,12 +303,24 @@ public class PasskeyFlowTest {
     assertTrue(contentAsString(account).contains("/account/passkeys/credential-1/remove"));
 
     Result wrong =
-        route(app, withCsrf(post("/account/passkeys/" + passkey.id() + "/remove", Map.of("password", "nope"))).session(session));
+        route(
+            app,
+            withCsrf(
+                    post(
+                        "/account/passkeys/" + passkey.id() + "/remove",
+                        Map.of("password", "nope")))
+                .session(session));
     assertEquals(401, wrong.status());
     assertTrue(store.byId(passkey.id()).isPresent());
 
     Result removed =
-        route(app, withCsrf(post("/account/passkeys/" + passkey.id() + "/remove", Map.of("password", "john"))).session(session));
+        route(
+            app,
+            withCsrf(
+                    post(
+                        "/account/passkeys/" + passkey.id() + "/remove",
+                        Map.of("password", "john")))
+                .session(session));
     assertEquals(303, removed.status());
     assertTrue(store.byId(passkey.id()).isEmpty());
   }

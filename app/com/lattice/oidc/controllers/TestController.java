@@ -4,11 +4,11 @@ import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.common.Requests;
 import com.lattice.oidc.security.ObbCertValidator;
+import jakarta.inject.Inject;
 import java.security.GeneralSecurityException;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
-import jakarta.inject.Inject;
 import play.mvc.Controller;
 import play.mvc.Http;
 import play.mvc.Result;
@@ -41,7 +41,8 @@ public final class TestController extends Controller {
         .asMap()
         .forEach(
             (name, values) -> {
-              boolean secret = name.equalsIgnoreCase("Authorization") || name.equalsIgnoreCase("Cookie");
+              boolean secret =
+                  name.equalsIgnoreCase("Authorization") || name.equalsIgnoreCase("Cookie");
               List<String> shown = secret ? List.of("<redacted>") : values;
               out.put(name, shown.size() == 1 ? shown.get(0) : shown);
             });
@@ -53,7 +54,9 @@ public final class TestController extends Controller {
    * client certificate and intermediate certificates is a certificate issued by the authority of
    * Open Banking Brasil. The result is returned in JSON format.
    *
-   * <p>Example, assuming certificates.pem includes a client certificate and intermediate certificates:
+   * <p>Example, assuming certificates.pem includes a client certificate and intermediate
+   * certificates:
+   *
    * <pre>$ curl -k --key private.pem --cert certificates.pem https://example/api/test/obb</pre>
    */
   public Result obb(Http.Request request) {
@@ -64,7 +67,8 @@ public final class TestController extends Controller {
       obbCerts.validate(requests.clientCertificateChain(request));
       return ok(JsonHelpers.pretty(Map.of("result", "succeeded"))).as("application/json");
     } catch (GeneralSecurityException e) {
-      return ok(JsonHelpers.pretty(Map.of("result", "failed", "error_message", String.valueOf(e.getMessage()))))
+      return ok(JsonHelpers.pretty(
+              Map.of("result", "failed", "error_message", String.valueOf(e.getMessage()))))
           .as("application/json");
     }
   }

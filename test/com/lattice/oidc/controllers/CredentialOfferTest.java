@@ -66,10 +66,14 @@ public class CredentialOfferTest {
     assertEquals(200, r.status());
     String html = contentAsString(r);
     assertTrue(html.contains("Add your credential to a wallet"));
-    assertTrue("the QR code is inline SVG", html.contains("<svg") && html.contains("QR code: credential offer"));
+    assertTrue(
+        "the QR code is inline SVG",
+        html.contains("<svg") && html.contains("QR code: credential offer"));
     assertTrue(html.contains("4821"));
     assertTrue(html.contains("IdentityCredential"));
-    assertTrue(html.contains("credential_offer_uri=https%3A%2F%2Flattice.example%2Fapi%2Foffer%2Foffer-1"));
+    assertTrue(
+        html.contains(
+            "credential_offer_uri=https%3A%2F%2Flattice.example%2Fapi%2Foffer%2Foffer-1"));
     CredentialOfferCreateRequest sent = fake.lastRequest("credentialOfferCreate");
     assertEquals("1001", sent.getSubject());
   }

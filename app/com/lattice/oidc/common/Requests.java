@@ -4,6 +4,8 @@ import com.authlete.common.dto.Pair;
 import com.authlete.common.web.BasicCredentials;
 import com.authlete.common.web.BearerToken;
 import com.authlete.common.web.DpopToken;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -15,8 +17,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 import play.mvc.Http;
 
 /** Extracts protocol inputs (parameters, credentials, certificates, URLs) from Play requests. */
@@ -71,7 +71,9 @@ public final class Requests {
         int separator = pair.indexOf('=');
         String name = separator < 0 ? pair : pair.substring(0, separator);
         String value = separator < 0 ? "" : pair.substring(separator + 1);
-        decoded.computeIfAbsent(URLDecoder.decode(name, StandardCharsets.UTF_8), key -> new ArrayList<>())
+        decoded
+            .computeIfAbsent(
+                URLDecoder.decode(name, StandardCharsets.UTF_8), key -> new ArrayList<>())
             .add(URLDecoder.decode(value, StandardCharsets.UTF_8));
       }
     }
@@ -97,10 +99,11 @@ public final class Requests {
 
   /**
    * The client ID and secret from {@code Authorization: Basic}, form-decoded as RFC 6749, section
-   * 2.3.1 requires: a client sends both {@code application/x-www-form-urlencoded} before base64, so a
-   * secret with {@code +}, {@code %} or {@code :} arrives as {@code %2B}, {@code %25} or {@code %3A}.
-   * Without decoding, such a client could never authenticate. Secrets made of letters, digits, {@code
-   * -}, {@code _}, {@code .} and {@code ~} (as Authlete generates) decode to themselves.
+   * 2.3.1 requires: a client sends both {@code application/x-www-form-urlencoded} before base64, so
+   * a secret with {@code +}, {@code %} or {@code :} arrives as {@code %2B}, {@code %25} or {@code
+   * %3A}. Without decoding, such a client could never authenticate. Secrets made of letters,
+   * digits, {@code -}, {@code _}, {@code .} and {@code ~} (as Authlete generates) decode to
+   * themselves.
    */
   public static BasicCredentials basicCredentials(Http.Request request) {
     BasicCredentials raw = BasicCredentials.parse(authorization(request));
@@ -111,8 +114,8 @@ public final class Requests {
   }
 
   /**
-   * {@code value} form-decoded, or as it is when it isn't valid form encoding (a lone {@code %}): the
-   * server then rejects it as a wrong credential rather than as a malformed request.
+   * {@code value} form-decoded, or as it is when it isn't valid form encoding (a lone {@code %}):
+   * the server then rejects it as a wrong credential rather than as a malformed request.
    */
   static String formDecoded(String value) {
     if (value == null) {

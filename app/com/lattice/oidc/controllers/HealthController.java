@@ -2,11 +2,11 @@ package com.lattice.oidc.controllers;
 
 import com.lattice.oidc.client.AuthleteExecutionContext;
 import com.lattice.oidc.common.DependencyChecks;
+import jakarta.inject.Inject;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
-import jakarta.inject.Inject;
 import play.libs.Json;
 import play.mvc.Controller;
 import play.mvc.Result;
@@ -31,7 +31,8 @@ public final class HealthController extends Controller {
   private final AuthleteExecutionContext executionContext;
 
   @Inject
-  public HealthController(DependencyChecks dependencies, AuthleteExecutionContext executionContext) {
+  public HealthController(
+      DependencyChecks dependencies, AuthleteExecutionContext executionContext) {
     this.dependencies = dependencies;
     this.executionContext = executionContext;
   }
@@ -48,7 +49,8 @@ public final class HealthController extends Controller {
     return CompletableFuture.supplyAsync(dependencies::run, executionContext.current())
         .thenApply(
             checks -> {
-              boolean up = checks.values().stream().allMatch(check -> "UP".equals(check.get("status")));
+              boolean up =
+                  checks.values().stream().allMatch(check -> "UP".equals(check.get("status")));
               Map<String, Object> body = new LinkedHashMap<>();
               body.put("status", up ? "UP" : "DOWN");
               body.put("checks", checks);

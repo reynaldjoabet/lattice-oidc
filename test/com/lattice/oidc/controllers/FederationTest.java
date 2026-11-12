@@ -45,16 +45,25 @@ public class FederationTest {
     Helpers.stop(app);
   }
 
-  /** A compact JWS with the given {@code typ}; the signature isn't checked by Lattice (Authlete made it). */
+  /**
+   * A compact JWS with the given {@code typ}; the signature isn't checked by Lattice (Authlete made
+   * it).
+   */
   private static String jwt(String typ) {
     Base64.Encoder b64 = Base64.getUrlEncoder().withoutPadding();
-    String header = b64.encodeToString(("{\"alg\":\"ES256\",\"typ\":\"" + typ + "\"}").getBytes(StandardCharsets.UTF_8));
-    String payload = b64.encodeToString("{\"iss\":\"https://op.example\",\"sub\":\"https://rp.example\"}".getBytes(StandardCharsets.UTF_8));
+    String header =
+        b64.encodeToString(
+            ("{\"alg\":\"ES256\",\"typ\":\"" + typ + "\"}").getBytes(StandardCharsets.UTF_8));
+    String payload =
+        b64.encodeToString(
+            "{\"iss\":\"https://op.example\",\"sub\":\"https://rp.example\"}"
+                .getBytes(StandardCharsets.UTF_8));
     return header + "." + payload + "." + b64.encodeToString(new byte[64]);
   }
 
   private static Http.RequestBuilder register(String contentType, String body) {
-    Http.RequestBuilder b = new Http.RequestBuilder().method("POST").uri("/api/federation/register");
+    Http.RequestBuilder b =
+        new Http.RequestBuilder().method("POST").uri("/api/federation/register");
     if (body != null) {
       b.bodyText(body);
     }
@@ -80,7 +89,8 @@ public class FederationTest {
   private List<Map<String, Object>> events(String event) {
     return app.injector()
         .instanceOf(AuditEventStore.class)
-        .search(new AuditEventStore.Query(Optional.of(event), Optional.empty(), Optional.empty(), 100));
+        .search(
+            new AuditEventStore.Query(Optional.of(event), Optional.empty(), Optional.empty(), 100));
   }
 
   @Test
@@ -105,7 +115,8 @@ public class FederationTest {
         args -> {
           FederationConfigurationResponse r = new FederationConfigurationResponse();
           r.setAction(FederationConfigurationResponse.Action.NOT_FOUND);
-          r.setResponseContent("{\"error\":\"not_found\",\"error_description\":\"Federation is not enabled.\"}");
+          r.setResponseContent(
+              "{\"error\":\"not_found\",\"error_description\":\"Federation is not enabled.\"}");
           return r;
         });
     assertEquals(404, route(app, get("/.well-known/openid-federation")).status());
@@ -125,7 +136,8 @@ public class FederationTest {
   @Test
   public void aTrustChainIsPassedToAuthlete() {
     authleteRegisters(jwt("explicit-registration-response+jwt"));
-    String chain = "[\"" + jwt("entity-statement+jwt") + "\",\"" + jwt("entity-statement+jwt") + "\"]";
+    String chain =
+        "[\"" + jwt("entity-statement+jwt") + "\",\"" + jwt("entity-statement+jwt") + "\"]";
     Result result = route(app, register("application/trust-chain+json", chain));
     assertEquals(200, result.status());
     FederationRegistrationRequest sent = fake.lastRequest("federationRegistration");
@@ -136,22 +148,27 @@ public class FederationTest {
   @Test
   public void theResponseUsesTheFinalSpecificationsMediaType() {
     authleteRegisters(jwt("explicit-registration-response+jwt"));
-    Result result = route(app, register("application/entity-statement+jwt", jwt("entity-statement+jwt")));
+    Result result =
+        route(app, register("application/entity-statement+jwt", jwt("entity-statement+jwt")));
     assertEquals("application/explicit-registration-response+jwt", result.contentType().orElse(""));
   }
 
   @Test
   public void aResponseTypedAsInTheDraftsIsServedAsAnEntityStatement() {
     authleteRegisters(jwt("entity-statement+jwt"));
-    Result result = route(app, register("application/entity-statement+jwt", jwt("entity-statement+jwt")));
+    Result result =
+        route(app, register("application/entity-statement+jwt", jwt("entity-statement+jwt")));
     assertEquals(200, result.status());
     assertEquals("application/entity-statement+jwt", result.contentType().orElse(""));
   }
 
   @Test
   public void anUnreadableResponseIsStillServedAsAnEntityStatement() {
-    assertEquals("application/entity-statement+jwt", FederationController.registrationResponseType("not a jwt"));
-    assertEquals("application/entity-statement+jwt", FederationController.registrationResponseType(null));
+    assertEquals(
+        "application/entity-statement+jwt",
+        FederationController.registrationResponseType("not a jwt"));
+    assertEquals(
+        "application/entity-statement+jwt", FederationController.registrationResponseType(null));
   }
 
   @Test
@@ -190,10 +207,12 @@ public class FederationTest {
         args -> {
           FederationRegistrationResponse r = new FederationRegistrationResponse();
           r.setAction(FederationRegistrationResponse.Action.BAD_REQUEST);
-          r.setResponseContent("{\"error\":\"invalid_trust_chain\",\"error_description\":\"No trust anchor.\"}");
+          r.setResponseContent(
+              "{\"error\":\"invalid_trust_chain\",\"error_description\":\"No trust anchor.\"}");
           return r;
         });
-    Result result = route(app, register("application/entity-statement+jwt", jwt("entity-statement+jwt")));
+    Result result =
+        route(app, register("application/entity-statement+jwt", jwt("entity-statement+jwt")));
     assertEquals(400, result.status());
     assertTrue(result.contentType().orElse("").startsWith("application/json"));
     assertTrue(contentAsString(result).contains("invalid_trust_chain"));

@@ -27,12 +27,21 @@ public class CredentialOrderHandlerTest {
           "alice",
           "alice",
           null,
-          Map.of("given_name", "Alice", "family_name", "Example", "birthdate", "1990-01-01", "email", "a@example.com"),
+          Map.of(
+              "given_name",
+              "Alice",
+              "family_name",
+              "Example",
+              "birthdate",
+              "1990-01-01",
+              "email",
+              "a@example.com"),
           Map.of(
               MDL,
               Map.of(
                   "org.iso.18013.5.1",
-                  Map.of("family_name", "Example", "given_name", "Alice", "document_number", "D-1"))),
+                  Map.of(
+                      "family_name", "Example", "given_name", "Alice", "document_number", "D-1"))),
           List.of());
 
   private final CredentialOrderHandler handler =
@@ -68,15 +77,18 @@ public class CredentialOrderHandlerTest {
       List.of(
           Map.of("credential_configuration_id", "pid", "format", "dc+sd-jwt", "vct", PID),
           Map.of(
-              "credential_configuration_id", "mdl",
-              "format", "mso_mdoc",
-              "doctype", MDL,
+              "credential_configuration_id",
+              "mdl",
+              "format",
+              "mso_mdoc",
+              "doctype",
+              MDL,
               "credential_metadata",
-                  Map.of(
-                      "claims",
-                      List.of(
-                          Map.of("path", List.of("org.iso.18013.5.1", "family_name")),
-                          Map.of("path", List.of("org.iso.18013.5.1", "issue_date"))))));
+              Map.of(
+                  "claims",
+                  List.of(
+                      Map.of("path", List.of("org.iso.18013.5.1", "family_name")),
+                      Map.of("path", List.of("org.iso.18013.5.1", "issue_date"))))));
 
   private Map<String, Object> payload(CredentialIssuanceOrder order) {
     return JsonHelpers.readMap(order.getCredentialPayload());
@@ -97,12 +109,16 @@ public class CredentialOrderHandlerTest {
         handler.toOrder(
             CredentialOrderHandler.Context.SINGLE,
             token("alice", PID_AND_MDL),
-            new CredentialRequestInfo().setIdentifier("req-1").setFormat("dc+sd-jwt").setCredentialConfigurationId("pid"));
+            new CredentialRequestInfo()
+                .setIdentifier("req-1")
+                .setFormat("dc+sd-jwt")
+                .setCredentialConfigurationId("pid"));
     Map<String, Object> credential = payload(order);
     assertEquals(PID, credential.get("vct"));
     assertEquals("alice", credential.get("sub"));
     assertEquals("Alice", credential.get("given_name"));
-    assertFalse("claims outside the credential type are not disclosed", credential.containsKey("email"));
+    assertFalse(
+        "claims outside the credential type are not disclosed", credential.containsKey("email"));
     assertEquals("req-1", order.getRequestIdentifier());
     assertFalse(order.isIssuanceDeferred());
   }
@@ -118,7 +134,8 @@ public class CredentialOrderHandlerTest {
     assertEquals(MDL, credential.get("doctype"));
     @SuppressWarnings("unchecked")
     Map<String, Object> namespace =
-        (Map<String, Object>) ((Map<String, Object>) credential.get("claims")).get("org.iso.18013.5.1");
+        (Map<String, Object>)
+            ((Map<String, Object>) credential.get("claims")).get("org.iso.18013.5.1");
     assertEquals("Example", namespace.get("family_name"));
     assertTrue(String.valueOf(namespace.get("issue_date")).startsWith("cbor:1004("));
     assertFalse("undeclared claims are not issued", namespace.containsKey("document_number"));
@@ -131,7 +148,9 @@ public class CredentialOrderHandlerTest {
         handler.toOrder(
             CredentialOrderHandler.Context.SINGLE,
             token("alice", issuable),
-            new CredentialRequestInfo().setFormat("vc+sd-jwt").setDetails("{\"vct\":\"" + PID + "\"}"));
+            new CredentialRequestInfo()
+                .setFormat("vc+sd-jwt")
+                .setDetails("{\"vct\":\"" + PID + "\"}"));
     assertEquals(PID, payload(order).get("vct"));
 
     rejected(
@@ -170,7 +189,10 @@ public class CredentialOrderHandlerTest {
         new CredentialRequestInfo().setFormat("jwt_vc_json").setCredentialConfigurationId("pid"));
     rejected(
         "unsupported_credential_type",
-        token("alice", List.of(Map.of("credential_configuration_id", "x", "format", "dc+sd-jwt", "vct", "urn:x"))),
+        token(
+            "alice",
+            List.of(
+                Map.of("credential_configuration_id", "x", "format", "dc+sd-jwt", "vct", "urn:x"))),
         new CredentialRequestInfo().setFormat("dc+sd-jwt").setCredentialConfigurationId("x"));
   }
 }

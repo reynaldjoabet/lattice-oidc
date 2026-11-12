@@ -1,11 +1,11 @@
 package com.lattice.oidc.common;
 
 import com.typesafe.config.Config;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 
 /** Typed view of the {@code lattice} configuration section. */
 @Singleton
@@ -84,11 +84,16 @@ public final class LatticeConfig {
 
   /** Outgoing email; without an SMTP host, messages are logged instead. */
   public record Mail(
-      String from, Optional<String> smtpHost, int smtpPort, Optional<String> smtpUsername,
-      Optional<String> smtpPassword, boolean startTls) {}
+      String from,
+      Optional<String> smtpHost,
+      int smtpPort,
+      Optional<String> smtpUsername,
+      Optional<String> smtpPassword,
+      boolean startTls) {}
 
   /** Password reset links: lifetime, and rate limits per account and per IP address. */
-  public record Recovery(Duration linkLifetime, int maxRequests, int maxRequestsPerIp, Duration window) {}
+  public record Recovery(
+      Duration linkLifetime, int maxRequests, int maxRequestsPerIp, Duration window) {}
 
   /** "Keep me signed in": whether it's offered, and the limits of such sessions. */
   public record RememberMe(boolean enabled, Duration idleTimeout, Duration maxLifespan) {}
@@ -118,11 +123,13 @@ public final class LatticeConfig {
             lattice.getBoolean("session.remember-me.enabled"),
             lattice.getDuration("session.remember-me.idle-timeout"),
             lattice.getDuration("session.remember-me.max-lifespan"));
-    storage = Storage.valueOf(lattice.getString("storage").trim().toUpperCase(java.util.Locale.ROOT));
+    storage =
+        Storage.valueOf(lattice.getString("storage").trim().toUpperCase(java.util.Locale.ROOT));
     loginMaxFailures = lattice.getInt("login.max-failures");
     loginMaxFailuresPerAccount = lattice.getInt("login.max-failures-per-account");
     loginMaxFailuresPerIp = lattice.getInt("login.max-failures-per-ip");
-    device = new Device(lattice.getInt("device.max-attempts"), lattice.getDuration("device.window"));
+    device =
+        new Device(lattice.getInt("device.max-attempts"), lattice.getDuration("device.window"));
     loginLockout = lattice.getDuration("login.lockout");
     satisfiedAcrs = lattice.getStringList("login.satisfied-acrs");
     trustedIssuers =
@@ -187,7 +194,10 @@ public final class LatticeConfig {
     pairwiseSecret =
         optionalString(lattice, "pairwise-secret")
             .orElseGet(
-                () -> root.hasPath("play.http.secret.key") ? root.getString("play.http.secret.key") : "");
+                () ->
+                    root.hasPath("play.http.secret.key")
+                        ? root.getString("play.http.secret.key")
+                        : "");
   }
 
   private static Optional<String> optionalString(Config config, String path) {
@@ -198,7 +208,9 @@ public final class LatticeConfig {
     return value.isEmpty() ? Optional.empty() : Optional.of(value);
   }
 
-  /** A list setting that may also be given as one comma-separated string (environment variables). */
+  /**
+   * A list setting that may also be given as one comma-separated string (environment variables).
+   */
   private static List<String> stringList(Config config, String path) {
     if (!config.hasPath(path)) {
       return List.of();

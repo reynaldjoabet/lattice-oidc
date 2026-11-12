@@ -19,7 +19,10 @@ import play.mvc.Http;
 import play.mvc.Result;
 import play.test.Helpers;
 
-/** The Grant Management endpoint: query and revoke, and how Authlete's answers become HTTP responses. */
+/**
+ * The Grant Management endpoint: query and revoke, and how Authlete's answers become HTTP
+ * responses.
+ */
 public class GrantManagementTest {
 
   private final FakeAuthleteApi fake = new FakeAuthleteApi();
@@ -49,7 +52,10 @@ public class GrantManagementTest {
   }
 
   private static Http.RequestBuilder request(String method) {
-    return new Http.RequestBuilder().method(method).uri("/api/gm/grant-1").header("Authorization", "Bearer at-123");
+    return new Http.RequestBuilder()
+        .method(method)
+        .uri("/api/gm/grant-1")
+        .header("Authorization", "Bearer at-123");
   }
 
   @Test
@@ -79,9 +85,13 @@ public class GrantManagementTest {
 
   @Test
   public void errorsCarryAuthletesChallengeInWwwAuthenticateWithNoBody() {
-    String challenge = "Bearer error=\"invalid_token\", error_description=\"[A065304] The access token has expired.\"";
+    String challenge =
+        "Bearer error=\"invalid_token\", error_description=\"[A065304] The access token has"
+            + " expired.\"";
     int[][] cases = {{401}, {403}, {404}};
-    GMResponse.Action[] actions = {GMResponse.Action.UNAUTHORIZED, GMResponse.Action.FORBIDDEN, GMResponse.Action.NOT_FOUND};
+    GMResponse.Action[] actions = {
+      GMResponse.Action.UNAUTHORIZED, GMResponse.Action.FORBIDDEN, GMResponse.Action.NOT_FOUND
+    };
     for (int i = 0; i < actions.length; i++) {
       authleteSays(actions[i], challenge);
       Result r = route(app, request("GET"));
@@ -111,7 +121,10 @@ public class GrantManagementTest {
 
   @Test
   public void authletesInternalErrorsAreNotShownToTheClient() {
-    for (GMResponse.Action action : new GMResponse.Action[] {GMResponse.Action.CALLER_ERROR, GMResponse.Action.AUTHLETE_ERROR}) {
+    for (GMResponse.Action action :
+        new GMResponse.Action[] {
+          GMResponse.Action.CALLER_ERROR, GMResponse.Action.AUTHLETE_ERROR
+        }) {
       authleteSays(action, "Bearer error=\"server_error\", error_description=\"internal detail\"");
       Result r = route(app, request("GET"));
       assertEquals(action.name(), 500, r.status());

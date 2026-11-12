@@ -9,8 +9,8 @@ import java.util.Optional;
 /**
  * Short-lived state shared by every server: pending sign-ins, reset links, CIBA requests, native
  * SSO device secrets and sign-in alerts. Entries live in a {@code namespace}, expire on their own,
- * and carry their value as JSON (see {@code JsonHelpers}). An entry may be bound to a browser ({@code
- * owner}) and indexed by account ({@code subject}).
+ * and carry their value as JSON (see {@code JsonHelpers}). An entry may be bound to a browser
+ * ({@code owner}) and indexed by account ({@code subject}).
  *
  * <p>Implementations: {@link InMemoryEphemeralStore} (one server, development and tests) and the
  * PostgreSQL store ({@code lattice.storage = postgres}).
@@ -19,7 +19,8 @@ import java.util.Optional;
 public interface EphemeralStore {
 
   /** A stored entry. {@code owner} and {@code subject} may be null. */
-  record Entry(String namespace, String key, String owner, String subject, String json, Instant expiresAt) {}
+  record Entry(
+      String namespace, String key, String owner, String subject, String json, Instant expiresAt) {}
 
   /** Creates or replaces an entry. */
   void put(String namespace, String key, String owner, String subject, String json, Duration ttl);

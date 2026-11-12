@@ -1,11 +1,14 @@
 package com.lattice.oidc.cache;
 
+import jakarta.inject.Singleton;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BiConsumer;
-import jakarta.inject.Singleton;
 
-/** {@link InvalidationBus} for one server ({@code lattice.storage = memory}): calls listeners directly. */
+/**
+ * {@link InvalidationBus} for one server ({@code lattice.storage = memory}): calls listeners
+ * directly.
+ */
 @Singleton
 public final class LocalInvalidationBus implements InvalidationBus {
 

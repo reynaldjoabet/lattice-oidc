@@ -43,7 +43,10 @@ public final class VerifiedClaimsData {
     } catch (RuntimeException e) {
       return new Parsed(List.of(), List.of("This is not valid JSON."));
     }
-    List<Object> items = value instanceof List<?> list ? (List<Object>) list : value instanceof Map<?, ?> ? List.of(value) : null;
+    List<Object> items =
+        value instanceof List<?> list
+            ? (List<Object>) list
+            : value instanceof Map<?, ?> ? List.of(value) : null;
     if (items == null) {
       return new Parsed(List.of(), List.of("Enter a JSON array of verified_claims objects."));
     }
@@ -57,7 +60,8 @@ public final class VerifiedClaimsData {
       }
       if (!(item.get("verification") instanceof Map<?, ?> verification)) {
         problems.add(where + " has no \"verification\" object.");
-      } else if (!(verification.get("trust_framework") instanceof String framework) || framework.isBlank()) {
+      } else if (!(verification.get("trust_framework") instanceof String framework)
+          || framework.isBlank()) {
         problems.add(where + " has no \"verification.trust_framework\".");
       }
       if (!(item.get("claims") instanceof Map<?, ?> claims) || claims.isEmpty()) {
@@ -65,7 +69,9 @@ public final class VerifiedClaimsData {
       }
       datasets.add((Map<String, Object>) item);
     }
-    return problems.isEmpty() ? new Parsed(List.copyOf(datasets), List.of()) : new Parsed(List.of(), problems);
+    return problems.isEmpty()
+        ? new Parsed(List.copyOf(datasets), List.of())
+        : new Parsed(List.of(), problems);
   }
 
   /** The datasets as indented JSON, for the editor; empty for none. */

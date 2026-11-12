@@ -2,12 +2,12 @@ package com.lattice.oidc.handlers;
 
 import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.common.LatticeConfig;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 import play.libs.ws.WSClient;
 import play.libs.ws.WSResponse;
 
@@ -53,13 +53,19 @@ public final class AuthenticationDevice {
   /** Starts an asynchronous authentication; the device later calls back with the request id. */
   public String async(String user, String message, int timeoutSeconds, String authReqId) {
     return requestId(
-        post("/api/authenticate/async", request(user, message, timeoutSeconds, authReqId), config.requestTimeout()));
+        post(
+            "/api/authenticate/async",
+            request(user, message, timeoutSeconds, authReqId),
+            config.requestTimeout()));
   }
 
   /** Starts an authentication whose result is polled with {@link #result}. */
   public String poll(String user, String message, int timeoutSeconds, String authReqId) {
     return requestId(
-        post("/api/authenticate/poll", request(user, message, timeoutSeconds, authReqId), config.requestTimeout()));
+        post(
+            "/api/authenticate/poll",
+            request(user, message, timeoutSeconds, authReqId),
+            config.requestTimeout()));
   }
 
   /** Polling result: {@code null} while the user has not decided yet. */
@@ -90,8 +96,14 @@ public final class AuthenticationDevice {
 
   private Map<String, Object> request(String user, String message, int timeout, String authReqId) {
     Map<String, Object> body = new LinkedHashMap<>();
-    body.put("workspace", config.workspace().orElseThrow(
-        () -> new IllegalStateException("lattice.ciba.workspace (CIBA_AD_WORKSPACE) is not set")));
+    body.put(
+        "workspace",
+        config
+            .workspace()
+            .orElseThrow(
+                () ->
+                    new IllegalStateException(
+                        "lattice.ciba.workspace (CIBA_AD_WORKSPACE) is not set")));
     body.put("user", user);
     body.put("message", message);
     body.put("timeout", timeout);

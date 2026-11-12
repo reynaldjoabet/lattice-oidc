@@ -3,18 +3,16 @@ package com.lattice.oidc.security;
 import com.lattice.oidc.common.Digests;
 import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.stores.EphemeralStore;
-import java.nio.charset.StandardCharsets;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
-import java.util.Base64;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 
 /**
  * "New sign-in to your account" alerts: raised when an account signs in from a browser it has not
@@ -26,7 +24,8 @@ import jakarta.inject.Singleton;
 public final class SignInAlerts {
 
   /** A sign-in from a new browser. */
-  public record Alert(String id, String sessionId, String device, String ip, String method, Instant at) {
+  public record Alert(
+      String id, String sessionId, String device, String ip, String method, Instant at) {
     private static final DateTimeFormatter TIME =
         DateTimeFormatter.ofPattern("d MMM, HH:mm 'UTC'", Locale.ENGLISH).withZone(ZoneOffset.UTC);
 
@@ -48,13 +47,15 @@ public final class SignInAlerts {
     this.store = store;
   }
 
-  void onSignIn(String subject, String browserId, String sessionId, String device, String ip, String method) {
+  void onSignIn(
+      String subject, String browserId, String sessionId, String device, String ip, String method) {
     String browserKey = subject + "|" + Digests.sha256Base64Url(browserId);
     boolean firstSignIn = store.bySubject(BROWSERS, subject).isEmpty();
     boolean newBrowser = store.get(BROWSERS, browserKey).isEmpty();
     store.put(BROWSERS, browserKey, null, subject, "{}", TTL);
     if (newBrowser && !firstSignIn) {
-      Alert alert = new Alert(UserSessions.randomId(), sessionId, device, ip, method, Instant.now());
+      Alert alert =
+          new Alert(UserSessions.randomId(), sessionId, device, ip, method, Instant.now());
       store.put(ALERTS, alert.id(), null, subject, JsonHelpers.write(alert), TTL);
     }
   }
@@ -70,7 +71,8 @@ public final class SignInAlerts {
 
   /** Removes the alert (the user answered it); returns it if it existed and was the account's. */
   public Optional<Alert> resolve(String subject, String alertId) {
-    if (alertId == null || store.get(ALERTS, alertId).filter(entry -> subject.equals(entry.subject())).isEmpty()) {
+    if (alertId == null
+        || store.get(ALERTS, alertId).filter(entry -> subject.equals(entry.subject())).isEmpty()) {
       return Optional.empty();
     }
     return store.take(ALERTS, alertId).map(entry -> JsonHelpers.read(entry.json(), Alert.class));

@@ -8,23 +8,22 @@ import com.lattice.oidc.models.User;
 import com.lattice.oidc.stores.CounterStore;
 import com.lattice.oidc.stores.EphemeralStore;
 import com.lattice.oidc.stores.UserStore;
-import java.nio.charset.StandardCharsets;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.Optional;
 import java.util.function.Function;
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * Password reset links ({@code lattice.recovery}). A link carries a random token; only its SHA-256
- * is stored, it works once, expires after {@code link-lifetime}, and only the account's newest
- * link works. At most {@code max-requests} links are sent per account, and {@code
- * max-requests-per-ip} requests are accepted per IP address, per {@code window}. Callers show the
- * same page whether or not an account matched, so the form reveals nothing. Links and counters are
- * shared by every server, so a link works whichever server opens it.
+ * is stored, it works once, expires after {@code link-lifetime}, and only the account's newest link
+ * works. At most {@code max-requests} links are sent per account, and {@code max-requests-per-ip}
+ * requests are accepted per IP address, per {@code window}. Callers show the same page whether or
+ * not an account matched, so the form reveals nothing. Links and counters are shared by every
+ * server, so a link works whichever server opens it.
  *
  * <p>A link is stored with the address it was sent to, and stops working if the account's email
  * changes before it's used: the email may have changed because the old mailbox was lost or taken
@@ -75,7 +74,8 @@ public final class RecoveryService {
    * @return whether a link was sent (for the audit log only; never shown)
    */
   public boolean request(String identifier, String next, String ip, Function<String, String> link) {
-    if (ip != null && counters.increment("reset:ip:" + ip, config.window()) > config.maxRequestsPerIp()) {
+    if (ip != null
+        && counters.increment("reset:ip:" + ip, config.window()) > config.maxRequestsPerIp()) {
       LOG.info("Password reset rate limit reached for IP {}", ip);
       return false;
     }
@@ -92,28 +92,48 @@ public final class RecoveryService {
     // Only the newest link works: earlier ones for this account are deleted.
     String token = randomToken();
     store.deleteBySubject(TOKENS, subject);
-    store.put(TOKENS, Digests.sha256Base64Url(token), null, subject, JsonHelpers.write(new Pending(subject, next, user.get().email().get())), config.linkLifetime());
+    store.put(
+        TOKENS,
+        Digests.sha256Base64Url(token),
+        null,
+        subject,
+        JsonHelpers.write(new Pending(subject, next, user.get().email().get())),
+        config.linkLifetime());
 
     long minutes = config.linkLifetime().toMinutes();
     mailer.send(
         user.get().email().get(),
         "Reset your password",
-        "Hello " + user.get().displayName() + ",\n\n"
-            + "Someone asked to reset the password for your account. To choose a new password, open this link:\n\n"
-            + link.apply(token) + "\n\n"
-            + "The link works once and expires in " + minutes + " minutes.\n"
+        "Hello "
+            + user.get().displayName()
+            + ",\n\n"
+            + "Someone asked to reset the password for your account. To choose a new password, open"
+            + " this link:\n\n"
+            + link.apply(token)
+            + "\n\n"
+            + "The link works once and expires in "
+            + minutes
+            + " minutes.\n"
             + "If you didn't ask for this, ignore this email: your password stays the same.\n");
     return true;
   }
 
-  /** The account a link resets, without using it up (to show the form); empty if it no longer applies. */
+  /**
+   * The account a link resets, without using it up (to show the form); empty if it no longer
+   * applies.
+   */
   public Optional<Pending> peek(String token) {
     return token == null || token.isEmpty()
         ? Optional.empty()
         : store
             .get(TOKENS, Digests.sha256Base64Url(token))
             .map(entry -> JsonHelpers.read(entry.json(), Pending.class))
-            .filter(pending -> users.bySubject(pending.subject()).filter(user -> stillApplies(pending, user)).isPresent());
+            .filter(
+                pending ->
+                    users
+                        .bySubject(pending.subject())
+                        .filter(user -> stillApplies(pending, user))
+                        .isPresent());
   }
 
   /** Whether the account still has the address the link was sent to. */
@@ -128,11 +148,16 @@ public final class RecoveryService {
     }
     // Taking the link is the single-use step: of two concurrent resets, only one gets it.
     Optional<Pending> pending =
-        store.take(TOKENS, Digests.sha256Base64Url(token)).map(entry -> JsonHelpers.read(entry.json(), Pending.class));
+        store
+            .take(TOKENS, Digests.sha256Base64Url(token))
+            .map(entry -> JsonHelpers.read(entry.json(), Pending.class));
     if (pending.isEmpty()) {
       return Optional.empty();
     }
-    Optional<User> user = users.bySubject(pending.get().subject()).filter(account -> stillApplies(pending.get(), account));
+    Optional<User> user =
+        users
+            .bySubject(pending.get().subject())
+            .filter(account -> stillApplies(pending.get(), account));
     if (user.isEmpty()) {
       return Optional.empty();
     }

@@ -2,10 +2,10 @@ package com.lattice.oidc.filters;
 
 import com.lattice.oidc.security.RequiredActions;
 import com.lattice.oidc.security.UserSessions;
-import java.util.List;
-import java.util.Map;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import java.util.List;
+import java.util.Map;
 import org.apache.pekko.util.ByteString;
 import play.libs.streams.Accumulator;
 import play.mvc.EssentialAction;
@@ -67,7 +67,9 @@ public final class RequiredActionsFilter extends EssentialFilter {
                   state ->
                       Accumulator.done(
                           Results.seeOther(
-                              com.lattice.oidc.controllers.routes.RequiredActionsController.page(destination).url())))
+                              com.lattice.oidc.controllers.routes.RequiredActionsController.page(
+                                      destination)
+                                  .url())))
               .orElseGet(() -> next.apply(request));
         });
   }

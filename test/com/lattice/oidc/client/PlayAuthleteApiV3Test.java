@@ -113,8 +113,9 @@ public class PlayAuthleteApiV3Test {
     assertEquals(SubjectType.PAIRWISE, response.getClient().getSubjectType());
     assertEquals("Lattice", response.getService().getServiceName());
     assertEquals("profile", response.getScopes()[1].getName());
-    assertTrue(response.getResponseHeaders().keySet().stream()
-        .anyMatch(h -> h.equalsIgnoreCase("Content-Type")));
+    assertTrue(
+        response.getResponseHeaders().keySet().stream()
+            .anyMatch(h -> h.equalsIgnoreCase("Content-Type")));
   }
 
   @Test
@@ -124,7 +125,8 @@ public class PlayAuthleteApiV3Test {
             .writeValueAsString(
                 new com.authlete.common.dto.AuthorizationFailRequest()
                     .setTicket("t")
-                    .setReason(com.authlete.common.dto.AuthorizationFailRequest.Reason.NOT_LOGGED_IN));
+                    .setReason(
+                        com.authlete.common.dto.AuthorizationFailRequest.Reason.NOT_LOGGED_IN));
     assertTrue(json, json.contains("\"reason\":\"NOT_LOGGED_IN\""));
   }
 

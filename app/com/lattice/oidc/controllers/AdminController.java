@@ -11,32 +11,38 @@ import com.lattice.oidc.security.LdapDirectory;
 import com.lattice.oidc.security.LoginService;
 import com.lattice.oidc.security.SecondFactors;
 import com.lattice.oidc.security.UserSessions;
+import com.lattice.oidc.security.UserSessions.LoginState;
 import com.lattice.oidc.security.Webhooks;
 import com.lattice.oidc.stores.CounterStore;
 import com.lattice.oidc.stores.EphemeralStore;
-import com.lattice.oidc.security.UserSessions.LoginState;
+import jakarta.inject.Inject;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletionStage;
-import jakarta.inject.Inject;
 import play.mvc.Http;
 import play.mvc.Result;
 
 /**
  * Operator console ({@code GET /admin}): Authlete status, sessions, identity providers, storage,
  * two-step verification and its encryption key, the LDAP directory, webhook delivery and recent
- * audit events. Only users whose login ID is in {@code
- * lattice.admin.login-ids} may open it, after signing in normally (password, lockout, CSRF);
- * everyone else gets 403, and anonymous visitors the sign-in page.
+ * audit events. Only users whose login ID is in {@code lattice.admin.login-ids} may open it, after
+ * signing in normally (password, lockout, CSRF); everyone else gets 403, and anonymous visitors the
+ * sign-in page.
  */
 public final class AdminController extends BaseController {
 
   private static final Set<String> GOOD_EVENTS =
-      Set.of("LOGIN_SUCCEEDED", "CONSENT_GRANTED", "DEVICE_AUTHORIZED", "CIBA_APPROVED", "ACCOUNT_LINKED");
+      Set.of(
+          "LOGIN_SUCCEEDED",
+          "CONSENT_GRANTED",
+          "DEVICE_AUTHORIZED",
+          "CIBA_APPROVED",
+          "ACCOUNT_LINKED");
   private static final Set<String> BAD_EVENTS =
       Set.of("LOGIN_FAILED", "LOGIN_LOCKED", "BROKERED_LOGIN_FAILED", "SECOND_FACTOR_FAILED");
+
   /** Fields shown in their own columns, or not at all. */
   private static final Set<String> COLUMNS =
       Set.of("id", "ts", "event", "request_id", "ip", "subject", "login_id", "client_id", "client");
@@ -93,7 +99,8 @@ public final class AdminController extends BaseController {
             return AccountController.loginPage(request, "admin", Optional.empty(), 200);
           }
           if (!isAdmin(current.get().user(), config)) {
-            return Pages.message(request, 403, "No access", "Your account can't open the operator console.");
+            return Pages.message(
+                request, 403, "No access", "Your account can't open the operator console.");
           }
           Map<String, String> health = authlete.check();
           boolean up = "UP".equals(health.get("status"));
@@ -108,7 +115,9 @@ public final class AdminController extends BaseController {
           long activeSessions = sessions.countActive();
           List<AdminPage.StorageRow> rows = new java.util.ArrayList<>();
           rows.add(new AdminPage.StorageRow("sessions", activeSessions));
-          ephemeral.counts().forEach((name, entries) -> rows.add(new AdminPage.StorageRow(name, entries)));
+          ephemeral
+              .counts()
+              .forEach((name, entries) -> rows.add(new AdminPage.StorageRow(name, entries)));
           AdminPage page =
               new AdminPage(
                   current.get().user().displayName(),
@@ -124,7 +133,8 @@ public final class AdminController extends BaseController {
                   directory.status(),
                   webhooks.status(),
                   audit.recent().stream().map(AdminController::event).toList());
-          return Responses.of(200, views.html.oidc.admin.render(page, request).body(), Responses.HTML, null)
+          return Responses.of(
+                  200, views.html.oidc.admin.render(page, request).body(), Responses.HTML, null)
               .withHeader(CACHE_CONTROL, "no-store");
         });
   }
@@ -150,11 +160,13 @@ public final class AdminController extends BaseController {
 
   static AdminPage.Event event(Map<String, Object> record) {
     String name = String.valueOf(record.get("event"));
-    Object client = record.containsKey("client_id") ? record.get("client_id") : record.get("client");
+    Object client =
+        record.containsKey("client_id") ? record.get("client_id") : record.get("client");
     String time = String.valueOf(record.get("ts"));
     // "2026-10-04T09:12:03.123Z" → "2026-10-04 09:12:03"
     String shown = time.length() >= 19 ? time.substring(0, 19).replace('T', ' ') : time;
-    String tone = GOOD_EVENTS.contains(name) ? "good" : BAD_EVENTS.contains(name) ? "bad" : "neutral";
+    String tone =
+        GOOD_EVENTS.contains(name) ? "good" : BAD_EVENTS.contains(name) ? "bad" : "neutral";
     return new AdminPage.Event(
         shown,
         name,

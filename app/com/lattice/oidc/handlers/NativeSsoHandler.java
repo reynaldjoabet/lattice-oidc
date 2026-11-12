@@ -10,14 +10,12 @@ import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.common.Responses;
 import com.lattice.oidc.security.UserSessions;
 import com.lattice.oidc.stores.EphemeralStore;
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
 import jakarta.inject.Inject;
 import jakarta.inject.Provider;
 import jakarta.inject.Singleton;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import play.mvc.Result;
@@ -27,9 +25,9 @@ import play.mvc.Result;
  *
  * <p>When a token request complies with the specification, Authlete returns the NATIVE_SSO action.
  * This class then validates or issues the device secret and calls Authlete's /nativesso API, which
- * generates the token response containing the {@code device_secret} and an ID token with the
- * {@code ds_hash} and {@code sid} claims. Device secrets are bound to the login session in which
- * they were created and stop working when that session ends. Only a hash of each secret is stored.
+ * generates the token response containing the {@code device_secret} and an ID token with the {@code
+ * ds_hash} and {@code sid} claims. Device secrets are bound to the login session in which they were
+ * created and stop working when that session ends. Only a hash of each secret is stored.
  */
 @Singleton
 public final class NativeSsoHandler {
@@ -50,7 +48,10 @@ public final class NativeSsoHandler {
 
   @Inject
   public NativeSsoHandler(
-      Provider<AuthleteApi> api, UserSessions sessions, EphemeralStore store, LatticeConfig config) {
+      Provider<AuthleteApi> api,
+      UserSessions sessions,
+      EphemeralStore store,
+      LatticeConfig config) {
     this.api = api;
     this.sessions = sessions;
     this.store = store;
@@ -63,12 +64,17 @@ public final class NativeSsoHandler {
     String sessionId = token.getSessionId();
     if (!sessions.isActive(sessionId)) {
       throw TokenResponses.error(
-          400, "invalid_grant", "The login session associated with this request has ended.", headers);
+          400,
+          "invalid_grant",
+          "The login session associated with this request has ended.",
+          headers);
     }
     // Validate the presented device secret, or create and register a new one.
-    DeviceSecret deviceSecret = deviceSecret(token.getDeviceSecret(), token.getDeviceSecretHash(), sessionId, headers);
+    DeviceSecret deviceSecret =
+        deviceSecret(token.getDeviceSecret(), token.getDeviceSecretHash(), sessionId, headers);
 
-    // Call Authlete's /nativesso API. "claims" carries /auth/token's additionalClaims unchanged: the
+    // Call Authlete's /nativesso API. "claims" carries /auth/token's additionalClaims unchanged:
+    // the
     // nonce and s_hash of the original request, which the new ID token must repeat (a client that
     // sent a nonce rejects an ID token without it).
     NativeSsoResponse response =
@@ -86,15 +92,19 @@ public final class NativeSsoHandler {
                 null);
     return switch (response.getAction()) {
       case OK -> Responses.ok(response.getResponseContent(), headers);
-      // A mistake in this request (CALLER_ERROR) or a failure at Authlete: logged here, and the client
+      // A mistake in this request (CALLER_ERROR) or a failure at Authlete: logged here, and the
+      // client
       // gets a generic error, not Authlete's message.
       case CALLER_ERROR -> {
-        LOG.error("Authlete's /nativesso refused Lattice's request: {}", response.getResultMessage());
-        yield Responses.serverError(Responses.error("server_error", "The token could not be issued."), headers);
+        LOG.error(
+            "Authlete's /nativesso refused Lattice's request: {}", response.getResultMessage());
+        yield Responses.serverError(
+            Responses.error("server_error", "The token could not be issued."), headers);
       }
       default -> {
         LOG.warn("Authlete's /nativesso failed: {}", response.getResultMessage());
-        yield Responses.serverError(Responses.error("server_error", "The token could not be issued."), headers);
+        yield Responses.serverError(
+            Responses.error("server_error", "The token could not be issued."), headers);
       }
     };
   }
@@ -108,8 +118,8 @@ public final class NativeSsoHandler {
    *   <li>A known device secret is presented whose hash (if given in the subject token) and session
    *       match: it is reused.
    *   <li>An unknown secret without a hash (regular flows): it is replaced with a new one.
-   *   <li>Otherwise (token exchange with a mismatching secret): the request fails with
-   *       {@code invalid_grant}.
+   *   <li>Otherwise (token exchange with a mismatching secret): the request fails with {@code
+   *       invalid_grant}.
    * </ul>
    */
   private DeviceSecret deviceSecret(
@@ -118,7 +128,9 @@ public final class NativeSsoHandler {
       return register(sessionId);
     }
     Optional<Registered> known =
-        store.get(NAMESPACE, Digests.sha256Base64Url(presented)).map(entry -> JsonHelpers.read(entry.json(), Registered.class));
+        store
+            .get(NAMESPACE, Digests.sha256Base64Url(presented))
+            .map(entry -> JsonHelpers.read(entry.json(), Registered.class));
     if (known.isPresent()
         && (presentedHash == null || Objects.equals(known.get().hash(), presentedHash))
         && Objects.equals(known.get().sessionId(), sessionId)) {

@@ -2,6 +2,8 @@ package com.lattice.oidc.stores.redis;
 
 import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.stores.EphemeralStore;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -9,16 +11,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 import redis.clients.jedis.params.ScanParams;
 import redis.clients.jedis.params.SetParams;
 import redis.clients.jedis.resps.ScanResult;
 
 /**
  * {@link EphemeralStore} in Redis ({@code lattice.short-lived-state = redis}). Each entry is a key
- * that Redis expires on its own; single use is {@code GETDEL}, which only one caller can win. Entries
- * indexed by account are also listed in a sorted set per account, scored by expiry time.
+ * that Redis expires on its own; single use is {@code GETDEL}, which only one caller can win.
+ * Entries indexed by account are also listed in a sorted set per account, scored by expiry time.
  */
 @Singleton
 public final class RedisEphemeralStore implements EphemeralStore {
@@ -49,13 +49,16 @@ public final class RedisEphemeralStore implements EphemeralStore {
 
   private static Entry entry(String namespace, String key, String value) {
     Stored stored = JsonHelpers.read(value, Stored.class);
-    return new Entry(namespace, key, stored.owner(), stored.subject(), stored.json(), stored.expiresAt());
+    return new Entry(
+        namespace, key, stored.owner(), stored.subject(), stored.json(), stored.expiresAt());
   }
 
   @Override
-  public void put(String namespace, String key, String owner, String subject, String json, Duration ttl) {
+  public void put(
+      String namespace, String key, String owner, String subject, String json, Duration ttl) {
     Instant expiresAt = Instant.now().plus(ttl);
-    redis.client()
+    redis
+        .client()
         .set(
             entryKey(namespace, key),
             JsonHelpers.write(new Stored(owner, subject, json, expiresAt)),
@@ -64,7 +67,9 @@ public final class RedisEphemeralStore implements EphemeralStore {
       String index = subjectKey(namespace, subject);
       redis.client().zadd(index, expiresAt.toEpochMilli(), key);
       // The index lives as long as its longest-lived entry.
-      redis.client().eval(EXTEND, List.of(index), List.of(String.valueOf(Math.max(1, ttl.toMillis()))));
+      redis
+          .client()
+          .eval(EXTEND, List.of(index), List.of(String.valueOf(Math.max(1, ttl.toMillis()))));
     }
   }
 
@@ -73,7 +78,8 @@ public final class RedisEphemeralStore implements EphemeralStore {
     if (key == null) {
       return Optional.empty();
     }
-    return Optional.ofNullable(redis.client().get(entryKey(namespace, key))).map(value -> entry(namespace, key, value));
+    return Optional.ofNullable(redis.client().get(entryKey(namespace, key)))
+        .map(value -> entry(namespace, key, value));
   }
 
   @Override
@@ -82,8 +88,10 @@ public final class RedisEphemeralStore implements EphemeralStore {
       return Optional.empty();
     }
     Optional<Entry> taken =
-        Optional.ofNullable(redis.client().getDel(entryKey(namespace, key))).map(value -> entry(namespace, key, value));
-    taken.filter(entry -> entry.subject() != null)
+        Optional.ofNullable(redis.client().getDel(entryKey(namespace, key)))
+            .map(value -> entry(namespace, key, value));
+    taken
+        .filter(entry -> entry.subject() != null)
         .ifPresent(entry -> redis.client().zrem(subjectKey(namespace, entry.subject()), key));
     return taken;
   }
@@ -97,7 +105,10 @@ public final class RedisEphemeralStore implements EphemeralStore {
     if (keys.isEmpty()) {
       return List.of();
     }
-    List<String> values = redis.client().mget(keys.stream().map(key -> entryKey(namespace, key)).toArray(String[]::new));
+    List<String> values =
+        redis
+            .client()
+            .mget(keys.stream().map(key -> entryKey(namespace, key)).toArray(String[]::new));
     List<Entry> entries = new ArrayList<>();
     for (int i = 0; i < keys.size(); i++) {
       if (values.get(i) != null) {
@@ -116,7 +127,12 @@ public final class RedisEphemeralStore implements EphemeralStore {
   public int deleteBySubject(String namespace, String subject) {
     List<Entry> entries = bySubject(namespace, subject);
     if (!entries.isEmpty()) {
-      redis.client().del(entries.stream().map(entry -> entryKey(namespace, entry.key())).toArray(String[]::new));
+      redis
+          .client()
+          .del(
+              entries.stream()
+                  .map(entry -> entryKey(namespace, entry.key()))
+                  .toArray(String[]::new));
     }
     redis.client().del(subjectKey(namespace, subject));
     return entries.size();

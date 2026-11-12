@@ -1,139 +1,118 @@
-
 package com.lattice.oidc.client.resilience;
-
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import com.lattice.oidc.client.resilience.AuthleteCircuitBreaker.State;
 import java.util.function.LongSupplier;
-
 import org.junit.Test;
 
-import com.lattice.oidc.client.resilience.AuthleteCircuitBreaker.State;
+public class AuthleteCircuitBreakerTest {
+  /** A clock whose value the test advances manually. */
+  private final long[] now = {0L};
 
+  private final LongSupplier clock = () -> now[0];
 
-public class AuthleteCircuitBreakerTest
-{
-    /** A clock whose value the test advances manually. */
-    private final long[] now = { 0L };
-    private final LongSupplier clock = () -> now[0];
+  private AuthleteCircuitBreaker newBreaker() {
+    // threshold=3 failures within a 30s window, open for 60s, 1 half-open trial.
+    return new AuthleteCircuitBreaker(3, 30_000, 60_000, 1, clock);
+  }
 
+  @Test
+  public void opensAfterThresholdFailures() {
+    AuthleteCircuitBreaker cb = newBreaker();
 
-    private AuthleteCircuitBreaker newBreaker()
-    {
-        // threshold=3 failures within a 30s window, open for 60s, 1 half-open trial.
-        return new AuthleteCircuitBreaker(3, 30_000, 60_000, 1, clock);
-    }
+    assertTrue(cb.allowRequest());
+    cb.recordFailure();
+    cb.recordFailure();
+    assertEquals(State.CLOSED, cb.getState());
 
+    cb.recordFailure(); // 3rd failure trips it open
+    assertEquals(State.OPEN, cb.getState());
+    assertFalse("open breaker fails fast", cb.allowRequest());
+  }
 
-    @Test
-    public void opensAfterThresholdFailures()
-    {
-        AuthleteCircuitBreaker cb = newBreaker();
+  @Test
+  public void successResetsFailureCount() {
+    AuthleteCircuitBreaker cb = newBreaker();
 
-        assertTrue(cb.allowRequest());
-        cb.recordFailure();
-        cb.recordFailure();
-        assertEquals(State.CLOSED, cb.getState());
+    cb.recordFailure();
+    cb.recordFailure();
+    cb.recordSuccess(); // resets the count
+    cb.recordFailure();
+    cb.recordFailure();
 
-        cb.recordFailure(); // 3rd failure trips it open
-        assertEquals(State.OPEN, cb.getState());
-        assertFalse("open breaker fails fast", cb.allowRequest());
-    }
+    assertEquals("still closed after reset", State.CLOSED, cb.getState());
+  }
 
+  @Test
+  public void failuresOutsideWindowDoNotAccumulate() {
+    AuthleteCircuitBreaker cb = newBreaker();
 
-    @Test
-    public void successResetsFailureCount()
-    {
-        AuthleteCircuitBreaker cb = newBreaker();
+    cb.recordFailure();
+    cb.recordFailure();
 
-        cb.recordFailure();
-        cb.recordFailure();
-        cb.recordSuccess(); // resets the count
-        cb.recordFailure();
-        cb.recordFailure();
+    // Advance beyond the 30s rolling window: the count restarts.
+    now[0] += 31_000;
+    cb.recordFailure();
+    cb.recordFailure();
 
-        assertEquals("still closed after reset", State.CLOSED, cb.getState());
-    }
+    assertEquals(State.CLOSED, cb.getState());
+  }
 
+  @Test
+  public void halfOpenSuccessClosesBreaker() {
+    AuthleteCircuitBreaker cb = newBreaker();
+    trip(cb);
 
-    @Test
-    public void failuresOutsideWindowDoNotAccumulate()
-    {
-        AuthleteCircuitBreaker cb = newBreaker();
+    // Before the open timeout, requests are rejected.
+    now[0] += 30_000;
+    assertFalse(cb.allowRequest());
 
-        cb.recordFailure();
-        cb.recordFailure();
+    // After the open timeout, a single trial is allowed (half-open).
+    now[0] += 31_000;
+    assertTrue("half-open trial allowed", cb.allowRequest());
+    assertEquals(State.HALF_OPEN, cb.getState());
+    assertFalse("only one trial permitted", cb.allowRequest());
 
-        // Advance beyond the 30s rolling window: the count restarts.
-        now[0] += 31_000;
-        cb.recordFailure();
-        cb.recordFailure();
+    cb.recordSuccess();
+    assertEquals("success closes the breaker", State.CLOSED, cb.getState());
+  }
 
-        assertEquals(State.CLOSED, cb.getState());
-    }
+  @Test
+  public void halfOpenFailureReopensBreaker() {
+    AuthleteCircuitBreaker cb = newBreaker();
+    trip(cb);
 
+    now[0] += 61_000;
+    assertTrue(cb.allowRequest()); // half-open trial
+    cb.recordFailure();
 
-    @Test
-    public void halfOpenSuccessClosesBreaker()
-    {
-        AuthleteCircuitBreaker cb = newBreaker();
-        trip(cb);
+    assertEquals("failed trial reopens", State.OPEN, cb.getState());
+    assertFalse(cb.allowRequest());
+  }
 
-        // Before the open timeout, requests are rejected.
-        now[0] += 30_000;
-        assertFalse(cb.allowRequest());
+  @Test
+  public void releaseTrialFreesHalfOpenSlot() {
+    AuthleteCircuitBreaker cb = newBreaker();
+    trip(cb);
 
-        // After the open timeout, a single trial is allowed (half-open).
-        now[0] += 31_000;
-        assertTrue("half-open trial allowed", cb.allowRequest());
-        assertEquals(State.HALF_OPEN, cb.getState());
-        assertFalse("only one trial permitted", cb.allowRequest());
+    now[0] += 61_000;
+    assertTrue(cb.allowRequest()); // half-open trial reserved
+    assertFalse("slot taken", cb.allowRequest());
 
-        cb.recordSuccess();
-        assertEquals("success closes the breaker", State.CLOSED, cb.getState());
-    }
+    // The trial ended without a verdict on backend health (e.g. an
+    // unexpected local error): the slot must become available again.
+    cb.releaseTrial();
+    assertEquals("still half-open", State.HALF_OPEN, cb.getState());
+    assertTrue("slot available again", cb.allowRequest());
+  }
 
-
-    @Test
-    public void halfOpenFailureReopensBreaker()
-    {
-        AuthleteCircuitBreaker cb = newBreaker();
-        trip(cb);
-
-        now[0] += 61_000;
-        assertTrue(cb.allowRequest()); // half-open trial
-        cb.recordFailure();
-
-        assertEquals("failed trial reopens", State.OPEN, cb.getState());
-        assertFalse(cb.allowRequest());
-    }
-
-
-    @Test
-    public void releaseTrialFreesHalfOpenSlot()
-    {
-        AuthleteCircuitBreaker cb = newBreaker();
-        trip(cb);
-
-        now[0] += 61_000;
-        assertTrue(cb.allowRequest()); // half-open trial reserved
-        assertFalse("slot taken", cb.allowRequest());
-
-        // The trial ended without a verdict on backend health (e.g. an
-        // unexpected local error): the slot must become available again.
-        cb.releaseTrial();
-        assertEquals("still half-open", State.HALF_OPEN, cb.getState());
-        assertTrue("slot available again", cb.allowRequest());
-    }
-
-
-    private void trip(AuthleteCircuitBreaker cb)
-    {
-        cb.recordFailure();
-        cb.recordFailure();
-        cb.recordFailure();
-        assertEquals(State.OPEN, cb.getState());
-    }
+  private void trip(AuthleteCircuitBreaker cb) {
+    cb.recordFailure();
+    cb.recordFailure();
+    cb.recordFailure();
+    assertEquals(State.OPEN, cb.getState());
+  }
 }

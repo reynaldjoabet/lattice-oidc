@@ -14,11 +14,11 @@ import java.util.regex.Pattern;
  * Secure} on a cookie in development.
  *
  * <p>A page is a secure context when it is served over {@code https} (or {@code wss}), or from a
- * loopback origin: {@code localhost}, a name under {@code .localhost}, {@code 127.0.0.0/8} or {@code
- * ::1}. Browsers trust loopback because traffic to it never leaves the machine.
+ * loopback origin: {@code localhost}, a name under {@code .localhost}, {@code 127.0.0.0/8} or
+ * {@code ::1}. Browsers trust loopback because traffic to it never leaves the machine.
  *
- * <p>No DNS lookups: a name only counts as loopback by its form ({@code localhost}), never by what it
- * resolves to, because an attacker can control the resolution of any other name. IP literals are
+ * <p>No DNS lookups: a name only counts as loopback by its form ({@code localhost}), never by what
+ * it resolves to, because an attacker can control the resolution of any other name. IP literals are
  * parsed, not resolved.
  *
  * <p>One exception the scheme alone misses: an {@code https} page framed by an {@code http} page is
@@ -28,7 +28,8 @@ import java.util.regex.Pattern;
  */
 public final class SecureContexts {
 
-  private static final Pattern IPV4 = Pattern.compile("(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})");
+  private static final Pattern IPV4 =
+      Pattern.compile("(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})");
 
   private SecureContexts() {}
 
@@ -45,8 +46,8 @@ public final class SecureContexts {
   }
 
   /**
-   * Whether a page at {@code pageUri} is a secure context, given the request's {@code Sec-Fetch-Dest}
-   * and {@code Referer} headers (either may be null).
+   * Whether a page at {@code pageUri} is a secure context, given the request's {@code
+   * Sec-Fetch-Dest} and {@code Referer} headers (either may be null).
    */
   public static boolean isSecureContext(URI pageUri, String secFetchDest, String referer) {
     if (!isPotentiallyTrustworthy(pageUri)) {
@@ -62,7 +63,9 @@ public final class SecureContexts {
     return true;
   }
 
-  /** {@code localhost}, a name under {@code .localhost}, or a loopback IP literal; never resolved. */
+  /**
+   * {@code localhost}, a name under {@code .localhost}, or a loopback IP literal; never resolved.
+   */
   public static boolean isLoopbackHost(String host) {
     if (host == null || host.isEmpty()) {
       return false;

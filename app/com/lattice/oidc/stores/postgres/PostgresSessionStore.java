@@ -1,6 +1,8 @@
 package com.lattice.oidc.stores.postgres;
 
 import com.lattice.oidc.stores.SessionStore;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Duration;
@@ -9,8 +11,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 
 /** {@link SessionStore} in PostgreSQL (tables {@code sessions} and {@code session_clients}). */
 @Singleton
@@ -62,7 +62,8 @@ public final class PostgresSessionStore implements SessionStore {
     return database.queryOne(
         "SELECT " + COLUMNS + " FROM sessions WHERE id = ? AND expires_at > ?",
         PostgresSessionStore::session,
-        id, Instant.now());
+        id,
+        Instant.now());
   }
 
   @Override
@@ -70,7 +71,9 @@ public final class PostgresSessionStore implements SessionStore {
     // Writes only when the last recorded activity is older than the interval.
     database.update(
         "UPDATE sessions SET last_seen_at = ? WHERE id = ? AND last_seen_at < ?",
-        now, id, now.minus(interval));
+        now,
+        id,
+        now.minus(interval));
   }
 
   @Override
@@ -80,15 +83,20 @@ public final class PostgresSessionStore implements SessionStore {
     }
     // session_clients rows go with it (ON DELETE CASCADE).
     return database.queryOne(
-        "DELETE FROM sessions WHERE id = ? RETURNING " + COLUMNS, PostgresSessionStore::session, id);
+        "DELETE FROM sessions WHERE id = ? RETURNING " + COLUMNS,
+        PostgresSessionStore::session,
+        id);
   }
 
   @Override
   public List<Session> forSubject(String subject) {
     return database.query(
-        "SELECT " + COLUMNS + " FROM sessions WHERE subject = ? AND expires_at > ? ORDER BY last_seen_at DESC",
+        "SELECT "
+            + COLUMNS
+            + " FROM sessions WHERE subject = ? AND expires_at > ? ORDER BY last_seen_at DESC",
         PostgresSessionStore::session,
-        subject, Instant.now());
+        subject,
+        Instant.now());
   }
 
   @Override
@@ -100,14 +108,16 @@ public final class PostgresSessionStore implements SessionStore {
         SELECT id, ? FROM sessions WHERE id = ?
         ON CONFLICT DO NOTHING
         """,
-        clientIdentifier, id);
+        clientIdentifier,
+        id);
   }
 
   @Override
   public Set<String> clients(String id) {
     return new LinkedHashSet<>(
         database.query(
-            "SELECT client_identifier FROM session_clients WHERE session_id = ? ORDER BY client_identifier",
+            "SELECT client_identifier FROM session_clients WHERE session_id = ? ORDER BY"
+                + " client_identifier",
             row -> row.getString(1),
             id));
   }
@@ -115,7 +125,10 @@ public final class PostgresSessionStore implements SessionStore {
   @Override
   public long countActive() {
     return database
-        .queryOne("SELECT count(*) FROM sessions WHERE expires_at > ?", row -> row.getLong(1), Instant.now())
+        .queryOne(
+            "SELECT count(*) FROM sessions WHERE expires_at > ?",
+            row -> row.getLong(1),
+            Instant.now())
         .orElse(0L);
   }
 }

@@ -9,13 +9,13 @@ import com.lattice.oidc.common.Responses;
 import com.lattice.oidc.handlers.ClaimsCollector;
 import com.lattice.oidc.models.User;
 import com.lattice.oidc.stores.UserStore;
+import jakarta.inject.Inject;
 import java.net.URI;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletionStage;
-import jakarta.inject.Inject;
 import play.mvc.BodyParser;
 import play.mvc.Http;
 import play.mvc.Result;
@@ -24,7 +24,8 @@ import play.mvc.Result;
  * An implementation of the userinfo endpoint (OpenID Connect Core 1.0, 5.3. UserInfo Endpoint):
  * {@code GET|POST /api/userinfo}.
  *
- * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#UserInfo">OpenID Connect Core 1.0, 5.3. UserInfo Endpoint</a>
+ * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#UserInfo">OpenID Connect Core
+ *     1.0, 5.3. UserInfo Endpoint</a>
  */
 public final class UserInfoController extends BaseController {
 
@@ -43,7 +44,8 @@ public final class UserInfoController extends BaseController {
    * The userinfo endpoint for the {@code GET} method. The access token is taken from the {@code
    * Authorization} header ({@code Bearer} or {@code DPoP} scheme).
    *
-   * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#UserInfoRequest">OpenID Connect Core 1.0, 5.3.1. UserInfo Request</a>
+   * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#UserInfoRequest">OpenID
+   *     Connect Core 1.0, 5.3.1. UserInfo Request</a>
    */
   public CompletionStage<Result> get(Http.Request request) {
     return async(() -> process(request, Requests.accessToken(request, null), false));
@@ -53,7 +55,8 @@ public final class UserInfoController extends BaseController {
    * The userinfo endpoint for the {@code POST} method. The access token may also be sent as the
    * {@code access_token} form parameter (RFC 6750, 2.2. Form-Encoded Body Parameter).
    *
-   * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#UserInfoRequest">OpenID Connect Core 1.0, 5.3.1. UserInfo Request</a>
+   * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#UserInfoRequest">OpenID
+   *     Connect Core 1.0, 5.3.1. UserInfo Request</a>
    */
   @BodyParser.Of(BodyParser.TolerantText.class)
   public CompletionStage<Result> post(Http.Request request) {
@@ -70,16 +73,15 @@ public final class UserInfoController extends BaseController {
                 body != null && !body.isEmpty()));
   }
 
-  /**
-   * Handle the userinfo request.
-   */
+  /** Handle the userinfo request. */
   private Result process(Http.Request request, String accessToken, boolean bodyContained) {
     // If an access token is not available, return "400 Bad Request".
     if (accessToken == null) {
       return Responses.bearerError(400, MISSING_TOKEN, null);
     }
     // Call Authlete's /api/auth/userinfo API. The request headers and target URI are passed for
-    // HTTP Message Signatures (RFC 9421), and the DPoP proof / client certificate for sender-constrained
+    // HTTP Message Signatures (RFC 9421), and the DPoP proof / client certificate for
+    // sender-constrained
     // access tokens.
     UserInfoResponse response =
         api()
@@ -104,7 +106,8 @@ public final class UserInfoController extends BaseController {
     return switch (response.getAction()) {
       // Return the user information.
       case OK -> issue(response, headers);
-      // 400 Bad Request / 401 Unauthorized / 403 Forbidden / 500 Internal Server Error. In these cases
+      // 400 Bad Request / 401 Unauthorized / 403 Forbidden / 500 Internal Server Error. In these
+      // cases
       // the content is the value of the WWW-Authenticate header (RFC 6750, 3. The WWW-Authenticate
       // Response Header Field).
       case BAD_REQUEST -> Responses.bearerError(400, content, headers);
@@ -128,13 +131,16 @@ public final class UserInfoController extends BaseController {
     List<Map<String, Object>> verifiedForTx = null;
     if (user.isPresent()) {
       ClaimsCollector collector = new ClaimsCollector(user.get());
-      claims = collector.withVerifiedClaims(collector.collect(info.getClaims(), null), info.getUserInfoClaims());
+      claims =
+          collector.withVerifiedClaims(
+              collector.collect(info.getClaims(), null), info.getUserInfoClaims());
       // Collect claim data that are referenced when Authlete computes values of transformed claims.
       claimsForTx = collector.collect(info.getRequestedClaimsForTx(), null);
       // Values of verified claims that are used to compute values of transformed claims under
       // "verified_claims/claims".
       verifiedForTx =
-          collector.verifiedClaimsForTx(info.getUserInfoClaims(), info.getRequestedVerifiedClaimsForTx());
+          collector.verifiedClaimsForTx(
+              info.getUserInfoClaims(), info.getRequestedVerifiedClaimsForTx());
     }
     UserInfoIssueRequest request = new UserInfoIssueRequest().setToken(info.getToken());
     if (claims != null && !claims.isEmpty()) {

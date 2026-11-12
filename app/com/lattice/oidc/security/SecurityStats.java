@@ -1,5 +1,6 @@
 package com.lattice.oidc.security;
 
+import jakarta.inject.Singleton;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -16,7 +17,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import jakarta.inject.Singleton;
 
 /**
  * Sign-in security figures for the operator console (screen 38): failed and locked sign-ins and
@@ -44,10 +44,15 @@ public final class SecurityStats {
    * The last 24 hours.
    *
    * @param hourly failed sign-ins per hour, oldest first (24 values)
-   * @param spikeHour the start of the busiest hour, when it stands out (more than 3 times the median
-   *     and at least 10)
+   * @param spikeHour the start of the busiest hour, when it stands out (more than 3 times the
+   *     median and at least 10)
    */
-  public record Summary(int failed, List<Integer> hourly, Optional<Instant> spikeHour, int reports, List<Source> sources) {
+  public record Summary(
+      int failed,
+      List<Integer> hourly,
+      Optional<Instant> spikeHour,
+      int reports,
+      List<Source> sources) {
     public Optional<String> spikeTime() {
       return spikeHour.map(TIME::format);
     }
@@ -55,7 +60,9 @@ public final class SecurityStats {
     /** Bar heights in percent of the busiest hour. */
     public List<Integer> bars() {
       int maximum = hourly.stream().mapToInt(Integer::intValue).max().orElse(0);
-      return hourly.stream().map(value -> maximum == 0 ? 0 : Math.max(4, value * 100 / maximum)).toList();
+      return hourly.stream()
+          .map(value -> maximum == 0 ? 0 : Math.max(4, value * 100 / maximum))
+          .toList();
     }
   }
 
@@ -69,7 +76,8 @@ public final class SecurityStats {
       return;
     }
     synchronized (observations) {
-      observations.addLast(new Observation(Instant.now(), event, ip, loginId == null ? null : loginId.toString()));
+      observations.addLast(
+          new Observation(Instant.now(), event, ip, loginId == null ? null : loginId.toString()));
       while (observations.size() > LIMIT) {
         observations.removeFirst();
       }
@@ -81,7 +89,9 @@ public final class SecurityStats {
     Instant since = Instant.now().minus(lockout);
     Set<String> locked = new HashSet<>();
     for (Observation observation : snapshot()) {
-      if (observation.event() == AuditService.Event.LOGIN_LOCKED && observation.at().isAfter(since) && observation.loginId() != null) {
+      if (observation.event() == AuditService.Event.LOGIN_LOCKED
+          && observation.at().isAfter(since)
+          && observation.loginId() != null) {
         locked.add(observation.loginId().toLowerCase(Locale.ROOT));
       }
     }
@@ -113,20 +123,28 @@ public final class SecurityStats {
       String ip = observation.ip() == null ? "unknown" : observation.ip();
       failuresByIp.computeIfAbsent(ip, key -> new int[1])[0]++;
       if (observation.loginId() != null) {
-        loginIdsByIp.computeIfAbsent(ip, key -> new HashSet<>()).add(observation.loginId().toLowerCase(Locale.ROOT));
+        loginIdsByIp
+            .computeIfAbsent(ip, key -> new HashSet<>())
+            .add(observation.loginId().toLowerCase(Locale.ROOT));
       }
       lastSeenByIp.merge(ip, observation.at(), (left, right) -> left.isAfter(right) ? left : right);
     }
     List<Source> sources = new ArrayList<>();
     failuresByIp.forEach(
         (ip, count) ->
-            sources.add(new Source(ip, count[0], loginIdsByIp.getOrDefault(ip, Set.of()).size(), lastSeenByIp.get(ip))));
+            sources.add(
+                new Source(
+                    ip,
+                    count[0],
+                    loginIdsByIp.getOrDefault(ip, Set.of()).size(),
+                    lastSeenByIp.get(ip))));
     sources.sort(Comparator.comparingInt(Source::failures).reversed());
     List<Integer> hours = new ArrayList<>();
     for (int value : hourly) {
       hours.add(value);
     }
-    return new Summary(failed, hours, spike(hourly, firstHour), reports, sources.stream().limit(10).toList());
+    return new Summary(
+        failed, hours, spike(hourly, firstHour), reports, sources.stream().limit(10).toList());
   }
 
   private static Optional<Instant> spike(int[] hourly, Instant firstHour) {

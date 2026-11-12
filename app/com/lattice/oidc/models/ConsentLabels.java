@@ -3,8 +3,8 @@ package com.lattice.oidc.models;
 import java.util.Map;
 
 /**
- * Plain-language labels for standard scopes and claims, so the consent page tells end-users what
- * is shared instead of showing protocol identifiers. Unknown names fall back to the identifier.
+ * Plain-language labels for standard scopes and claims, so the consent page tells end-users what is
+ * shared instead of showing protocol identifiers. Unknown names fall back to the identifier.
  */
 public final class ConsentLabels {
   private ConsentLabels() {}

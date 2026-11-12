@@ -16,22 +16,19 @@ import play.mvc.Result;
 /**
  * An implementation of the Grant Management endpoint: {@code GET|DELETE /api/gm/:grantId}.
  *
- * @see <a href="https://openid.net/specs/fapi-grant-management.html">Grant Management for OAuth 2.0</a>
+ * @see <a href="https://openid.net/specs/fapi-grant-management.html">Grant Management for OAuth
+ *     2.0</a>
  */
 public final class GrantManagementController extends BaseController {
 
   private static final Logger LOG = LoggerFactory.getLogger(GrantManagementController.class);
 
-  /**
-   * The entry point for grant management 'query' requests.
-   */
+  /** The entry point for grant management 'query' requests. */
   public CompletionStage<Result> query(Http.Request request, String grantId) {
     return async(() -> handle(request, grantId, GMAction.QUERY));
   }
 
-  /**
-   * The entry point for grant management 'revoke' requests.
-   */
+  /** The entry point for grant management 'revoke' requests. */
   public CompletionStage<Result> revoke(Http.Request request, String grantId) {
     return async(() -> handle(request, grantId, GMAction.REVOKE));
   }
@@ -69,11 +66,13 @@ public final class GrantManagementController extends BaseController {
       // client rather than Authlete's message.
       case CALLER_ERROR -> {
         LOG.error("Authlete's /gm refused Lattice's request: {}", response.getResultMessage());
-        yield Responses.serverError(Responses.error("server_error", "The grant could not be processed."), headers);
+        yield Responses.serverError(
+            Responses.error("server_error", "The grant could not be processed."), headers);
       }
       case AUTHLETE_ERROR -> {
         LOG.warn("Authlete's /gm failed: {}", response.getResultMessage());
-        yield Responses.serverError(Responses.error("server_error", "The grant could not be processed."), headers);
+        yield Responses.serverError(
+            Responses.error("server_error", "The grant could not be processed."), headers);
       }
       // This should not happen.
       default -> throw unknownAction("/gm", response.getAction());

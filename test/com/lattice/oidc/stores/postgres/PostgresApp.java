@@ -12,9 +12,9 @@ import play.Application;
 import play.test.Helpers;
 
 /**
- * A started Lattice with {@code lattice.storage = postgres} on a fresh database ({@link TestPostgres}).
- * A test class shares one, and its tests use their own keys ({@link #unique}), so they don't
- * interfere.
+ * A started Lattice with {@code lattice.storage = postgres} on a fresh database ({@link
+ * TestPostgres}). A test class shares one, and its tests use their own keys ({@link #unique}), so
+ * they don't interfere.
  */
 final class PostgresApp {
 

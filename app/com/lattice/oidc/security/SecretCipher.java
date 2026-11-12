@@ -2,6 +2,8 @@ package com.lattice.oidc.security;
 
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigValueType;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
@@ -17,8 +19,6 @@ import javax.crypto.Cipher;
 import javax.crypto.Mac;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 
 /**
  * Encrypts secrets the server must read back (authenticator-app secrets) with AES-256-GCM, and
@@ -26,11 +26,11 @@ import jakarta.inject.Singleton;
  *
  * <p>The key comes from {@code lattice.second-factor.encryption-key}, or else the application
  * secret. Every value is stored as {@code <key id>:<value>}, so the key can be rotated: set the new
- * key and move the old one to {@code previous-encryption-keys}. Values under a previous key are still
- * read, and {@link SecondFactors} re-encrypts secrets under the new key. Recovery codes can't be
- * re-hashed (only their hashes are kept), so a previous key stays listed until those accounts have
- * new codes; the operator console shows how many are left. Values from before key ids (no prefix)
- * are tried with every key.
+ * key and move the old one to {@code previous-encryption-keys}. Values under a previous key are
+ * still read, and {@link SecondFactors} re-encrypts secrets under the new key. Recovery codes can't
+ * be re-hashed (only their hashes are kept), so a previous key stays listed until those accounts
+ * have new codes; the operator console shows how many are left. Values from before key ids (no
+ * prefix) are tried with every key.
  */
 @Singleton
 public final class SecretCipher {
@@ -42,6 +42,7 @@ public final class SecretCipher {
   private record Key(String id, byte[] encryption, byte[] hashing) {}
 
   private final Key current;
+
   /** The current key first, then the previous ones. */
   private final List<Key> keys;
 
@@ -49,7 +50,9 @@ public final class SecretCipher {
   public SecretCipher(Config config) {
     String configured = config.getString("lattice.second-factor.encryption-key");
     String secret =
-        configured.isBlank() && config.hasPath("play.http.secret.key") ? config.getString("play.http.secret.key") : configured;
+        configured.isBlank() && config.hasPath("play.http.secret.key")
+            ? config.getString("play.http.secret.key")
+            : configured;
     this.current = key(secret);
     List<Key> all = new ArrayList<>(List.of(current));
     for (String previous : previousKeys(config)) {
@@ -61,7 +64,9 @@ public final class SecretCipher {
     this.keys = List.copyOf(all);
   }
 
-  /** {@code previous-encryption-keys}: a list, or one comma-separated string (from the environment). */
+  /**
+   * {@code previous-encryption-keys}: a list, or one comma-separated string (from the environment).
+   */
   private static List<String> previousKeys(Config config) {
     String path = "lattice.second-factor.previous-encryption-keys";
     if (!config.hasPath(path)) {
@@ -77,12 +82,16 @@ public final class SecretCipher {
   private static Key key(String secret) {
     // The id is a hash of the secret, so it can be shown in the console and stored with each value.
     String id = HexFormat.of().formatHex(derive(secret, "lattice second-factor key id"), 0, 6);
-    return new Key(id, derive(secret, "lattice second-factor encryption"), derive(secret, "lattice second-factor hashing"));
+    return new Key(
+        id,
+        derive(secret, "lattice second-factor encryption"),
+        derive(secret, "lattice second-factor hashing"));
   }
 
   private static byte[] derive(String secret, String purpose) {
     try {
-      return MessageDigest.getInstance("SHA-256").digest((purpose + "|" + secret).getBytes(StandardCharsets.UTF_8));
+      return MessageDigest.getInstance("SHA-256")
+          .digest((purpose + "|" + secret).getBytes(StandardCharsets.UTF_8));
     } catch (GeneralSecurityException e) {
       throw new IllegalStateException(e);
     }
@@ -104,7 +113,10 @@ public final class SecretCipher {
       byte[] nonce = new byte[NONCE_BYTES];
       RANDOM.nextBytes(nonce);
       Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-      cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(current.encryption(), "AES"), new GCMParameterSpec(128, nonce));
+      cipher.init(
+          Cipher.ENCRYPT_MODE,
+          new SecretKeySpec(current.encryption(), "AES"),
+          new GCMParameterSpec(128, nonce));
       byte[] sealed = cipher.doFinal(plaintext.getBytes(StandardCharsets.UTF_8));
       byte[] all = ByteBuffer.allocate(nonce.length + sealed.length).put(nonce).put(sealed).array();
       return current.id() + ":" + Base64.getEncoder().encodeToString(all);
@@ -126,7 +138,8 @@ public final class SecretCipher {
           throw new IllegalStateException(e);
         }
       }
-      throw new IllegalStateException("A stored secret could not be decrypted with any configured key");
+      throw new IllegalStateException(
+          "A stored secret could not be decrypted with any configured key");
     }
     String id = encrypted.substring(0, colon);
     Key key =
@@ -136,7 +149,9 @@ public final class SecretCipher {
             .orElseThrow(
                 () ->
                     new IllegalStateException(
-                        "A stored secret is encrypted with key " + id + ", which isn't configured (add it to previous-encryption-keys)"));
+                        "A stored secret is encrypted with key "
+                            + id
+                            + ", which isn't configured (add it to previous-encryption-keys)"));
     try {
       return decrypt(key, encrypted.substring(colon + 1));
     } catch (GeneralSecurityException e) {
@@ -147,8 +162,12 @@ public final class SecretCipher {
   private static String decrypt(Key key, String base64) throws GeneralSecurityException {
     byte[] all = Base64.getDecoder().decode(base64);
     Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-    cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key.encryption(), "AES"), new GCMParameterSpec(128, all, 0, NONCE_BYTES));
-    return new String(cipher.doFinal(all, NONCE_BYTES, all.length - NONCE_BYTES), StandardCharsets.UTF_8);
+    cipher.init(
+        Cipher.DECRYPT_MODE,
+        new SecretKeySpec(key.encryption(), "AES"),
+        new GCMParameterSpec(128, all, 0, NONCE_BYTES));
+    return new String(
+        cipher.doFinal(all, NONCE_BYTES, all.length - NONCE_BYTES), StandardCharsets.UTF_8);
   }
 
   /** Whether {@code encrypted} is under the current key (otherwise it should be re-encrypted). */
@@ -156,12 +175,17 @@ public final class SecretCipher {
     return encrypted.startsWith(current.id() + ":");
   }
 
-  /** A keyed hash (HMAC-SHA256, base64url) with the current key, for values that are only compared. */
+  /**
+   * A keyed hash (HMAC-SHA256, base64url) with the current key, for values that are only compared.
+   */
   public String hash(String value) {
     return current.id() + ":" + hmac(current, value);
   }
 
-  /** Every form {@code value} may have been stored in: hashed with each key, with and without its id. */
+  /**
+   * Every form {@code value} may have been stored in: hashed with each key, with and without its
+   * id.
+   */
   public List<String> storedHashes(String value) {
     List<String> hashes = new ArrayList<>();
     for (Key key : keys) {
@@ -176,7 +200,9 @@ public final class SecretCipher {
     try {
       Mac mac = Mac.getInstance("HmacSHA256");
       mac.init(new SecretKeySpec(key.hashing(), "HmacSHA256"));
-      return Base64.getUrlEncoder().withoutPadding().encodeToString(mac.doFinal(value.getBytes(StandardCharsets.UTF_8)));
+      return Base64.getUrlEncoder()
+          .withoutPadding()
+          .encodeToString(mac.doFinal(value.getBytes(StandardCharsets.UTF_8)));
     } catch (GeneralSecurityException e) {
       throw new IllegalStateException(e);
     }

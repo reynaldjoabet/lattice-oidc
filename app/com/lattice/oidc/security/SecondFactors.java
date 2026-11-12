@@ -4,14 +4,14 @@ import com.lattice.oidc.common.QrCodes;
 import com.lattice.oidc.models.User;
 import com.lattice.oidc.stores.SecondFactorStore;
 import com.typesafe.config.Config;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.OptionalLong;
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,9 +27,16 @@ public final class SecondFactors {
    * For the operator console: accounts with an authenticator app, the current key id, and what is
    * still under a previous key (a previous key can be removed once both are zero).
    */
-  public record Status(long accountsWithApp, String keyId, int previousKeys, long secretsUnderPreviousKeys, long recoveryCodesUnderPreviousKeys) {}
+  public record Status(
+      long accountsWithApp,
+      String keyId,
+      int previousKeys,
+      long secretsUnderPreviousKeys,
+      long recoveryCodesUnderPreviousKeys) {}
 
-  /** A new authenticator app being set up: its secret, the otpauth URI, and that URI as a QR code. */
+  /**
+   * A new authenticator app being set up: its secret, the otpauth URI, and that URI as a QR code.
+   */
   public record Enrollment(String secret, String uri, String qrSvg) {}
 
   private static final Logger LOG = LoggerFactory.getLogger(SecondFactors.class);
@@ -65,7 +72,8 @@ public final class SecondFactors {
 
   /** The enrollment for an existing pending secret (to show its QR code again). */
   public Enrollment enrollment(User user, String secret) {
-    String account = user.email().orElse(user.loginId() != null ? user.loginId() : user.getSubject());
+    String account =
+        user.email().orElse(user.loginId() != null ? user.loginId() : user.getSubject());
     String uri = Totp.uri(issuer, account, secret);
     return new Enrollment(secret, uri, QrCodes.svg(uri, "QR code for your authenticator app"));
   }
@@ -76,7 +84,9 @@ public final class SecondFactors {
     if (step.isEmpty()) {
       return false;
     }
-    store.saveTotp(new SecondFactorStore.Totp(subject, cipher.encrypt(secret), Instant.now(), step.getAsLong()));
+    store.saveTotp(
+        new SecondFactorStore.Totp(
+            subject, cipher.encrypt(secret), Instant.now(), step.getAsLong()));
     return true;
   }
 
@@ -146,7 +156,8 @@ public final class SecondFactors {
 
   /**
    * Re-encrypts every authenticator secret that isn't under the current key; returns how many. Safe
-   * to run on several servers at once. A secret under a key that isn't configured is logged and left.
+   * to run on several servers at once. A secret under a key that isn't configured is logged and
+   * left.
    */
   public int reencryptAll() {
     int reencrypted = 0;
@@ -162,7 +173,8 @@ public final class SecondFactors {
             reencrypted++;
           }
         } catch (IllegalStateException e) {
-          LOG.warn("Authenticator secret of {} not re-encrypted: {}", totp.subject(), e.getMessage());
+          LOG.warn(
+              "Authenticator secret of {} not re-encrypted: {}", totp.subject(), e.getMessage());
         }
       }
       if (page.size() < 500) {

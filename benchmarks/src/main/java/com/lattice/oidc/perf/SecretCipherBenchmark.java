@@ -15,7 +15,9 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 
-/** Encrypting an authenticator-app secret (AES-256-GCM) and hashing a recovery code (HMAC-SHA256). */
+/**
+ * Encrypting an authenticator-app secret (AES-256-GCM) and hashing a recovery code (HMAC-SHA256).
+ */
 @Fork(2)
 @Warmup(iterations = 5, time = 1, timeUnit = TimeUnit.SECONDS)
 @Measurement(iterations = 5, time = 1, timeUnit = TimeUnit.SECONDS)
@@ -29,7 +31,10 @@ public class SecretCipherBenchmark {
 
   @Setup
   public void cipher() {
-    cipher = new SecretCipher(ConfigFactory.parseMap(Map.of("lattice.second-factor.encryption-key", "benchmark-key")));
+    cipher =
+        new SecretCipher(
+            ConfigFactory.parseMap(
+                Map.of("lattice.second-factor.encryption-key", "benchmark-key")));
     sealed = cipher.encrypt("JBSWY3DPEHPK3PXP");
   }
 

@@ -4,21 +4,21 @@ import com.authlete.common.dto.CredentialOfferCreateRequest;
 import com.authlete.common.dto.CredentialOfferCreateResponse;
 import com.authlete.common.dto.CredentialOfferInfo;
 import com.lattice.oidc.common.JsonHelpers;
-import com.lattice.oidc.common.QrCodes;
 import com.lattice.oidc.common.LatticeConfig;
+import com.lattice.oidc.common.QrCodes;
 import com.lattice.oidc.common.Requests;
 import com.lattice.oidc.common.Responses;
 import com.lattice.oidc.models.CredentialOfferForm;
 import com.lattice.oidc.security.LoginService;
-import com.lattice.oidc.security.UserSessions.LoginState;
 import com.lattice.oidc.security.UserSessions;
+import com.lattice.oidc.security.UserSessions.LoginState;
+import jakarta.inject.Inject;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletionStage;
-import jakarta.inject.Inject;
 import play.mvc.Http;
 import play.mvc.Result;
 
@@ -29,7 +29,6 @@ import play.mvc.Result;
  * credential_offer}, and by reference, {@code credential_offer_uri}).
  */
 public final class CredentialOfferController extends BaseController {
-
 
   private static final String DEFAULT_IDS =
       "[\"DigitalCredential\", \"IdentityCredential\", \"org.iso.18013.5.1.mDL\"]";
@@ -49,10 +48,22 @@ public final class CredentialOfferController extends BaseController {
   }
 
   public Result form(Http.Request request) {
-    Optional<String> user = sessions.current(request).map(loginState -> loginState.user().displayName());
+    Optional<String> user =
+        sessions.current(request).map(loginState -> loginState.user().displayName());
     CredentialOfferForm form =
-        new CredentialOfferForm(DEFAULT_IDS, false, true, true, "", "numeric", "", 0, config.credentialOfferEndpoint(),
-            user, Optional.empty(), Optional.empty());
+        new CredentialOfferForm(
+            DEFAULT_IDS,
+            false,
+            true,
+            true,
+            "",
+            "numeric",
+            "",
+            0,
+            config.credentialOfferEndpoint(),
+            user,
+            Optional.empty(),
+            Optional.empty());
     return page(request, 200, form);
   }
 
@@ -82,27 +93,40 @@ public final class CredentialOfferController extends BaseController {
             user = current.get().user();
           } else {
             LoginService.Result auth =
-                login.authenticate(Requests.first(f, "loginId"), Requests.first(f, "password"), request.remoteAddress());
+                login.authenticate(
+                    Requests.first(f, "loginId"),
+                    Requests.first(f, "password"),
+                    request.remoteAddress());
             auditLogin(request, Requests.first(f, "loginId"), auth);
             if (auth.outcome() != LoginService.Outcome.SUCCESS) {
-              return page(request, 401, withError(form, Optional.empty(), "Invalid login ID or password."));
+              return page(
+                  request, 401, withError(form, Optional.empty(), "Invalid login ID or password."));
             }
             user = auth.user().get();
             if (flow.needsSecondFactor(user)) {
               return flow.challenge(request, user, "Password", false, "offer", Optional.empty());
             }
-            sessions.login(user, System.currentTimeMillis() / 1000L, null, sessionOut, request, "Password");
+            sessions.login(
+                user, System.currentTimeMillis() / 1000L, null, sessionOut, request, "Password");
           }
           Optional<String> shown = Optional.of(user.displayName());
 
           String[] ids;
           try {
-            ids = JsonHelpers.readList(form.credentialConfigurationIds()).stream().map(String.class::cast).toArray(String[]::new);
+            ids =
+                JsonHelpers.readList(form.credentialConfigurationIds()).stream()
+                    .map(String.class::cast)
+                    .toArray(String[]::new);
           } catch (RuntimeException e) {
-            return page(request, 400, withError(form, shown, "Credential configuration IDs must be a JSON array of strings."));
+            return page(
+                request,
+                400,
+                withError(
+                    form, shown, "Credential configuration IDs must be a JSON array of strings."));
           }
           if (form.duration() < 0) {
-            return page(request, 400, withError(form, shown, "Duration must be a non-negative number."));
+            return page(
+                request, 400, withError(form, shown, "Duration must be a non-negative number."));
           }
 
           CredentialOfferCreateResponse r =
@@ -115,11 +139,15 @@ public final class CredentialOfferController extends BaseController {
                           .setPreAuthorizedCodeGrantIncluded(form.preAuthorizedCodeGrant())
                           .setTxCode(form.txCode().isEmpty() ? null : form.txCode())
                           .setTxCodeInputMode(form.txCodeInputMode())
-                          .setTxCodeDescription(form.txCodeDescription().isEmpty() ? null : form.txCodeDescription())
+                          .setTxCodeDescription(
+                              form.txCodeDescription().isEmpty() ? null : form.txCodeDescription())
                           .setDuration(form.duration())
                           .setSubject(user.getSubject()));
           if (r.getAction() != CredentialOfferCreateResponse.Action.CREATED) {
-            return page(request, 400, withError(form, shown, "The offer could not be created: " + r.getResultMessage()));
+            return page(
+                request,
+                400,
+                withError(form, shown, "The offer could not be created: " + r.getResultMessage()));
           }
           CredentialOfferInfo info = r.getInfo();
           String offerUri = info.getCredentialIssuer() + "/api/offer/" + info.getIdentifier();
@@ -135,9 +163,17 @@ public final class CredentialOfferController extends BaseController {
                   java.util.List.of(ids));
           CredentialOfferForm done =
               new CredentialOfferForm(
-                  form.credentialConfigurationIds(), form.authorizationCodeGrant(), form.issuerState(),
-                  form.preAuthorizedCodeGrant(), form.txCode(), form.txCodeInputMode(),
-                  form.txCodeDescription(), form.duration(), form.endpoint(), shown, Optional.empty(),
+                  form.credentialConfigurationIds(),
+                  form.authorizationCodeGrant(),
+                  form.issuerState(),
+                  form.preAuthorizedCodeGrant(),
+                  form.txCode(),
+                  form.txCodeInputMode(),
+                  form.txCodeDescription(),
+                  form.duration(),
+                  form.endpoint(),
+                  shown,
+                  Optional.empty(),
                   Optional.of(created));
           return sessions.apply(
               Responses.of(
@@ -150,11 +186,21 @@ public final class CredentialOfferController extends BaseController {
         });
   }
 
-  private static CredentialOfferForm withError(CredentialOfferForm f, Optional<String> user, String error) {
+  private static CredentialOfferForm withError(
+      CredentialOfferForm f, Optional<String> user, String error) {
     return new CredentialOfferForm(
-        f.credentialConfigurationIds(), f.authorizationCodeGrant(), f.issuerState(),
-        f.preAuthorizedCodeGrant(), f.txCode(), f.txCodeInputMode(), f.txCodeDescription(),
-        f.duration(), f.endpoint(), user, Optional.of(error), Optional.empty());
+        f.credentialConfigurationIds(),
+        f.authorizationCodeGrant(),
+        f.issuerState(),
+        f.preAuthorizedCodeGrant(),
+        f.txCode(),
+        f.txCodeInputMode(),
+        f.txCodeDescription(),
+        f.duration(),
+        f.endpoint(),
+        user,
+        Optional.of(error),
+        Optional.empty());
   }
 
   private static String value(Map<String, String[]> f, String name, String fallback) {

@@ -6,33 +6,35 @@ import java.util.Arrays;
 
 /**
  * Converts ECDSA signatures between the two formats in use: the fixed-length {@code R || S} of JOSE
- * (RFC 7518, section 3.4: ES256, ES384, ES512 in JWS) and the ASN.1 DER {@code SEQUENCE { INTEGER r,
- * INTEGER s }} that {@link java.security.Signature} produces and expects for {@code SHA256withECDSA}
- * and the like.
+ * (RFC 7518, section 3.4: ES256, ES384, ES512 in JWS) and the ASN.1 DER {@code SEQUENCE { INTEGER
+ * r, INTEGER s }} that {@link java.security.Signature} produces and expects for {@code
+ * SHA256withECDSA} and the like.
  *
  * <p>Getting this wrong fails in quiet ways, so both directions are strict:
  *
  * <ul>
- *   <li><b>Zero values are refused.</b> r and s must be at least 1. Java 15 to 18 accepted r = s = 0
- *       as a valid signature for any message and key (CVE-2022-21449, "psychic signatures"); refusing
- *       zeros here protects a verifier even on such a runtime.
+ *   <li><b>Zero values are refused.</b> r and s must be at least 1. Java 15 to 18 accepted r = s =
+ *       0 as a valid signature for any message and key (CVE-2022-21449, "psychic signatures");
+ *       refusing zeros here protects a verifier even on such a runtime.
  *   <li><b>The JOSE length must be exactly right</b> for the algorithm: 64, 96 or 132 bytes. A
  *       shorter signature is not padded and a longer one is not cut: either would let a malformed
  *       signature through to the verifier.
- *   <li><b>DER is parsed as DER</b>, not as lenient BER: one encoding per value (minimal lengths and
- *       minimal integers, no negative numbers, nothing after the sequence), and integers larger than
- *       the curve allows are refused rather than truncated. Signatures that only differ in encoding
- *       would otherwise all verify (signature malleability), which breaks anything that uses a
- *       signature as an identifier or a replay-cache key.
- *   <li><b>P-521 lengths are handled</b>: its sequence can exceed 127 bytes, so its length takes the
- *       long form ({@code 0x81 nn}), which simple converters forget.
+ *   <li><b>DER is parsed as DER</b>, not as lenient BER: one encoding per value (minimal lengths
+ *       and minimal integers, no negative numbers, nothing after the sequence), and integers larger
+ *       than the curve allows are refused rather than truncated. Signatures that only differ in
+ *       encoding would otherwise all verify (signature malleability), which breaks anything that
+ *       uses a signature as an identifier or a replay-cache key.
+ *   <li><b>P-521 lengths are handled</b>: its sequence can exceed 127 bytes, so its length takes
+ *       the long form ({@code 0x81 nn}), which simple converters forget.
  * </ul>
  */
 public final class EcdsaSignatures {
 
   private EcdsaSignatures() {}
 
-  /** The length of a JOSE ECDSA signature for {@code alg}: ES256 and ES256K 64, ES384 96, ES512 132. */
+  /**
+   * The length of a JOSE ECDSA signature for {@code alg}: ES256 and ES256K 64, ES384 96, ES512 132.
+   */
   public static int joseLength(String alg) {
     return switch (alg) {
       case "ES256", "ES256K" -> 64;

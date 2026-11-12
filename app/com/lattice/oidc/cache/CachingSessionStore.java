@@ -3,20 +3,20 @@ package com.lattice.oidc.cache;
 import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.metrics.Metrics;
 import com.lattice.oidc.stores.SessionStore;
+import jakarta.inject.Inject;
+import jakarta.inject.Named;
+import jakarta.inject.Singleton;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import jakarta.inject.Inject;
-import jakarta.inject.Named;
-import jakarta.inject.Singleton;
 
 /**
  * Caches the lookup made on every signed-in request, a session by id. Ending a session or recording
- * activity invalidates it on every server, so a sign-out takes effect everywhere at once. Activity is
- * recorded at most once per touch interval; while the cached copy shows recent activity, nothing is
- * written. Listings and client sets always go to the store.
+ * activity invalidates it on every server, so a sign-out takes effect everywhere at once. Activity
+ * is recorded at most once per touch interval; while the cached copy shows recent activity, nothing
+ * is written. Listings and client sets always go to the store.
  */
 @Singleton
 public final class CachingSessionStore implements SessionStore {
@@ -28,7 +28,8 @@ public final class CachingSessionStore implements SessionStore {
   private final Metrics metrics;
 
   @Inject
-  public CachingSessionStore(@Named("backing") SessionStore store, ReadCache cache, Metrics metrics) {
+  public CachingSessionStore(
+      @Named("backing") SessionStore store, ReadCache cache, Metrics metrics) {
     this.store = store;
     this.cache = cache;
     this.metrics = metrics;
@@ -44,7 +45,8 @@ public final class CachingSessionStore implements SessionStore {
     if (id == null) {
       return Optional.empty();
     }
-    Optional<Session> cached = cache.get(REGION, id).map(json -> JsonHelpers.read(json, Session.class));
+    Optional<Session> cached =
+        cache.get(REGION, id).map(json -> JsonHelpers.read(json, Session.class));
     metrics.cacheLookup(REGION, cached.isPresent());
     if (cached.isPresent()) {
       return cached.filter(session -> session.expiresAt().isAfter(Instant.now()));
@@ -56,7 +58,8 @@ public final class CachingSessionStore implements SessionStore {
 
   @Override
   public void touch(String id, Instant now, Duration interval) {
-    Optional<Session> cached = cache.get(REGION, id).map(json -> JsonHelpers.read(json, Session.class));
+    Optional<Session> cached =
+        cache.get(REGION, id).map(json -> JsonHelpers.read(json, Session.class));
     if (cached.isPresent() && !cached.get().lastSeenAt().plus(interval).isBefore(now)) {
       return; // Recent enough: the store wouldn't write either.
     }

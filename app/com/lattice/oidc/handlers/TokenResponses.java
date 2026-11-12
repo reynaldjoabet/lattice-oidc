@@ -17,7 +17,9 @@ final class TokenResponses {
     Map<String, Object> body = new LinkedHashMap<>();
     body.put(
         "access_token",
-        created.getJwtAccessToken() != null ? created.getJwtAccessToken() : created.getAccessToken());
+        created.getJwtAccessToken() != null
+            ? created.getJwtAccessToken()
+            : created.getAccessToken());
     if (issuedTokenType != null) {
       body.put("issued_token_type", issuedTokenType);
     }
@@ -32,7 +34,8 @@ final class TokenResponses {
     return Responses.ok(JsonHelpers.write(body), headers);
   }
 
-  static WebException error(int status, String error, String description, Map<String, String> headers) {
+  static WebException error(
+      int status, String error, String description, Map<String, String> headers) {
     return new WebException(Responses.json(status, Responses.error(error, description), headers));
   }
 }

@@ -34,10 +34,13 @@ public class ObbDcrHandlerTest {
 
   /** Builds a request from a (possibly altered) statement and request, and expects a rejection. */
   private void rejected(
-      String expectedError, Consumer<Map<String, Object>> statementChange, Consumer<Map<String, Object>> requestChange) {
+      String expectedError,
+      Consumer<Map<String, Object>> statementChange,
+      Consumer<Map<String, Object>> requestChange) {
     Map<String, Object> claims = new java.util.LinkedHashMap<>(FakeObbDirectory.claims());
     statementChange.accept(claims);
-    Map<String, Object> request = new java.util.LinkedHashMap<>(FakeObbDirectory.request(directory.sign(claims)));
+    Map<String, Object> request =
+        new java.util.LinkedHashMap<>(FakeObbDirectory.request(directory.sign(claims)));
     requestChange.accept(request);
     rejected(expectedError, JsonHelpers.write(request));
   }
@@ -86,32 +89,46 @@ public class ObbDcrHandlerTest {
     Map<String, Object> claims = FakeObbDirectory.claims();
     rejected(
         "invalid_software_statement",
-        JsonHelpers.write(FakeObbDirectory.request(directory.sign(claims, JWSAlgorithm.RS256, new Date()))));
+        JsonHelpers.write(
+            FakeObbDirectory.request(directory.sign(claims, JWSAlgorithm.RS256, new Date()))));
     Date stale = new Date(System.currentTimeMillis() - 10 * 60_000);
     rejected(
         "invalid_software_statement",
-        JsonHelpers.write(FakeObbDirectory.request(directory.sign(claims, JWSAlgorithm.PS256, stale))));
+        JsonHelpers.write(
+            FakeObbDirectory.request(directory.sign(claims, JWSAlgorithm.PS256, stale))));
     Date future = new Date(System.currentTimeMillis() + 10 * 60_000);
     rejected(
         "invalid_software_statement",
-        JsonHelpers.write(FakeObbDirectory.request(directory.sign(claims, JWSAlgorithm.PS256, future))));
+        JsonHelpers.write(
+            FakeObbDirectory.request(directory.sign(claims, JWSAlgorithm.PS256, future))));
   }
 
   @Test
   public void requestMustAgreeWithTheStatement() {
-    rejected("invalid_client_metadata", statement -> {}, request -> request.put("jwks_uri", "https://evil.example/jwks"));
+    rejected(
+        "invalid_client_metadata",
+        statement -> {},
+        request -> request.put("jwks_uri", "https://evil.example/jwks"));
     rejected(
         "invalid_redirect_uri",
         statement -> {},
         request -> request.put("redirect_uris", List.of("https://evil.example/cb")));
-    rejected("invalid_client_metadata", statement -> {}, request -> request.put("jwks", Map.of("keys", List.of())));
+    rejected(
+        "invalid_client_metadata",
+        statement -> {},
+        request -> request.put("jwks", Map.of("keys", List.of())));
   }
 
   @Test
   public void scopesAreLimitedByRoles() {
-    rejected("invalid_client_metadata", statement -> {}, request -> request.put("scope", "openid payments"));
     rejected(
-        "invalid_software_statement", statement -> statement.put("software_roles", List.of("ROOT")), request -> {});
+        "invalid_client_metadata",
+        statement -> {},
+        request -> request.put("scope", "openid payments"));
+    rejected(
+        "invalid_software_statement",
+        statement -> statement.put("software_roles", List.of("ROOT")),
+        request -> {});
   }
 
   @Test
@@ -121,11 +138,17 @@ public class ObbDcrHandlerTest {
         statement -> {},
         request -> request.put("token_endpoint_auth_method", "client_secret_basic"));
     rejected(
-        "invalid_client_metadata", statement -> {}, request -> request.put("id_token_signed_response_alg", "RS256"));
+        "invalid_client_metadata",
+        statement -> {},
+        request -> request.put("id_token_signed_response_alg", "RS256"));
     rejected(
-        "invalid_client_metadata", statement -> {}, request -> request.put("request_object_encryption_alg", "RSA1_5"));
+        "invalid_client_metadata",
+        statement -> {},
+        request -> request.put("request_object_encryption_alg", "RSA1_5"));
     rejected(
-        "invalid_client_metadata", statement -> {}, request -> request.put("tls_client_auth_san_dns", "tpp.example"));
+        "invalid_client_metadata",
+        statement -> {},
+        request -> request.put("tls_client_auth_san_dns", "tpp.example"));
   }
 
   @Test

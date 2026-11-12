@@ -13,16 +13,16 @@ import com.lattice.oidc.models.DeviceApproval;
 import com.lattice.oidc.security.AuditService;
 import com.lattice.oidc.security.Interactions;
 import com.lattice.oidc.security.LoginService;
-import com.lattice.oidc.security.UserSessions.LoginState;
 import com.lattice.oidc.security.UserSessions;
+import com.lattice.oidc.security.UserSessions.LoginState;
 import com.lattice.oidc.stores.CounterStore;
+import jakarta.inject.Inject;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletionStage;
-import jakarta.inject.Inject;
 import play.mvc.Http;
 import play.mvc.Result;
 
@@ -37,13 +37,13 @@ import play.mvc.Result;
  *       page.
  * </ul>
  *
- * @see <a href="https://www.rfc-editor.org/rfc/rfc8628.html">RFC 8628: OAuth 2.0 Device Authorization Grant</a>
+ * @see <a href="https://www.rfc-editor.org/rfc/rfc8628.html">RFC 8628: OAuth 2.0 Device
+ *     Authorization Grant</a>
  */
 public final class DeviceController extends BaseController {
 
   private static final String CHALLENGE = "Basic realm=\"device/authorization\"";
   private static final String KIND = "device";
-
 
   private final UserSessions sessions;
   private final Interactions interactions;
@@ -77,9 +77,7 @@ public final class DeviceController extends BaseController {
     return "device:ip:" + request.remoteAddress();
   }
 
-  /**
-   * The device authorization endpoint.
-   */
+  /** The device authorization endpoint. */
   public CompletionStage<Result> authorization(Http.Request request) {
     return async(
         () -> {
@@ -95,9 +93,13 @@ public final class DeviceController extends BaseController {
                           .setClientSecret(basic == null ? null : basic.getPassword())
                           .setClientCertificate(chain == null ? null : chain[0])
                           .setClientCertificatePath(
-                              chain == null || chain.length < 2 ? null : Arrays.copyOfRange(chain, 1, chain.length))
-                          .setOauthClientAttestation(Requests.header(request, "OAuth-Client-Attestation"))
-                          .setOauthClientAttestationPop(Requests.header(request, "OAuth-Client-Attestation-PoP")));
+                              chain == null || chain.length < 2
+                                  ? null
+                                  : Arrays.copyOfRange(chain, 1, chain.length))
+                          .setOauthClientAttestation(
+                              Requests.header(request, "OAuth-Client-Attestation"))
+                          .setOauthClientAttestationPop(
+                              Requests.header(request, "OAuth-Client-Attestation-PoP")));
           Map<String, String> headers = new LinkedHashMap<>();
           if (r.getAttestationChallenge() != null) {
             headers.put("OAuth-Client-Attestation-Challenge", r.getAttestationChallenge());
@@ -124,7 +126,8 @@ public final class DeviceController extends BaseController {
    * {@code user_code} query parameter (verification_uri_complete) pre-fills the code.
    */
   public Result verificationPage(Http.Request request) {
-    Optional<String> user = sessions.current(request).map(loginState -> loginState.user().displayName());
+    Optional<String> user =
+        sessions.current(request).map(loginState -> loginState.user().displayName());
     String userCode = request.queryString("user_code").orElse("");
     return page(request, 200, userCode, user, Optional.empty());
   }
@@ -143,7 +146,10 @@ public final class DeviceController extends BaseController {
           Optional<String> shown = current.map(loginState -> loginState.user().displayName());
           if (current.isEmpty()) {
             LoginService.Result auth =
-                login.authenticate(Requests.first(form, "loginId"), Requests.first(form, "password"), request.remoteAddress());
+                login.authenticate(
+                    Requests.first(form, "loginId"),
+                    Requests.first(form, "password"),
+                    request.remoteAddress());
             auditLogin(request, Requests.first(form, "loginId"), auth);
             if (auth.outcome() != LoginService.Outcome.SUCCESS) {
               String message =
@@ -154,9 +160,16 @@ public final class DeviceController extends BaseController {
             }
             if (flow.needsSecondFactor(auth.user().get())) {
               // After the code, the user comes back here and enters the device code again.
-              return flow.challenge(request, auth.user().get(), "Password", false, "device", Optional.empty());
+              return flow.challenge(
+                  request, auth.user().get(), "Password", false, "device", Optional.empty());
             }
-            sessions.login(auth.user().get(), System.currentTimeMillis() / 1000L, null, sessionOut, request, "Password");
+            sessions.login(
+                auth.user().get(),
+                System.currentTimeMillis() / 1000L,
+                null,
+                sessionOut,
+                request,
+                "Password");
             shown = Optional.of(auth.user().get().displayName());
           }
 
@@ -164,7 +177,12 @@ public final class DeviceController extends BaseController {
           // can't be guessed.
           if (counters.count(guessesKey(request)) >= config.device().maxAttempts()) {
             return sessions.apply(
-                page(request, 429, userCode, shown, Optional.of("Too many wrong codes. Try again later.")),
+                page(
+                    request,
+                    429,
+                    userCode,
+                    shown,
+                    Optional.of("Too many wrong codes. Try again later.")),
                 request,
                 sessionOut);
           }
@@ -179,11 +197,19 @@ public final class DeviceController extends BaseController {
                 // The user code is valid. Ask the user to authorize the client.
                 case VALID -> approvalPage(request, userCode, r, sessionOut);
                 // The user code has expired. Urge the user to re-initiate device flow.
-                case EXPIRED -> page(request, 400, "", shown, Optional.of("The code has expired. Restart on your device."));
+                case EXPIRED ->
+                    page(
+                        request,
+                        400,
+                        "",
+                        shown,
+                        Optional.of("The code has expired. Restart on your device."));
                 // The user code does not exist. Urge the user to re-input a valid user code.
-                case NOT_EXIST -> page(request, 404, userCode, shown, Optional.of("The code does not exist."));
+                case NOT_EXIST ->
+                    page(request, 404, userCode, shown, Optional.of("The code does not exist."));
                 // An error occurred on Authlete. Urge the user to re-initiate device flow.
-                case SERVER_ERROR -> Pages.message(request, 500, "Error", "Please try again later.");
+                case SERVER_ERROR ->
+                    Pages.message(request, 500, "Error", "Please try again later.");
                 // This never happens.
                 default -> throw unknownAction("/device/verification", r.getAction());
               };
@@ -196,19 +222,28 @@ public final class DeviceController extends BaseController {
    * this same request assigned ({@code sessionOut}), else the browser's own.
    */
   private Result approvalPage(
-      Http.Request request, String userCode, DeviceVerificationResponse info, Map<String, String> sessionOut) {
+      Http.Request request,
+      String userCode,
+      DeviceVerificationResponse info,
+      Map<String, String> sessionOut) {
     DeviceApproval approval = device.approval(userCode, info);
     String browserId =
-        Optional.ofNullable(sessionOut.get(UserSessions.BROWSER_ID)).orElseGet(() -> sessions.browserId(request));
+        Optional.ofNullable(sessionOut.get(UserSessions.BROWSER_ID))
+            .orElseGet(() -> sessions.browserId(request));
     interactions.put(KIND, userCode, browserId, approval);
     return sessions.withBrowserId(
-        Responses.of(200, views.html.oidc.deviceAuthorization.render(approval, request).body(), Responses.HTML, null),
+        Responses.of(
+            200,
+            views.html.oidc.deviceAuthorization.render(approval, request).body(),
+            Responses.HTML,
+            null),
         request,
         browserId);
   }
 
   /**
-   * Processes a request from the form in the authorization page of the Device Flow: approve or deny.
+   * Processes a request from the form in the authorization page of the Device Flow: approve or
+   * deny.
    */
   public CompletionStage<Result> complete(Http.Request request) {
     return async(
@@ -216,14 +251,16 @@ public final class DeviceController extends BaseController {
           Map<String, String[]> form = Requests.form(request);
           String userCode = Requests.first(form, "userCode");
           String browserId = sessions.existingBrowserId(request).orElse(null);
-          Optional<DeviceApproval> approval = interactions.take(KIND, userCode, browserId, DeviceApproval.class);
+          Optional<DeviceApproval> approval =
+              interactions.take(KIND, userCode, browserId, DeviceApproval.class);
           Optional<LoginState> current = sessions.current(request);
           if (approval.isEmpty() || current.isEmpty()) {
             return Pages.message(request, 400, "Request expired", "Please enter the code again.");
           }
           boolean authorized = form.containsKey("authorized");
           // Call Authlete's /api/device/complete API through the handler.
-          DeviceCompleteResponse.Action action = device.complete(approval.get(), current, authorized);
+          DeviceCompleteResponse.Action action =
+              device.complete(approval.get(), current, authorized);
           audit.record(
               request,
               authorized ? AuditService.Event.DEVICE_AUTHORIZED : AuditService.Event.DEVICE_DENIED,
@@ -239,23 +276,31 @@ public final class DeviceController extends BaseController {
                         request,
                         "Device connected",
                         approval.get().clientName()
-                            + " can now use your account. You can return to your device; it will continue on its own.")
-                    : Pages.message(request, 200, "Request denied", "The device was not given access.");
+                            + " can now use your account. You can return to your device; it will"
+                            + " continue on its own.")
+                    : Pages.message(
+                        request, 200, "Request denied", "The device was not given access.");
             // The user code has expired.
-            case USER_CODE_EXPIRED -> Pages.message(request, 400, "Code expired", "Restart the flow on your device.");
+            case USER_CODE_EXPIRED ->
+                Pages.message(request, 400, "Code expired", "Restart the flow on your device.");
             // The user code does not exist.
-            case USER_CODE_NOT_EXIST -> Pages.message(request, 400, "Code invalid", "Restart the flow on your device.");
+            case USER_CODE_NOT_EXIST ->
+                Pages.message(request, 400, "Code invalid", "Restart the flow on your device.");
             // The API call was invalid, or an error occurred on Authlete side.
-            case INVALID_REQUEST, SERVER_ERROR -> Pages.message(request, 500, "Error", "Please restart the flow.");
+            case INVALID_REQUEST, SERVER_ERROR ->
+                Pages.message(request, 500, "Error", "Please restart the flow.");
             // This never happens.
             default -> throw unknownAction("/device/complete", action);
           };
         });
   }
 
-
   private static Result page(
-      Http.Request request, int status, String userCode, Optional<String> user, Optional<String> notice) {
+      Http.Request request,
+      int status,
+      String userCode,
+      Optional<String> user,
+      Optional<String> notice) {
     return Responses.of(
         status,
         views.html.oidc.deviceVerification.render(userCode, user, notice, request).body(),

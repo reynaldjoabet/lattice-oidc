@@ -1,11 +1,11 @@
 package com.lattice.oidc.stores;
 
 import com.lattice.oidc.models.Consent;
+import jakarta.inject.Singleton;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import jakarta.inject.Singleton;
 
 /** {@link ConsentStore} in memory, for one server (development and tests). */
 @Singleton
@@ -28,7 +28,9 @@ public final class InMemoryConsentStore implements ConsentStore {
   @Override
   public void save(Consent consent) {
     consents.values().removeIf(stored -> !stored.keepUntil().isAfter(Instant.now()));
-    consents.put(consent.consentId(), new Stored(consent, ConsentStore.keepUntil(consent.expirationDateTime())));
+    consents.put(
+        consent.consentId(),
+        new Stored(consent, ConsentStore.keepUntil(consent.expirationDateTime())));
   }
 
   @Override

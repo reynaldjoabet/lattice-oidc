@@ -19,7 +19,8 @@ public final class Pages {
     return message(request, 200, title, text, "success");
   }
 
-  private static Result message(Http.Request request, int status, String title, String text, String tone) {
+  private static Result message(
+      Http.Request request, int status, String title, String text, String tone) {
     return Responses.of(
         status,
         views.html.oidc.message.render(title, text, status, tone, request).body(),

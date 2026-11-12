@@ -35,7 +35,8 @@ public class RequestsTest {
             + Base64.getEncoder()
                 .encodeToString("my%3Aclient:s%2Bcr%25t%3Ax".getBytes(StandardCharsets.UTF_8));
     BasicCredentials credentials =
-        Requests.basicCredentials(new Http.RequestBuilder().header("Authorization", header).build());
+        Requests.basicCredentials(
+            new Http.RequestBuilder().header("Authorization", header).build());
     assertEquals("my:client", credentials.getUserId());
     assertEquals("s+cr%t:x", credentials.getPassword());
   }

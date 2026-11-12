@@ -38,6 +38,7 @@ public final class FakeUpstreamProvider implements AutoCloseable {
   public volatile String idTokenSubject = "alice";
   public volatile String userInfoSubject = "alice";
   public volatile String email = "alice@upstream.example";
+
   /** The ID token's auth_time (seconds since the epoch), or null to leave it out. */
   public volatile Long authTime;
 
@@ -55,7 +56,10 @@ public final class FakeUpstreamProvider implements AutoCloseable {
           java.util.Map<String, String> query = new java.util.HashMap<>();
           for (String pair : ex.getRequestURI().getRawQuery().split("&")) {
             String[] parts = pair.split("=", 2);
-            query.put(parts[0], java.net.URLDecoder.decode(parts.length > 1 ? parts[1] : "", StandardCharsets.UTF_8));
+            query.put(
+                parts[0],
+                java.net.URLDecoder.decode(
+                    parts.length > 1 ? parts[1] : "", StandardCharsets.UTF_8));
           }
           nonce = query.get("nonce");
           String back =
@@ -71,17 +75,31 @@ public final class FakeUpstreamProvider implements AutoCloseable {
         ex ->
             json(
                 ex,
-                "{\"sub\":\"" + userInfoSubject + "\",\"name\":\"Alice Upstream\","
-                    + "\"email\":\"" + email + "\"}"));
+                "{\"sub\":\""
+                    + userInfoSubject
+                    + "\",\"name\":\"Alice Upstream\","
+                    + "\"email\":\""
+                    + email
+                    + "\"}"));
     server.start();
   }
 
   private String discovery() {
-    return "{\"issuer\":\"" + issuer + "\","
-        + "\"authorization_endpoint\":\"" + issuer + "/authorize\","
-        + "\"token_endpoint\":\"" + issuer + "/token\","
-        + "\"userinfo_endpoint\":\"" + issuer + "/userinfo\","
-        + "\"jwks_uri\":\"" + issuer + "/jwks\","
+    return "{\"issuer\":\""
+        + issuer
+        + "\","
+        + "\"authorization_endpoint\":\""
+        + issuer
+        + "/authorize\","
+        + "\"token_endpoint\":\""
+        + issuer
+        + "/token\","
+        + "\"userinfo_endpoint\":\""
+        + issuer
+        + "/userinfo\","
+        + "\"jwks_uri\":\""
+        + issuer
+        + "/jwks\","
         + "\"response_types_supported\":[\"code\"],"
         + "\"subject_types_supported\":[\"public\"],"
         + "\"claims_parameter_supported\":true,"
@@ -109,7 +127,9 @@ public final class FakeUpstreamProvider implements AutoCloseable {
       json(
           ex,
           "{\"access_token\":\"upstream-at\",\"token_type\":\"Bearer\",\"expires_in\":300,"
-              + "\"id_token\":\"" + idToken.serialize() + "\"}");
+              + "\"id_token\":\""
+              + idToken.serialize()
+              + "\"}");
     } catch (JOSEException e) {
       throw new IOException(e);
     }
@@ -133,7 +153,8 @@ public final class FakeUpstreamProvider implements AutoCloseable {
     try {
       SignedJWT jwt =
           new SignedJWT(
-              new JWSHeader.Builder(JWSAlgorithm.RS256).keyID(key.getKeyID()).build(), claims.build());
+              new JWSHeader.Builder(JWSAlgorithm.RS256).keyID(key.getKeyID()).build(),
+              claims.build());
       jwt.sign(new RSASSASigner(key));
       return jwt.serialize();
     } catch (JOSEException e) {
@@ -159,16 +180,27 @@ public final class FakeUpstreamProvider implements AutoCloseable {
   }
 
   /** As {@link #configFile(String, String)}, for users of the given email {@code domains}. */
-  public Path configFile(String id, String redirectUri, java.util.List<String> domains) throws IOException {
+  public Path configFile(String id, String redirectUri, java.util.List<String> domains)
+      throws IOException {
     Path file = Files.createTempFile("identity-providers", ".json");
     file.toFile().deleteOnExit();
     Files.writeString(
         file,
-        "{\"identityProviders\":[{\"id\":\"" + id + "\","
-            + "\"server\":{\"name\":\"Upstream\",\"issuer\":\"" + issuer + "\"},"
-            + "\"client\":{\"clientId\":\"" + CLIENT_ID + "\",\"clientSecret\":\"s3cret\","
-            + "\"redirectUri\":\"" + redirectUri + "\"},"
-            + "\"domains\":[" + String.join(",", domains.stream().map(domain -> "\"" + domain + "\"").toList()) + "]}]}");
+        "{\"identityProviders\":[{\"id\":\""
+            + id
+            + "\","
+            + "\"server\":{\"name\":\"Upstream\",\"issuer\":\""
+            + issuer
+            + "\"},"
+            + "\"client\":{\"clientId\":\""
+            + CLIENT_ID
+            + "\",\"clientSecret\":\"s3cret\","
+            + "\"redirectUri\":\""
+            + redirectUri
+            + "\"},"
+            + "\"domains\":["
+            + String.join(",", domains.stream().map(domain -> "\"" + domain + "\"").toList())
+            + "]}]}");
     return file;
   }
 

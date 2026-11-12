@@ -14,7 +14,8 @@ import java.util.Optional;
 
 /**
  * {@link PasskeyStore} through JPA (entities {@link PasskeyEntity}, {@link UserHandleEntity} and
- * {@link PasskeyOfferEntity}; tables {@code passkeys}, {@code user_handles}, {@code passkey_offers}).
+ * {@link PasskeyOfferEntity}; tables {@code passkeys}, {@code user_handles}, {@code
+ * passkey_offers}).
  */
 @Singleton
 public final class JpaPasskeyStore implements PasskeyStore {
@@ -30,16 +31,28 @@ public final class JpaPasskeyStore implements PasskeyStore {
 
   private static Passkey passkey(PasskeyEntity p) {
     LinkedHashSet<String> transports = new LinkedHashSet<>();
-    JsonHelpers.readList(p.transports).forEach(transport -> transports.add(String.valueOf(transport)));
-    return new Passkey(p.id, p.subject, p.userHandle, p.publicKeyCose, p.signatureCount, p.name, p.createdAt,
-        Optional.ofNullable(p.lastUsedAt), p.backedUp, transports);
+    JsonHelpers.readList(p.transports)
+        .forEach(transport -> transports.add(String.valueOf(transport)));
+    return new Passkey(
+        p.id,
+        p.subject,
+        p.userHandle,
+        p.publicKeyCose,
+        p.signatureCount,
+        p.name,
+        p.createdAt,
+        Optional.ofNullable(p.lastUsedAt),
+        p.backedUp,
+        transports);
   }
 
   @Override
   public List<Passkey> forSubject(String subject) {
     return database.transaction(
         em ->
-            em.createQuery("select p from PasskeyEntity p where p.subject = :subject order by p.createdAt", PasskeyEntity.class)
+            em.createQuery(
+                    "select p from PasskeyEntity p where p.subject = :subject order by p.createdAt",
+                    PasskeyEntity.class)
                 .setParameter("subject", subject)
                 .getResultStream()
                 .map(JpaPasskeyStore::passkey)
@@ -52,7 +65,9 @@ public final class JpaPasskeyStore implements PasskeyStore {
       return Optional.empty();
     }
     return database.transaction(
-        em -> Optional.ofNullable(em.find(PasskeyEntity.class, credentialId)).map(JpaPasskeyStore::passkey));
+        em ->
+            Optional.ofNullable(em.find(PasskeyEntity.class, credentialId))
+                .map(JpaPasskeyStore::passkey));
   }
 
   @Override
@@ -86,7 +101,10 @@ public final class JpaPasskeyStore implements PasskeyStore {
   @Override
   public void delete(String credentialId) {
     database.transaction(
-        em -> em.createQuery("delete from PasskeyEntity p where p.id = :id").setParameter("id", credentialId).executeUpdate());
+        em ->
+            em.createQuery("delete from PasskeyEntity p where p.id = :id")
+                .setParameter("id", credentialId)
+                .executeUpdate());
   }
 
   @Override
@@ -97,11 +115,15 @@ public final class JpaPasskeyStore implements PasskeyStore {
     // Native SQL: keeps the existing handle if another request (on any server) created one first.
     return database.transaction(
         em -> {
-          em.createNativeQuery("INSERT INTO user_handles (subject, handle) VALUES (?1, ?2) ON CONFLICT (subject) DO NOTHING")
+          em.createNativeQuery(
+                  "INSERT INTO user_handles (subject, handle) VALUES (?1, ?2) ON CONFLICT (subject)"
+                      + " DO NOTHING")
               .setParameter(1, subject)
               .setParameter(2, candidate)
               .executeUpdate();
-          return em.createQuery("select h.handle from UserHandleEntity h where h.subject = :subject", String.class)
+          return em.createQuery(
+                  "select h.handle from UserHandleEntity h where h.subject = :subject",
+                  String.class)
               .setParameter("subject", subject)
               .getSingleResult();
         });
@@ -111,7 +133,9 @@ public final class JpaPasskeyStore implements PasskeyStore {
   public Optional<String> subjectForUserHandle(String userHandle) {
     return database.transaction(
         em ->
-            em.createQuery("select h.subject from UserHandleEntity h where h.handle = :handle", String.class)
+            em.createQuery(
+                    "select h.subject from UserHandleEntity h where h.handle = :handle",
+                    String.class)
                 .setParameter("handle", userHandle)
                 .getResultStream()
                 .findFirst());
@@ -120,7 +144,9 @@ public final class JpaPasskeyStore implements PasskeyStore {
   @Override
   public Optional<Instant> offeredAt(String subject) {
     return database.transaction(
-        em -> Optional.ofNullable(em.find(PasskeyOfferEntity.class, subject)).map(offer -> offer.offeredAt));
+        em ->
+            Optional.ofNullable(em.find(PasskeyOfferEntity.class, subject))
+                .map(offer -> offer.offeredAt));
   }
 
   @Override
@@ -140,6 +166,8 @@ public final class JpaPasskeyStore implements PasskeyStore {
   @Override
   public long accountsWithPasskeys() {
     return database.transaction(
-        em -> em.createQuery("select count(distinct p.subject) from PasskeyEntity p", Long.class).getSingleResult());
+        em ->
+            em.createQuery("select count(distinct p.subject) from PasskeyEntity p", Long.class)
+                .getSingleResult());
   }
 }

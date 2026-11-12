@@ -36,13 +36,13 @@ import com.lattice.oidc.stores.jpa.JpaAuditEventStore;
 import com.lattice.oidc.stores.jpa.JpaConsentStore;
 import com.lattice.oidc.stores.jpa.JpaCounterStore;
 import com.lattice.oidc.stores.jpa.JpaDatabase;
-import com.lattice.oidc.stores.jpa.JpaUserStore;
-import com.lattice.oidc.stores.postgres.PostgresDatabase;
 import com.lattice.oidc.stores.jpa.JpaEphemeralStore;
 import com.lattice.oidc.stores.jpa.JpaIdentityLinkStore;
 import com.lattice.oidc.stores.jpa.JpaPasskeyStore;
 import com.lattice.oidc.stores.jpa.JpaSecondFactorStore;
 import com.lattice.oidc.stores.jpa.JpaSessionStore;
+import com.lattice.oidc.stores.jpa.JpaUserStore;
+import com.lattice.oidc.stores.postgres.PostgresDatabase;
 import com.lattice.oidc.stores.postgres.StorageCleanup;
 import com.lattice.oidc.stores.redis.RedisConnection;
 import com.lattice.oidc.stores.redis.RedisCounterStore;
@@ -55,11 +55,11 @@ import play.Environment;
  * Chooses where state is kept, from three independent settings:
  *
  * <ul>
- *   <li>{@code lattice.storage} ("memory" or "postgres"): accounts, passkeys, links, consents
- *       (Open Banking and app approvals) and sessions.
+ *   <li>{@code lattice.storage} ("memory" or "postgres"): accounts, passkeys, links, consents (Open
+ *       Banking and app approvals) and sessions.
  *   <li>{@code lattice.short-lived-state} ("storage" or "redis"): single-use state and counters.
- *   <li>{@code lattice.cache.type} ("none", "local" or "redis"): a read cache in front of the user and
- *       session stores.
+ *   <li>{@code lattice.cache.type} ("none", "local" or "redis"): a read cache in front of the user
+ *       and session stores.
  * </ul>
  *
  * PostgreSQL and Redis are connected at startup, so a wrong address or password fails the
@@ -105,7 +105,8 @@ public final class StorageModule extends AbstractModule {
     // Durable data.
     if (postgres) {
       bind(PostgresDatabase.class).asEagerSingleton();
-      // JPA shares PostgresDatabase's pool, and validates its entities against the schema at startup.
+      // JPA shares PostgresDatabase's pool, and validates its entities against the schema at
+      // startup.
       bind(JpaDatabase.class).asEagerSingleton();
       bind(StorageCleanup.class).asEagerSingleton();
       bind(PasskeyStore.class).to(JpaPasskeyStore.class);
@@ -125,7 +126,8 @@ public final class StorageModule extends AbstractModule {
 
     // Users and sessions, with or without the read cache in front.
     Class<? extends UserStore> users = postgres ? JpaUserStore.class : InMemoryUserStore.class;
-    Class<? extends SessionStore> sessions = postgres ? JpaSessionStore.class : InMemorySessionStore.class;
+    Class<? extends SessionStore> sessions =
+        postgres ? JpaSessionStore.class : InMemorySessionStore.class;
     if (cache.equals("none")) {
       bind(UserStore.class).to(users);
       bind(SessionStore.class).to(sessions);
@@ -138,8 +140,10 @@ public final class StorageModule extends AbstractModule {
         bind(ReadCache.class).to(RedisReadCache.class);
       } else {
         bind(ReadCache.class).to(LocalReadCache.class);
-        // Several servers only share data through PostgreSQL, so that's where changes are announced.
-        bind(InvalidationBus.class).to(postgres ? PostgresInvalidationBus.class : LocalInvalidationBus.class);
+        // Several servers only share data through PostgreSQL, so that's where changes are
+        // announced.
+        bind(InvalidationBus.class)
+            .to(postgres ? PostgresInvalidationBus.class : LocalInvalidationBus.class);
       }
     }
 

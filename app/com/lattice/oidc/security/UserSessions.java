@@ -6,6 +6,8 @@ import com.lattice.oidc.models.User;
 import com.lattice.oidc.stores.SessionStore;
 import com.lattice.oidc.stores.SessionStore.Session;
 import com.lattice.oidc.stores.UserStore;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
@@ -14,8 +16,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 import play.mvc.Http;
 import play.mvc.Result;
 
@@ -70,8 +70,10 @@ public final class UserSessions {
 
   private static final SecureRandom RANDOM = new SecureRandom();
   private static final String SESSION_ID = "session_id";
+
   /** Session key of the browser id (also in the values {@link #login} produces). */
   public static final String BROWSER_ID = "browser_id";
+
   private static final String SUBJECT = "subject";
   private static final String AUTH_TIME = "auth_time";
   private static final String ACR = "acr";
@@ -83,7 +85,8 @@ public final class UserSessions {
   private final SignInAlerts alerts;
 
   @Inject
-  public UserSessions(SessionStore store, UserStore users, LatticeConfig config, SignInAlerts alerts) {
+  public UserSessions(
+      SessionStore store, UserStore users, LatticeConfig config, SignInAlerts alerts) {
     this.store = store;
     this.users = users;
     this.config = config;
@@ -189,9 +192,9 @@ public final class UserSessions {
   }
 
   /**
-   * As {@link #login(User, long, String, Map, Http.RequestHeader, String)}, where {@code rememberMe}
-   * ("keep me signed in", if {@code lattice.session.remember-me.enabled}) gives the session the
-   * longer limits of {@code lattice.session.remember-me}.
+   * As {@link #login(User, long, String, Map, Http.RequestHeader, String)}, where {@code
+   * rememberMe} ("keep me signed in", if {@code lattice.session.remember-me.enabled}) gives the
+   * session the longer limits of {@code lattice.session.remember-me}.
    */
   public String login(
       User user,
@@ -204,7 +207,9 @@ public final class UserSessions {
     boolean remembered = rememberMe && config.rememberMe().enabled();
     String sessionId = randomId();
     String browserId =
-        request == null ? null : request.session().get(BROWSER_ID).orElseGet(UserSessions::randomId);
+        request == null
+            ? null
+            : request.session().get(BROWSER_ID).orElseGet(UserSessions::randomId);
     String userAgent = request == null ? null : request.header("User-Agent").orElse(null);
     String ip = request == null ? null : request.remoteAddress();
     Instant now = Instant.now();
@@ -221,7 +226,8 @@ public final class UserSessions {
             remembered));
     if (browserId != null) {
       sessionOut.put(BROWSER_ID, browserId);
-      alerts.onSignIn(user.getSubject(), browserId, sessionId, UserAgents.describe(userAgent), ip, method);
+      alerts.onSignIn(
+          user.getSubject(), browserId, sessionId, UserAgents.describe(userAgent), ip, method);
     }
     sessionOut.put(SESSION_ID, sessionId);
     sessionOut.put(SUBJECT, user.getSubject());
@@ -277,7 +283,9 @@ public final class UserSessions {
 
   /** The session, if it is still active and belongs to {@code subject}. */
   public Optional<SessionInfo> sessionOf(String subject, String sessionId) {
-    return sessionsOf(subject).stream().filter(info -> info.sessionId().equals(sessionId)).findFirst();
+    return sessionsOf(subject).stream()
+        .filter(info -> info.sessionId().equals(sessionId))
+        .findFirst();
   }
 
   /** Active sessions on every server (for the operator console). */

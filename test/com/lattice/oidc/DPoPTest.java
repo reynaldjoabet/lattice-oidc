@@ -36,13 +36,17 @@ public class DPoPTest {
     assertEquals(Thumbprints.ofJwk(key.toPublicJWK().toJSONObject()), verified.jkt().toString());
   }
 
-  /** EdDSA is in the allowed list, so an Ed25519 proof must verify too (signed here with the JDK). */
+  /**
+   * EdDSA is in the allowed list, so an Ed25519 proof must verify too (signed here with the JDK).
+   */
   @Test
   public void verifiesAnEd25519Proof() throws Exception {
     KeyPair pair = KeyPairGenerator.getInstance("Ed25519").generateKeyPair();
     byte[] spki = pair.getPublic().getEncoded();
     OctetKeyPair jwk =
-        new OctetKeyPair.Builder(Curve.Ed25519, Base64URL.encode(Arrays.copyOfRange(spki, 12, spki.length))).build();
+        new OctetKeyPair.Builder(
+                Curve.Ed25519, Base64URL.encode(Arrays.copyOfRange(spki, 12, spki.length)))
+            .build();
 
     String proof = ed25519Proof(pair, jwk, "POST");
     DPoP.Verified verified = new DPoP().verify(List.of(proof), "POST", TOKEN, null, null, null);
@@ -51,11 +55,15 @@ public class DPoPTest {
     // Signed by a different key than the one in the header: refused.
     KeyPair other = KeyPairGenerator.getInstance("Ed25519").generateKeyPair();
     String forged = ed25519Proof(other, jwk, "POST");
-    assertThrows(DPoP.InvalidProof.class, () -> new DPoP().verify(List.of(forged), "POST", TOKEN, null, null, null));
+    assertThrows(
+        DPoP.InvalidProof.class,
+        () -> new DPoP().verify(List.of(forged), "POST", TOKEN, null, null, null));
   }
 
-  private static String ed25519Proof(KeyPair signer, OctetKeyPair headerKey, String htm) throws Exception {
-    JWSHeader header = new JWSHeader.Builder(JWSAlgorithm.EdDSA).type(DPoP.DPOP_JWT).jwk(headerKey).build();
+  private static String ed25519Proof(KeyPair signer, OctetKeyPair headerKey, String htm)
+      throws Exception {
+    JWSHeader header =
+        new JWSHeader.Builder(JWSAlgorithm.EdDSA).type(DPoP.DPOP_JWT).jwk(headerKey).build();
     JWTClaimsSet claims =
         new JWTClaimsSet.Builder()
             .jwtID(UUID.randomUUID().toString())
@@ -76,6 +84,8 @@ public class DPoPTest {
     String proof = DPoP.createProof(key, "POST", TOKEN, null, null);
     DPoP dpop = new DPoP();
     dpop.verify(List.of(proof), "POST", TOKEN, null, null, null);
-    assertThrows(DPoP.InvalidProof.class, () -> dpop.verify(List.of(proof), "POST", TOKEN, null, null, null));
+    assertThrows(
+        DPoP.InvalidProof.class,
+        () -> dpop.verify(List.of(proof), "POST", TOKEN, null, null, null));
   }
 }

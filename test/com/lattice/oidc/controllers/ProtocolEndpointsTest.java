@@ -68,7 +68,8 @@ public class ProtocolEndpointsTest {
     fake.answer(
         "token",
         args -> {
-          TokenResponse r = token(TokenResponse.Action.INVALID_CLIENT, "{\"error\":\"invalid_client\"}");
+          TokenResponse r =
+              token(TokenResponse.Action.INVALID_CLIENT, "{\"error\":\"invalid_client\"}");
           r.setDpopNonce("nonce-1");
           return r;
         });
@@ -117,7 +118,10 @@ public class ProtocolEndpointsTest {
   @Test
   public void jwtBearerRejectsAssertionsFromUntrustedIssuers() throws Exception {
     RSAKey key = new RSAKeyGenerator(2048).keyID("k").generate();
-    fake.answer("getServiceConfiguration", args -> "{\"issuer\":\"https://as.example\",\"token_endpoint\":\"https://as.example/api/token\"}")
+    fake.answer(
+            "getServiceConfiguration",
+            args ->
+                "{\"issuer\":\"https://as.example\",\"token_endpoint\":\"https://as.example/api/token\"}")
         .answer("getServiceJwks", args -> "{\"keys\":[]}")
         .answer(
             "token",
@@ -141,7 +145,11 @@ public class ProtocolEndpointsTest {
               t.setAssertion(jwt.serialize());
               return t;
             });
-    Result r = route(app, post("/api/token", Map.of("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer")));
+    Result r =
+        route(
+            app,
+            post(
+                "/api/token", Map.of("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer")));
     assertEquals(400, r.status());
     assertTrue(contentAsString(r).contains("invalid_grant"));
     assertTrue(contentAsString(r).contains("not trusted"));
@@ -159,12 +167,18 @@ public class ProtocolEndpointsTest {
           return s;
         });
     Result denied =
-        route(app, post("/api/introspection", Map.of("token", "t")).header("Authorization", basic("rs0", "bad")));
+        route(
+            app,
+            post("/api/introspection", Map.of("token", "t"))
+                .header("Authorization", basic("rs0", "bad")));
     assertEquals(401, denied.status());
     assertEquals(0, fake.count("standardIntrospection"));
 
     Result ok =
-        route(app, post("/api/introspection", Map.of("token", "t")).header("Authorization", basic("rs0", "rs0-secret")));
+        route(
+            app,
+            post("/api/introspection", Map.of("token", "t"))
+                .header("Authorization", basic("rs0", "rs0-secret")));
     assertEquals(200, ok.status());
     assertTrue(contentAsString(ok).contains("active"));
   }
@@ -219,7 +233,10 @@ public class ProtocolEndpointsTest {
               f.setResponseContent("{\"error\":\"unknown_user_id\"}");
               return f;
             });
-    Result r = route(app, post("/api/backchannel/authentication", Map.of("login_hint", "nobody@example.com")));
+    Result r =
+        route(
+            app,
+            post("/api/backchannel/authentication", Map.of("login_hint", "nobody@example.com")));
     assertEquals(400, r.status());
     BackchannelAuthenticationFailRequest fail = fake.lastRequest("backchannelAuthenticationFail");
     assertEquals(BackchannelAuthenticationFailRequest.Reason.UNKNOWN_USER_ID, fail.getReason());

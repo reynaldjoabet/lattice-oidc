@@ -53,11 +53,18 @@ public class TokenGrantsTest {
   public void start() throws Exception {
     trusted = new FakeUpstreamProvider();
     untrusted = new FakeUpstreamProvider();
-    fake.answer("getServiceConfiguration", args -> "{\"issuer\":\"" + ISSUER + "\",\"token_endpoint\":\"" + ISSUER + "/api/token\"}")
+    fake.answer(
+            "getServiceConfiguration",
+            args ->
+                "{\"issuer\":\"" + ISSUER + "\",\"token_endpoint\":\"" + ISSUER + "/api/token\"}")
         .answer("getServiceJwks", args -> "{\"keys\":[]}")
         .answer(
             "tokenCreate",
-            args -> new TokenCreateResponse().setAction(TokenCreateResponse.Action.OK).setAccessToken("new-at").setExpiresIn(3600))
+            args ->
+                new TokenCreateResponse()
+                    .setAction(TokenCreateResponse.Action.OK)
+                    .setAccessToken("new-at")
+                    .setExpiresIn(3600))
         .answer(
             "nativeSso",
             args ->
@@ -255,7 +262,8 @@ public class TokenGrantsTest {
     fake.answer(
         "nativeSso",
         args -> {
-          NativeSsoResponse r = new NativeSsoResponse().setAction(NativeSsoResponse.Action.CALLER_ERROR);
+          NativeSsoResponse r =
+              new NativeSsoResponse().setAction(NativeSsoResponse.Action.CALLER_ERROR);
           r.setResultMessage("[A123] internal detail about Lattice's request");
           r.setResponseContent("{\"error\":\"internal detail\"}");
           return r;
@@ -272,7 +280,8 @@ public class TokenGrantsTest {
     String sessionId = login();
     nativeSso(sessionId, "stale-secret", null);
     assertEquals(200, tokenRequest().status());
-    assertNotEquals("stale-secret", ((NativeSsoRequest) fake.lastRequest("nativeSso")).getDeviceSecret());
+    assertNotEquals(
+        "stale-secret", ((NativeSsoRequest) fake.lastRequest("nativeSso")).getDeviceSecret());
   }
 
   @Test

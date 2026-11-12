@@ -10,11 +10,11 @@ import org.testcontainers.DockerClientFactory;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * A real PostgreSQL for the storage tests: one Docker container per test JVM (Testcontainers), and a
- * fresh, empty database for every caller of {@link #newDatabase}. Lattice's own startup then applies
- * the Flyway migrations to it, as in production. Needs a running Docker;
- * Testcontainers removes the container when the JVM exits ({@code Test / fork := true} in build.sbt
- * gives each test run its own JVM).
+ * A real PostgreSQL for the storage tests: one Docker container per test JVM (Testcontainers), and
+ * a fresh, empty database for every caller of {@link #newDatabase}. Lattice's own startup then
+ * applies the Flyway migrations to it, as in production. Needs a running Docker; Testcontainers
+ * removes the container when the JVM exits ({@code Test / fork := true} in build.sbt gives each
+ * test run its own JVM).
  */
 public final class TestPostgres {
 
@@ -58,9 +58,13 @@ public final class TestPostgres {
             + "/"
             + name;
     return Map.of(
-        "lattice.storage", "postgres",
-        "lattice.postgres.url", url,
-        "lattice.postgres.username", server.getUsername(),
-        "lattice.postgres.password", server.getPassword());
+        "lattice.storage",
+        "postgres",
+        "lattice.postgres.url",
+        url,
+        "lattice.postgres.username",
+        server.getUsername(),
+        "lattice.postgres.password",
+        server.getPassword());
   }
 }

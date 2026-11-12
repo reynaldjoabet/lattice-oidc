@@ -69,7 +69,10 @@ public class HealthControllerTest {
           Result r = get(app, "/health/dependencies");
           assertEquals(503, r.status());
           assertTrue(contentAsString(r).contains("unreachable"));
-          assertEquals("a shared outage must not take every replica out", 200, get(app, "/health/ready").status());
+          assertEquals(
+              "a shared outage must not take every replica out",
+              200,
+              get(app, "/health/ready").status());
         });
   }
 
@@ -101,13 +104,24 @@ public class HealthControllerTest {
         () -> {
           String uri = "/api/authorization?response_type=code&client_id=42";
           Result browser =
-              route(app, new Http.RequestBuilder().method(GET).uri(uri).header("Accept", "text/html,application/xhtml+xml,*/*;q=0.8"));
+              route(
+                  app,
+                  new Http.RequestBuilder()
+                      .method(GET)
+                      .uri(uri)
+                      .header("Accept", "text/html,application/xhtml+xml,*/*;q=0.8"));
           assertEquals(503, browser.status());
           assertEquals("text/html", browser.contentType().orElse(null));
           assertTrue(contentAsString(browser).contains("Temporarily unavailable"));
           assertEquals("30", browser.header("Retry-After").orElse(null));
 
-          Result api = route(app, new Http.RequestBuilder().method(GET).uri(uri).header("Accept", "application/json"));
+          Result api =
+              route(
+                  app,
+                  new Http.RequestBuilder()
+                      .method(GET)
+                      .uri(uri)
+                      .header("Accept", "application/json"));
           assertEquals(503, api.status());
           assertEquals("application/json", api.contentType().orElse(null));
           assertTrue(contentAsString(api).contains("server_error"));

@@ -6,9 +6,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * After a key rotation ({@code lattice.second-factor.previous-encryption-keys} set), re-encrypts the
- * authenticator secrets still under a previous key, in the background at startup. Secrets are also
- * re-encrypted when they're used, so this only finishes the job for accounts that don't sign in.
+ * After a key rotation ({@code lattice.second-factor.previous-encryption-keys} set), re-encrypts
+ * the authenticator secrets still under a previous key, in the background at startup. Secrets are
+ * also re-encrypted when they're used, so this only finishes the job for accounts that don't sign
+ * in.
  */
 @Singleton
 public final class SecondFactorKeyRotation {
@@ -26,7 +27,10 @@ public final class SecondFactorKeyRotation {
             () -> {
               try {
                 int reencrypted = secondFactors.reencryptAll();
-                LOG.info("Re-encrypted {} authenticator secrets under key {}", reencrypted, cipher.currentKeyId());
+                LOG.info(
+                    "Re-encrypted {} authenticator secrets under key {}",
+                    reencrypted,
+                    cipher.currentKeyId());
               } catch (RuntimeException e) {
                 LOG.warn("Re-encrypting authenticator secrets stopped: {}", e.getMessage(), e);
               }

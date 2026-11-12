@@ -50,7 +50,8 @@ public class AccountRecoveryTest {
         new GuiceApplicationBuilder()
             .overrides(
                 bind(AuthleteApi.class).toInstance(fake.api()),
-                bind(Mailer.class).toInstance((to, subject, text) -> sent.add(new Mail(to, subject, text))))
+                bind(Mailer.class)
+                    .toInstance((to, subject, text) -> sent.add(new Mail(to, subject, text))))
             .build();
     Helpers.start(app);
   }
@@ -61,7 +62,9 @@ public class AccountRecoveryTest {
   }
 
   private Result requestLink(String identifier) {
-    return route(app, withCsrf(post("/account/recover", Map.of("identifier", identifier, "next", "account"))));
+    return route(
+        app,
+        withCsrf(post("/account/recover", Map.of("identifier", identifier, "next", "account"))));
   }
 
   private String token() {
@@ -70,10 +73,19 @@ public class AccountRecoveryTest {
     return matcher.group(1);
   }
 
-  private Result reset(String token, String password, String confirmation, boolean signOutEverywhere) {
+  private Result reset(
+      String token, String password, String confirmation, boolean signOutEverywhere) {
     Map<String, String> form =
         signOutEverywhere
-            ? Map.of("token", token, "password", password, "confirmation", confirmation, "signOutEverywhere", "true")
+            ? Map.of(
+                "token",
+                token,
+                "password",
+                password,
+                "confirmation",
+                confirmation,
+                "signOutEverywhere",
+                "true")
             : Map.of("token", token, "password", password, "confirmation", confirmation);
     return route(app, withCsrf(post("/account/reset", form)));
   }
@@ -130,7 +142,9 @@ public class AccountRecoveryTest {
 
     Result mismatch = reset(token, NEW_PASSWORD, NEW_PASSWORD + "!", true);
     assertEquals(400, mismatch.status());
-    assertTrue(contentAsString(mismatch).contains("don&#x27;t match") || contentAsString(mismatch).contains("don't match"));
+    assertTrue(
+        contentAsString(mismatch).contains("don&#x27;t match")
+            || contentAsString(mismatch).contains("don't match"));
   }
 
   @Test
@@ -142,7 +156,8 @@ public class AccountRecoveryTest {
     assertTrue(contentAsString(done).contains("Password changed"));
 
     LoginService login = app.injector().instanceOf(LoginService.class);
-    assertEquals(LoginService.Outcome.INVALID_CREDENTIALS, login.authenticate("john", "john").outcome());
+    assertEquals(
+        LoginService.Outcome.INVALID_CREDENTIALS, login.authenticate("john", "john").outcome());
     assertEquals(LoginService.Outcome.SUCCESS, login.authenticate("john", NEW_PASSWORD).outcome());
 
     Result again = route(app, get("/account/reset?token=" + token));
@@ -154,17 +169,28 @@ public class AccountRecoveryTest {
   public void aLinkStopsWorkingWhenTheAccountsEmailChanges() {
     requestLink("john");
     String token = token();
-    com.lattice.oidc.stores.UserStore users = app.injector().instanceOf(com.lattice.oidc.stores.UserStore.class);
+    com.lattice.oidc.stores.UserStore users =
+        app.injector().instanceOf(com.lattice.oidc.stores.UserStore.class);
     com.lattice.oidc.models.User john = users.byLoginId("john").orElseThrow();
     java.util.Map<String, Object> claims = new java.util.HashMap<>(john.claims());
     claims.put("email", "john.new@example.com");
-    users.save(new com.lattice.oidc.models.User(john.getSubject(), john.loginId(), john.passwordHash(), claims, john.attributes(), john.verifiedClaims()));
+    users.save(
+        new com.lattice.oidc.models.User(
+            john.getSubject(),
+            john.loginId(),
+            john.passwordHash(),
+            claims,
+            john.attributes(),
+            john.verifiedClaims()));
 
     Result opened = route(app, get("/account/reset?token=" + token));
     assertEquals("the link was sent to the old address", 400, opened.status());
     assertEquals(400, reset(token, NEW_PASSWORD, NEW_PASSWORD, false).status());
     LoginService login = app.injector().instanceOf(LoginService.class);
-    assertEquals("the password is unchanged", LoginService.Outcome.SUCCESS, login.authenticate("john", "john").outcome());
+    assertEquals(
+        "the password is unchanged",
+        LoginService.Outcome.SUCCESS,
+        login.authenticate("john", "john").outcome());
   }
 
   @Test
@@ -179,9 +205,16 @@ public class AccountRecoveryTest {
   @Test
   public void resettingSignsOutEverywhereByDefault() {
     Result signedIn =
-        route(app, withCsrf(post("/account/login", Map.of("loginId", "john", "password", "john", "next", "account"))));
+        route(
+            app,
+            withCsrf(
+                post(
+                    "/account/login",
+                    Map.of("loginId", "john", "password", "john", "next", "account"))));
     Map<String, String> session = signedIn.session().data();
-    assertTrue(contentAsString(route(app, get("/account").session(session))).contains("John Flibble Smith"));
+    assertTrue(
+        contentAsString(route(app, get("/account").session(session)))
+            .contains("John Flibble Smith"));
 
     requestLink("john");
     reset(token(), NEW_PASSWORD, NEW_PASSWORD, true);
@@ -216,13 +249,24 @@ public class AccountRecoveryTest {
   /** The password is changed and the sessions ended even if Authlete can't revoke the tokens. */
   @Test
   public void aFailedRevocationDoesNotUndoTheReset() {
-    fake.answer("tokenRevoke", args -> { throw new IllegalStateException("Authlete unavailable"); });
+    fake.answer(
+        "tokenRevoke",
+        args -> {
+          throw new IllegalStateException("Authlete unavailable");
+        });
     Result signedIn =
-        route(app, withCsrf(post("/account/login", Map.of("loginId", "john", "password", "john", "next", "account"))));
+        route(
+            app,
+            withCsrf(
+                post(
+                    "/account/login",
+                    Map.of("loginId", "john", "password", "john", "next", "account"))));
     requestLink("john");
     Result done = reset(token(), NEW_PASSWORD, NEW_PASSWORD, true);
     assertEquals(200, done.status());
-    assertFalse(contentAsString(route(app, get("/account").session(signedIn.session().data()))).contains("John Flibble Smith"));
+    assertFalse(
+        contentAsString(route(app, get("/account").session(signedIn.session().data())))
+            .contains("John Flibble Smith"));
     LoginService login = app.injector().instanceOf(LoginService.class);
     assertEquals(LoginService.Outcome.SUCCESS, login.authenticate("john", NEW_PASSWORD).outcome());
   }
@@ -235,7 +279,8 @@ public class AccountRecoveryTest {
             .configure(Map.of("lattice.recovery.max-requests-per-ip", 2))
             .overrides(
                 bind(AuthleteApi.class).toInstance(fake.api()),
-                bind(Mailer.class).toInstance((to, subject, text) -> sent.add(new Mail(to, subject, text))))
+                bind(Mailer.class)
+                    .toInstance((to, subject, text) -> sent.add(new Mail(to, subject, text))))
             .build();
     Helpers.start(app);
     for (String account : List.of("john", "jane", "max")) {

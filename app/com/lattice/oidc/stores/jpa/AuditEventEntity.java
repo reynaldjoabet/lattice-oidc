@@ -10,7 +10,10 @@ import java.time.Instant;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-/** A row of {@code audit_events}: one audit record, as JSON, with its event and subject for filtering. */
+/**
+ * A row of {@code audit_events}: one audit record, as JSON, with its event and subject for
+ * filtering.
+ */
 @Entity
 @Table(name = "audit_events")
 public class AuditEventEntity {

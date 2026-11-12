@@ -4,19 +4,19 @@ import com.lattice.oidc.models.User;
 import com.lattice.oidc.stores.PasskeyStore;
 import com.lattice.oidc.stores.UserStore;
 import com.typesafe.config.Config;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 
 /**
- * Required actions: steps a signed-in user must complete before using apps or their account.
- * Each is pending while its condition holds, so it disappears as soon as the user meets it,
- * however they meet it:
+ * Required actions: steps a signed-in user must complete before using apps or their account. Each
+ * is pending while its condition holds, so it disappears as soon as the user meets it, however they
+ * meet it:
  *
  * <ul>
  *   <li>{@code VERIFY_EMAIL}: the email isn't verified, and {@code
@@ -26,8 +26,8 @@ import jakarta.inject.Singleton;
  *   <li>{@code UPDATE_PASSWORD}: the account is flagged (for example after an operator set a
  *       temporary password); cleared when the user chooses a new one.
  *   <li>{@code CONFIGURE_TOTP}: the account is flagged and has no authenticator app; or {@code
- *       lattice.second-factor.required} is on and the account has neither an authenticator app nor a
- *       passkey.
+ *       lattice.second-factor.required} is on and the account has neither an authenticator app nor
+ *       a passkey.
  *   <li>{@code CONFIGURE_PASSKEY}: the account is flagged and has no passkey.
  * </ul>
  *
@@ -55,7 +55,8 @@ public final class RequiredActions {
   private final boolean secondFactorRequired;
 
   @Inject
-  public RequiredActions(UserStore users, PasskeyStore passkeys, SecondFactors secondFactors, Config config) {
+  public RequiredActions(
+      UserStore users, PasskeyStore passkeys, SecondFactors secondFactors, Config config) {
     this.users = users;
     this.passkeys = passkeys;
     this.secondFactors = secondFactors;
@@ -105,12 +106,27 @@ public final class RequiredActions {
   public void markEmailVerified(User user) {
     Map<String, Object> claims = new HashMap<>(user.claims());
     claims.put("email_verified", true);
-    users.save(new User(user.getSubject(), user.loginId(), user.passwordHash(), claims, clearedAttributes(user, Action.VERIFY_EMAIL), user.verifiedClaims()));
+    users.save(
+        new User(
+            user.getSubject(),
+            user.loginId(),
+            user.passwordHash(),
+            claims,
+            clearedAttributes(user, Action.VERIFY_EMAIL),
+            user.verifiedClaims()));
   }
 
-  /** The account with {@code action} removed from its flags (for example after a password change). */
+  /**
+   * The account with {@code action} removed from its flags (for example after a password change).
+   */
   public User cleared(User user, Action action) {
-    return new User(user.getSubject(), user.loginId(), user.passwordHash(), user.claims(), clearedAttributes(user, action), user.verifiedClaims());
+    return new User(
+        user.getSubject(),
+        user.loginId(),
+        user.passwordHash(),
+        user.claims(),
+        clearedAttributes(user, action),
+        user.verifiedClaims());
   }
 
   private Map<String, Object> clearedAttributes(User user, Action action) {
@@ -125,7 +141,14 @@ public final class RequiredActions {
   private void save(User user, java.util.function.Consumer<Map<String, Object>> change) {
     Map<String, Object> attributes = new HashMap<>(user.attributes());
     change.accept(attributes);
-    users.save(new User(user.getSubject(), user.loginId(), user.passwordHash(), user.claims(), attributes, user.verifiedClaims()));
+    users.save(
+        new User(
+            user.getSubject(),
+            user.loginId(),
+            user.passwordHash(),
+            user.claims(),
+            attributes,
+            user.verifiedClaims()));
   }
 
   private static Set<String> flags(User user) {

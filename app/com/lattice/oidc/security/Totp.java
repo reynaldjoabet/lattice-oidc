@@ -77,8 +77,16 @@ public final class Totp {
   /** The {@code otpauth://} URI an authenticator app scans from the QR code. */
   public static String uri(String issuer, String account, String secret) {
     String label = encode(issuer) + ":" + encode(account);
-    return "otpauth://totp/" + label + "?secret=" + secret + "&issuer=" + encode(issuer)
-        + "&algorithm=SHA1&digits=" + DIGITS + "&period=" + PERIOD_SECONDS;
+    return "otpauth://totp/"
+        + label
+        + "?secret="
+        + secret
+        + "&issuer="
+        + encode(issuer)
+        + "&algorithm=SHA1&digits="
+        + DIGITS
+        + "&period="
+        + PERIOD_SECONDS;
   }
 
   private static String encode(String value) {

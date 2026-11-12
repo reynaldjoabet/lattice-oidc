@@ -73,19 +73,28 @@ public class ReadCacheBenchmark {
 
   @Setup
   public void stores() {
-    Metrics metrics = new Metrics(new play.inject.DelegateApplicationLifecycle(new play.api.inject.DefaultApplicationLifecycle()));
+    Metrics metrics =
+        new Metrics(
+            new play.inject.DelegateApplicationLifecycle(
+                new play.api.inject.DefaultApplicationLifecycle()));
     backing = new MapUserStore();
     user =
         new User(
-            "1001", "john", "$argon2id$v=19$m=15360,t=2,p=1$placeholder",
-            Map.of("name", "John Flibble Smith", "email", "john@example.com", "email_verified", true),
-            Map.of("requiredActions", List.of()), List.of());
+            "1001",
+            "john",
+            "$argon2id$v=19$m=15360,t=2,p=1$placeholder",
+            Map.of(
+                "name", "John Flibble Smith", "email", "john@example.com", "email_verified", true),
+            Map.of("requiredActions", List.of()),
+            List.of());
     backing.save(user);
     cached =
         new CachingUserStore(
             backing,
             new LocalReadCache(
-                ConfigFactory.parseMap(Map.of("lattice.cache.ttl", "10 minutes", "lattice.cache.maximum-size", 100_000)),
+                ConfigFactory.parseMap(
+                    Map.of(
+                        "lattice.cache.ttl", "10 minutes", "lattice.cache.maximum-size", 100_000)),
                 new LocalInvalidationBus(),
                 metrics),
             metrics);

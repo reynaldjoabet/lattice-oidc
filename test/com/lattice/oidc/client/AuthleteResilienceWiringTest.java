@@ -35,15 +35,26 @@ public class AuthleteResilienceWiringTest {
         .build();
   }
 
-  /** Real HTTP calls to Authlete for an operation, read from the registry (a scrape would add health checks). */
+  /**
+   * Real HTTP calls to Authlete for an operation, read from the registry (a scrape would add health
+   * checks).
+   */
   private static long calls(Application app, String operation) {
-    return app.injector().instanceOf(Metrics.class).registry().find("lattice.authlete.calls").tag("operation", operation).timers().stream()
+    return app
+        .injector()
+        .instanceOf(Metrics.class)
+        .registry()
+        .find("lattice.authlete.calls")
+        .tag("operation", operation)
+        .timers()
+        .stream()
         .mapToLong(io.micrometer.core.instrument.Timer::count)
         .sum();
   }
 
   private static double counter(Application app, String name, String... tags) {
-    var counter = app.injector().instanceOf(Metrics.class).registry().find(name).tags(tags).counter();
+    var counter =
+        app.injector().instanceOf(Metrics.class).registry().find(name).tags(tags).counter();
     return counter == null ? 0 : counter.count();
   }
 
@@ -59,11 +70,29 @@ public class AuthleteResilienceWiringTest {
         () -> {
           AuthleteApi api = app.injector().instanceOf(AuthleteApi.class);
           assertThrows(AuthleteApiException.class, () -> api.getServiceConfiguration(false));
-          assertThrows(AuthleteApiException.class, () -> api.authorizationIssue(new AuthorizationIssueRequest()));
+          assertThrows(
+              AuthleteApiException.class,
+              () -> api.authorizationIssue(new AuthorizationIssueRequest()));
           assertEquals("3 attempts", 3, calls(app, "getServiceConfiguration"));
-          assertEquals("never reached Authlete, so even the write is retried", 3, calls(app, "authorizationIssue"));
-          assertEquals(2.0, counter(app, "lattice.authlete.resilience", "operation", "authorizationIssue", "event", "retry"), 0);
-          assertTrue(app.injector().instanceOf(Metrics.class).scrape().contains("lattice_authlete_circuit_open"));
+          assertEquals(
+              "never reached Authlete, so even the write is retried",
+              3,
+              calls(app, "authorizationIssue"));
+          assertEquals(
+              2.0,
+              counter(
+                  app,
+                  "lattice.authlete.resilience",
+                  "operation",
+                  "authorizationIssue",
+                  "event",
+                  "retry"),
+              0);
+          assertTrue(
+              app.injector()
+                  .instanceOf(Metrics.class)
+                  .scrape()
+                  .contains("lattice_authlete_circuit_open"));
         });
   }
 
@@ -89,7 +118,9 @@ public class AuthleteResilienceWiringTest {
           app,
           () -> {
             AuthleteApi api = app.injector().instanceOf(AuthleteApi.class);
-            assertThrows(AuthleteApiException.class, () -> api.authorizationIssue(new AuthorizationIssueRequest()));
+            assertThrows(
+                AuthleteApiException.class,
+                () -> api.authorizationIssue(new AuthorizationIssueRequest()));
             assertEquals("one attempt only", 1, calls(app, "authorizationIssue"));
           });
       acceptor.interrupt();

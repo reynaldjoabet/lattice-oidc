@@ -1,6 +1,7 @@
 package com.lattice.oidc.stores;
 
 import com.lattice.oidc.models.Passkey;
+import jakarta.inject.Singleton;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
@@ -9,7 +10,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import jakarta.inject.Singleton;
 
 /** Thread-safe in-memory passkey store (lost on restart, like {@link InMemoryUserStore}). */
 @Singleton

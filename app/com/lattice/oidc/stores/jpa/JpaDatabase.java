@@ -36,7 +36,8 @@ public final class JpaDatabase {
   public JpaDatabase(PostgresDatabase database, ApplicationLifecycle lifecycle) {
     this.factory =
         new PersistenceConfiguration("lattice")
-            // One entity per table in conf/db/migration, all validated against the schema at startup.
+            // One entity per table in conf/db/migration, all validated against the schema at
+            // startup.
             .managedClass(UserEntity.class)
             .managedClass(PasskeyEntity.class)
             .managedClass(UserHandleEntity.class)
@@ -51,7 +52,8 @@ public final class JpaDatabase {
             .managedClass(TotpEntity.class)
             .managedClass(RecoveryCodeEntity.class)
             .managedClass(AppConsentEntity.class)
-            // No Bean Validation of entities: they carry no constraints of their own (the schema's are
+            // No Bean Validation of entities: they carry no constraints of their own (the schema's
+            // are
             // enforced by PostgreSQL), and Play's hibernate-validator would otherwise be picked up
             // automatically and fail to start without an expression-language library.
             .validationMode(ValidationMode.NONE)

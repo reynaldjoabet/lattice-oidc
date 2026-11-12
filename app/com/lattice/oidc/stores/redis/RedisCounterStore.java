@@ -1,18 +1,18 @@
 package com.lattice.oidc.stores.redis;
 
 import com.lattice.oidc.stores.CounterStore;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 import redis.clients.jedis.params.ScanParams;
 import redis.clients.jedis.resps.ScanResult;
 
 /**
- * {@link CounterStore} in Redis ({@code lattice.short-lived-state = redis}). A counter is a key that
- * expires when its window ends; incrementing is one script, so concurrent increments on any server
- * all count and the window starts with the first one.
+ * {@link CounterStore} in Redis ({@code lattice.short-lived-state = redis}). A counter is a key
+ * that expires when its window ends; incrementing is one script, so concurrent increments on any
+ * server all count and the window starts with the first one.
  */
 @Singleton
 public final class RedisCounterStore implements CounterStore {
@@ -36,8 +36,12 @@ public final class RedisCounterStore implements CounterStore {
   @Override
   public long increment(String key, Duration window) {
     Object count =
-        redis.client()
-            .eval(INCREMENT, List.of(counterKey(key)), List.of(String.valueOf(Math.max(1, window.toMillis()))));
+        redis
+            .client()
+            .eval(
+                INCREMENT,
+                List.of(counterKey(key)),
+                List.of(String.valueOf(Math.max(1, window.toMillis()))));
     return ((Number) count).longValue();
   }
 

@@ -22,7 +22,9 @@ import play.Application;
 import play.mvc.Result;
 import play.test.Helpers;
 
-/** Where you're signed in, new sign-in alerts, signing out other sessions and changing the password. */
+/**
+ * Where you're signed in, new sign-in alerts, signing out other sessions and changing the password.
+ */
 public class AccountSecurityTest {
 
   private static final Pattern ALERT = Pattern.compile("/account/alerts/([A-Za-z0-9_-]+)");
@@ -33,7 +35,8 @@ public class AccountSecurityTest {
   @Before
   public void start() {
     fake.answer("nativeSsoLogout", args -> null)
-        .answer("tokenRevoke", args -> new com.authlete.common.dto.TokenRevokeResponse().setCount(1));
+        .answer(
+            "tokenRevoke", args -> new com.authlete.common.dto.TokenRevokeResponse().setCount(1));
     app = app(fake);
     Helpers.start(app);
   }
@@ -48,20 +51,26 @@ public class AccountSecurityTest {
     Result login =
         route(
             app,
-            withCsrf(post("/account/login", Map.of("loginId", "john", "password", "john", "next", "account")))
+            withCsrf(
+                    post(
+                        "/account/login",
+                        Map.of("loginId", "john", "password", "john", "next", "account")))
                 .header("User-Agent", userAgent));
     assertEquals(303, login.status());
     return login.session().data();
   }
 
   private boolean signedIn(Map<String, String> session) {
-    return contentAsString(route(app, get("/account").session(session))).contains("John Flibble Smith");
+    return contentAsString(route(app, get("/account").session(session)))
+        .contains("John Flibble Smith");
   }
 
   private static final String MAC_SAFARI =
-      "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15";
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 (KHTML, like Gecko)"
+          + " Version/17.5 Safari/605.1.15";
   private static final String WINDOWS_CHROME =
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)"
+          + " Chrome/126.0 Safari/537.36";
 
   @Test
   public void sessionsPageListsEachBrowserAndMarksThisOne() {
@@ -81,11 +90,15 @@ public class AccountSecurityTest {
     Map<String, String> mac = signInFromNewBrowser(MAC_SAFARI);
     Map<String, String> windows = signInFromNewBrowser(WINDOWS_CHROME);
     Result ended =
-        route(app, withCsrf(post("/account/sessions/" + windows.get("session_id") + "/end", Map.of())).session(mac));
+        route(
+            app,
+            withCsrf(post("/account/sessions/" + windows.get("session_id") + "/end", Map.of()))
+                .session(mac));
     assertEquals(303, ended.status());
     assertFalse(signedIn(windows));
     assertTrue(signedIn(mac));
-    // Tokens aren't tied to a session: revoking them would sign the user out of their apps everywhere.
+    // Tokens aren't tied to a session: revoking them would sign the user out of their apps
+    // everywhere.
     assertEquals(0, fake.count("tokenRevoke"));
   }
 
@@ -93,9 +106,17 @@ public class AccountSecurityTest {
   public void aSessionCannotEndAnotherAccountsSession() {
     Map<String, String> john = signInFromNewBrowser(MAC_SAFARI);
     Result jane =
-        route(app, withCsrf(post("/account/login", Map.of("loginId", "jane", "password", "jane", "next", "account"))));
+        route(
+            app,
+            withCsrf(
+                post(
+                    "/account/login",
+                    Map.of("loginId", "jane", "password", "jane", "next", "account"))));
     Map<String, String> janeSession = jane.session().data();
-    route(app, withCsrf(post("/account/sessions/" + janeSession.get("session_id") + "/end", Map.of())).session(john));
+    route(
+        app,
+        withCsrf(post("/account/sessions/" + janeSession.get("session_id") + "/end", Map.of()))
+            .session(john));
     assertTrue(contentAsString(route(app, get("/account").session(janeSession))).contains("Jane"));
   }
 
@@ -107,7 +128,8 @@ public class AccountSecurityTest {
     assertTrue(macPage.contains("New sign-in to your account"));
     assertTrue(macPage.contains("Chrome on Windows"));
     String windowsPage = contentAsString(route(app, get("/account").session(windows)));
-    assertFalse("the new session itself isn't asked", windowsPage.contains("New sign-in to your account"));
+    assertFalse(
+        "the new session itself isn't asked", windowsPage.contains("New sign-in to your account"));
   }
 
   @Test
@@ -117,11 +139,16 @@ public class AccountSecurityTest {
     Matcher alert = ALERT.matcher(contentAsString(route(app, get("/account").session(mac))));
     assertTrue(alert.find());
     Result answered =
-        route(app, withCsrf(post("/account/alerts/" + alert.group(1), Map.of("answer", "no"))).session(mac));
+        route(
+            app,
+            withCsrf(post("/account/alerts/" + alert.group(1), Map.of("answer", "no")))
+                .session(mac));
     assertEquals(303, answered.status());
     assertEquals("/account/password", answered.redirectLocation().orElse(null));
     assertFalse(signedIn(windows));
-    assertFalse(contentAsString(route(app, get("/account").session(mac))).contains("New sign-in to your account"));
+    assertFalse(
+        contentAsString(route(app, get("/account").session(mac)))
+            .contains("New sign-in to your account"));
   }
 
   @Test
@@ -130,9 +157,13 @@ public class AccountSecurityTest {
     Map<String, String> windows = signInFromNewBrowser(WINDOWS_CHROME);
     Matcher alert = ALERT.matcher(contentAsString(route(app, get("/account").session(mac))));
     assertTrue(alert.find());
-    route(app, withCsrf(post("/account/alerts/" + alert.group(1), Map.of("answer", "yes"))).session(mac));
+    route(
+        app,
+        withCsrf(post("/account/alerts/" + alert.group(1), Map.of("answer", "yes"))).session(mac));
     assertTrue(signedIn(windows));
-    assertFalse(contentAsString(route(app, get("/account").session(mac))).contains("New sign-in to your account"));
+    assertFalse(
+        contentAsString(route(app, get("/account").session(mac)))
+            .contains("New sign-in to your account"));
   }
 
   @Test
@@ -147,7 +178,10 @@ public class AccountSecurityTest {
     assertTrue(signedIn(mac));
     // Apps too: the account's tokens are revoked, not just the other sessions ended.
     assertEquals(1, fake.count("tokenRevoke"));
-    assertEquals("1001", ((com.authlete.common.dto.TokenRevokeRequest) fake.lastRequest("tokenRevoke")).getSubject());
+    assertEquals(
+        "1001",
+        ((com.authlete.common.dto.TokenRevokeRequest) fake.lastRequest("tokenRevoke"))
+            .getSubject());
   }
 
   @Test
@@ -158,7 +192,10 @@ public class AccountSecurityTest {
     Result wrong =
         route(
             app,
-            withCsrf(post("/account/password", Map.of("current", "nope", "password", strong, "confirmation", strong)))
+            withCsrf(
+                    post(
+                        "/account/password",
+                        Map.of("current", "nope", "password", strong, "confirmation", strong)))
                 .session(mac));
     assertEquals(401, wrong.status());
 
@@ -168,7 +205,15 @@ public class AccountSecurityTest {
             withCsrf(
                     post(
                         "/account/password",
-                        Map.of("current", "john", "password", strong, "confirmation", strong, "signOutEverywhere", "true")))
+                        Map.of(
+                            "current",
+                            "john",
+                            "password",
+                            strong,
+                            "confirmation",
+                            strong,
+                            "signOutEverywhere",
+                            "true")))
                 .session(mac));
     assertEquals(200, changed.status());
     assertTrue(contentAsString(changed).contains("Password changed"));
@@ -201,7 +246,15 @@ public class AccountSecurityTest {
             withCsrf(
                 post(
                     "/account/login",
-                    Map.of("loginId", "john", "password", "john", "next", "account", "rememberMe", "true"))));
+                    Map.of(
+                        "loginId",
+                        "john",
+                        "password",
+                        "john",
+                        "next",
+                        "account",
+                        "rememberMe",
+                        "true"))));
     Map<String, String> forgotten = signInFromNewBrowser(MAC_SAFARI);
     Thread.sleep(1_200);
     assertTrue("kept signed in past the normal idle limit", signedIn(remembered.session().data()));

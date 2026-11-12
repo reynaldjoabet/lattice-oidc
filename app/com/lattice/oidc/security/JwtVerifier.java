@@ -14,6 +14,8 @@ import com.nimbusds.jwt.JWTParser;
 import com.nimbusds.jwt.SignedJWT;
 import com.nimbusds.jwt.proc.DefaultJWTClaimsVerifier;
 import com.nimbusds.jwt.proc.DefaultJWTProcessor;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.util.HashSet;
@@ -21,8 +23,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 
 /**
  * Verifies signed JWTs issued by this server (keys from Authlete) or by a configured trusted issuer
@@ -42,10 +42,17 @@ public final class JwtVerifier {
 
   private static final Set<JWSAlgorithm> ALGORITHMS =
       Set.of(
-          JWSAlgorithm.RS256, JWSAlgorithm.RS384, JWSAlgorithm.RS512,
-          JWSAlgorithm.PS256, JWSAlgorithm.PS384, JWSAlgorithm.PS512,
-          JWSAlgorithm.ES256, JWSAlgorithm.ES384, JWSAlgorithm.ES512,
-          JWSAlgorithm.EdDSA, JWSAlgorithm.Ed25519);
+          JWSAlgorithm.RS256,
+          JWSAlgorithm.RS384,
+          JWSAlgorithm.RS512,
+          JWSAlgorithm.PS256,
+          JWSAlgorithm.PS384,
+          JWSAlgorithm.PS512,
+          JWSAlgorithm.ES256,
+          JWSAlgorithm.ES384,
+          JWSAlgorithm.ES512,
+          JWSAlgorithm.EdDSA,
+          JWSAlgorithm.Ed25519);
 
   private final ServerMetadata server;
   private final Map<String, JWKSource<SecurityContext>> trusted = new ConcurrentHashMap<>();
@@ -55,7 +62,8 @@ public final class JwtVerifier {
     this.server = server;
     for (LatticeConfig.TrustedIssuer t : config.trustedIssuers()) {
       trusted.put(
-          t.issuer(), JWKSourceBuilder.create(URI.create(t.jwksUri()).toURL()).retrying(true).build());
+          t.issuer(),
+          JWKSourceBuilder.create(URI.create(t.jwksUri()).toURL()).retrying(true).build());
     }
   }
 
@@ -83,8 +91,10 @@ public final class JwtVerifier {
     if (issuer == null) {
       throw new InvalidJwtException("The JWT has no 'iss' claim.");
     }
-    JWKSource<SecurityContext> keys = keysFor(issuer).orElseThrow(
-        () -> new InvalidJwtException("The issuer '" + issuer + "' is not trusted."));
+    JWKSource<SecurityContext> keys =
+        keysFor(issuer)
+            .orElseThrow(
+                () -> new InvalidJwtException("The issuer '" + issuer + "' is not trusted."));
 
     DefaultJWTProcessor<SecurityContext> processor = new DefaultJWTProcessor<>();
     processor.setJWSKeySelector(new JWSVerificationKeySelector<>(ALGORITHMS, keys));

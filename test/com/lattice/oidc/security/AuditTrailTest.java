@@ -64,14 +64,30 @@ public class AuditTrailTest {
               withCsrf(
                       post(
                           "/api/authorization/decision",
-                          Map.of("ticket", "t1", "loginId", "jane", "password", "nope", "authorized", "true")))
+                          Map.of(
+                              "ticket",
+                              "t1",
+                              "loginId",
+                              "jane",
+                              "password",
+                              "nope",
+                              "authorized",
+                              "true")))
                   .session(page.session().data()));
           route(
               app,
               withCsrf(
                       post(
                           "/api/authorization/decision",
-                          Map.of("ticket", "t1", "loginId", "jane", "password", "jane", "authorized", "true")))
+                          Map.of(
+                              "ticket",
+                              "t1",
+                              "loginId",
+                              "jane",
+                              "password",
+                              "jane",
+                              "authorized",
+                              "true")))
                   .session(page.session().data()));
         });
 

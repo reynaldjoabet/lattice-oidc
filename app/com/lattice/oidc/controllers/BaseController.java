@@ -10,11 +10,11 @@ import com.lattice.oidc.common.WebException;
 import com.lattice.oidc.security.AuditService;
 import com.lattice.oidc.security.LoginService;
 import com.lattice.oidc.security.SecondFactors;
+import jakarta.inject.Inject;
+import jakarta.inject.Provider;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Supplier;
-import jakarta.inject.Inject;
-import jakarta.inject.Provider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import play.mvc.Controller;
@@ -23,8 +23,8 @@ import play.mvc.Result;
 
 /**
  * Base class for endpoints backed by Authlete. Work runs on the blocking Authlete pool; {@link
- * WebException}s become their response and unexpected failures a generic server_error, with
- * details only in the log.
+ * WebException}s become their response and unexpected failures a generic server_error, with details
+ * only in the log.
  */
 public abstract class BaseController extends Controller {
 
@@ -49,30 +49,69 @@ public abstract class BaseController extends Controller {
    * Audits the password step of a sign-in. With an authenticator app the sign-in isn't finished
    * yet: that is {@code SECOND_FACTOR_REQUIRED}, and {@code LOGIN_SUCCEEDED} follows the code.
    */
-  protected void auditLogin(Http.RequestHeader request, String loginId, LoginService.Result result) {
+  protected void auditLogin(
+      Http.RequestHeader request, String loginId, LoginService.Result result) {
     switch (result.outcome()) {
       case SUCCESS -> {
         String subject = result.user().get().getSubject();
         if (secondFactors.enrolled(subject)) {
-          audit.record(request, AuditService.Event.SECOND_FACTOR_REQUIRED, "subject", subject, "method", "password", "factor", "totp");
+          audit.record(
+              request,
+              AuditService.Event.SECOND_FACTOR_REQUIRED,
+              "subject",
+              subject,
+              "method",
+              "password",
+              "factor",
+              "totp");
         } else {
-          audit.record(request, AuditService.Event.LOGIN_SUCCEEDED, "subject", subject, "method", "password");
+          audit.record(
+              request,
+              AuditService.Event.LOGIN_SUCCEEDED,
+              "subject",
+              subject,
+              "method",
+              "password");
         }
       }
-      case LOCKED -> audit.record(request, AuditService.Event.LOGIN_LOCKED, "login_id", loginId, "method", "password");
+      case LOCKED ->
+          audit.record(
+              request, AuditService.Event.LOGIN_LOCKED, "login_id", loginId, "method", "password");
       case UNAVAILABLE ->
-          audit.record(request, AuditService.Event.LOGIN_FAILED, "login_id", loginId, "method", "password", "reason", "directory_unavailable");
-      default -> audit.record(request, AuditService.Event.LOGIN_FAILED, "login_id", loginId, "method", "password");
+          audit.record(
+              request,
+              AuditService.Event.LOGIN_FAILED,
+              "login_id",
+              loginId,
+              "method",
+              "password",
+              "reason",
+              "directory_unavailable");
+      default ->
+          audit.record(
+              request, AuditService.Event.LOGIN_FAILED, "login_id", loginId, "method", "password");
     }
   }
 
   /** Audits a signed-in user re-entering their password before a sensitive change. */
-  protected void auditPasswordConfirmation(Http.RequestHeader request, String subject, LoginService.Result result) {
+  protected void auditPasswordConfirmation(
+      Http.RequestHeader request, String subject, LoginService.Result result) {
     switch (result.outcome()) {
-      case SUCCESS -> audit.record(request, AuditService.Event.PASSWORD_CONFIRMED, "subject", subject);
-      case LOCKED -> audit.record(request, AuditService.Event.LOGIN_LOCKED, "subject", subject, "method", "password");
+      case SUCCESS ->
+          audit.record(request, AuditService.Event.PASSWORD_CONFIRMED, "subject", subject);
+      case LOCKED ->
+          audit.record(
+              request, AuditService.Event.LOGIN_LOCKED, "subject", subject, "method", "password");
       default ->
-          audit.record(request, AuditService.Event.LOGIN_FAILED, "subject", subject, "method", "password", "step", "confirmation");
+          audit.record(
+              request,
+              AuditService.Event.LOGIN_FAILED,
+              "subject",
+              subject,
+              "method",
+              "password",
+              "step",
+              "confirmation");
     }
   }
 
@@ -91,7 +130,8 @@ public abstract class BaseController extends Controller {
       // (UnavailablePageFilter); API clients keep this JSON.
       return Responses.json(
               503,
-              Responses.error("server_error", "The authorization server is temporarily unavailable."),
+              Responses.error(
+                  "server_error", "The authorization server is temporarily unavailable."),
               java.util.Map.of("Retry-After", "30"))
           .addAttr(com.lattice.oidc.filters.UnavailablePageFilter.UNAVAILABLE, true);
     } catch (RuntimeException e) {

@@ -2,12 +2,12 @@ package com.lattice.oidc.common;
 
 import com.lattice.oidc.filters.RequestIdFilter;
 import com.typesafe.config.Config;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 import jakarta.inject.Inject;
 import jakarta.inject.Provider;
 import jakarta.inject.Singleton;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import play.Environment;
@@ -23,9 +23,9 @@ import play.mvc.Result;
  * CSRF rejections and uncaught exceptions.
  *
  * <p>Protocol endpoints get OAuth-style JSON ({@code error}, {@code error_description}); the pages
- * end-users see in a browser (consent, device verification, logout, ...) get a minimal HTML page. Neither ever contains
- * stack traces or exception messages: server errors are logged with an incident id that is
- * returned to the caller for correlation.
+ * end-users see in a browser (consent, device verification, logout, ...) get a minimal HTML page.
+ * Neither ever contains stack traces or exception messages: server errors are logged with an
+ * incident id that is returned to the caller for correlation.
  */
 @Singleton
 public final class ErrorHandler extends DefaultHttpErrorHandler {
@@ -54,14 +54,16 @@ public final class ErrorHandler extends DefaultHttpErrorHandler {
         };
     String description =
         switch (statusCode) {
-          case 403 -> "The request was rejected (missing or invalid CSRF token, or a disallowed host).";
+          case 403 ->
+              "The request was rejected (missing or invalid CSRF token, or a disallowed host).";
           case 404 -> "No such endpoint.";
           case 405 -> "The HTTP method is not allowed for this endpoint.";
           case 413 -> "The request body is too large.";
           case 415 -> "Unsupported content type.";
           default -> "The request is malformed.";
         };
-    LOG.debug("Client error {} on {} {}: {}", statusCode, request.method(), request.path(), message);
+    LOG.debug(
+        "Client error {} on {} {}: {}", statusCode, request.method(), request.path(), message);
     return CompletableFuture.completedFuture(
         respond(request, statusCode, error, description, RequestIdFilter.of(request)));
   }

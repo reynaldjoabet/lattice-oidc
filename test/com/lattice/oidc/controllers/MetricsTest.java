@@ -45,8 +45,18 @@ public class MetricsTest {
   @Test
   public void metricsCountRequestsSignInsAndSessions() {
     start(Map.of("lattice.metrics.enabled", true));
-    route(app, withCsrf(post("/account/login", Map.of("loginId", "john", "password", "wrong", "next", "account"))));
-    route(app, withCsrf(post("/account/login", Map.of("loginId", "john", "password", "john", "next", "account"))));
+    route(
+        app,
+        withCsrf(
+            post(
+                "/account/login",
+                Map.of("loginId", "john", "password", "wrong", "next", "account"))));
+    route(
+        app,
+        withCsrf(
+            post(
+                "/account/login",
+                Map.of("loginId", "john", "password", "john", "next", "account"))));
 
     Result metrics = route(app, get("/metrics"));
     assertEquals(200, metrics.status());
@@ -62,21 +72,39 @@ public class MetricsTest {
   @Test
   public void storageThreadPoolMailLogsAndJvmAreMeasured() {
     start(Map.of("lattice.metrics.enabled", true, "lattice.cache.type", "local"));
-    route(app, withCsrf(post("/account/login", Map.of("loginId", "john", "password", "john", "next", "account"))));
+    route(
+        app,
+        withCsrf(
+            post(
+                "/account/login",
+                Map.of("loginId", "john", "password", "john", "next", "account"))));
     app.injector().instanceOf(Mailer.class).send("jane@example.com", "Hello", "Text");
 
     String text = contentAsString(route(app, get("/metrics")));
-    assertTrue("pending state by namespace", text.contains("lattice_short_lived_entries{namespace="));
+    assertTrue(
+        "pending state by namespace", text.contains("lattice_short_lived_entries{namespace="));
     assertTrue(text.contains("lattice_second_factor_accounts 0.0"));
-    assertTrue(text.contains("lattice_second_factor_previous_key{kind=\"authenticator_secrets\"} 0.0"));
+    assertTrue(
+        text.contains("lattice_second_factor_previous_key{kind=\"authenticator_secrets\"} 0.0"));
     assertTrue(text.contains("lattice_authlete_executor_tasks{state=\"queued\"}"));
     assertTrue(text.contains("lattice_authlete_executor_threads 32.0"));
-    assertTrue("no SMTP host: the email is logged", text.contains("lattice_mail_messages_seconds_count{outcome=\"logged\"} 1"));
+    assertTrue(
+        "no SMTP host: the email is logged",
+        text.contains("lattice_mail_messages_seconds_count{outcome=\"logged\"} 1"));
     assertTrue("Caffeine's own figures", text.contains("cache_size{cache=\"read_cache\"}"));
     assertTrue(text.contains("logback_events_total{level=\"warn\"}"));
     assertTrue(text.contains("jvm_info{"));
-    assertTrue("dependency status, for alerts", text.contains("lattice_dependency_up{dependency=\"authlete\"}"));
-    assertTrue("which build is running", text.contains("lattice_build_info{revision=\"" + com.lattice.oidc.metrics.Metrics.shortRevision() + "\",version=\"" + com.lattice.oidc.BuildInfo.version + "\"} 1"));
+    assertTrue(
+        "dependency status, for alerts",
+        text.contains("lattice_dependency_up{dependency=\"authlete\"}"));
+    assertTrue(
+        "which build is running",
+        text.contains(
+            "lattice_build_info{revision=\""
+                + com.lattice.oidc.metrics.Metrics.shortRevision()
+                + "\",version=\""
+                + com.lattice.oidc.BuildInfo.version
+                + "\"} 1"));
     assertTrue(text.contains("jvm_memory_usage_after_gc"));
     assertFalse("no user data in tags", text.contains("jane@example.com"));
   }
@@ -86,6 +114,7 @@ public class MetricsTest {
     start(Map.of("lattice.metrics.enabled", true, "lattice.metrics.token", "scrape-secret"));
     assertEquals(401, route(app, get("/metrics")).status());
     assertEquals(401, route(app, get("/metrics").header("Authorization", "Bearer wrong")).status());
-    assertEquals(200, route(app, get("/metrics").header("Authorization", "Bearer scrape-secret")).status());
+    assertEquals(
+        200, route(app, get("/metrics").header("Authorization", "Bearer scrape-secret")).status());
   }
 }

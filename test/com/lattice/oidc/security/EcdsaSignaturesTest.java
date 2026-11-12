@@ -51,30 +51,60 @@ public class EcdsaSignaturesTest {
   /** CVE-2022-21449: r = s = 0 is refused before it reaches the verifier. */
   @Test
   public void refusesZeroSignatures() {
-    assertThrows(IllegalArgumentException.class, () -> EcdsaSignatures.toDer(new byte[64], "ES256"));
+    assertThrows(
+        IllegalArgumentException.class, () -> EcdsaSignatures.toDer(new byte[64], "ES256"));
     byte[] zeroS = new byte[64];
     zeroS[31] = 1;
     assertThrows(IllegalArgumentException.class, () -> EcdsaSignatures.toDer(zeroS, "ES256"));
-    assertThrows(IllegalArgumentException.class, () -> EcdsaSignatures.toJose(new byte[] {0x30, 0x06, 0x02, 0x01, 0x00, 0x02, 0x01, 0x01}, "ES256"));
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            EcdsaSignatures.toJose(
+                new byte[] {0x30, 0x06, 0x02, 0x01, 0x00, 0x02, 0x01, 0x01}, "ES256"));
   }
 
   @Test
   public void refusesWrongLengthsAndNonDerEncodings() {
-    assertThrows(IllegalArgumentException.class, () -> EcdsaSignatures.toDer(new byte[63], "ES256"));
-    assertThrows(IllegalArgumentException.class, () -> EcdsaSignatures.toDer(new byte[96], "ES256"));
-    assertThrows(IllegalArgumentException.class, () -> EcdsaSignatures.toDer(new byte[64], "RS256"));
+    assertThrows(
+        IllegalArgumentException.class, () -> EcdsaSignatures.toDer(new byte[63], "ES256"));
+    assertThrows(
+        IllegalArgumentException.class, () -> EcdsaSignatures.toDer(new byte[96], "ES256"));
+    assertThrows(
+        IllegalArgumentException.class, () -> EcdsaSignatures.toDer(new byte[64], "RS256"));
     // a superfluous leading zero
-    assertThrows(IllegalArgumentException.class, () -> EcdsaSignatures.toJose(new byte[] {0x30, 0x07, 0x02, 0x02, 0x00, 0x01, 0x02, 0x01, 0x01}, "ES256"));
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            EcdsaSignatures.toJose(
+                new byte[] {0x30, 0x07, 0x02, 0x02, 0x00, 0x01, 0x02, 0x01, 0x01}, "ES256"));
     // a negative integer
-    assertThrows(IllegalArgumentException.class, () -> EcdsaSignatures.toJose(new byte[] {0x30, 0x06, 0x02, 0x01, (byte) 0x81, 0x02, 0x01, 0x01}, "ES256"));
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            EcdsaSignatures.toJose(
+                new byte[] {0x30, 0x06, 0x02, 0x01, (byte) 0x81, 0x02, 0x01, 0x01}, "ES256"));
     // a long-form length where the short form fits
-    assertThrows(IllegalArgumentException.class, () -> EcdsaSignatures.toJose(new byte[] {0x30, (byte) 0x81, 0x06, 0x02, 0x01, 0x01, 0x02, 0x01, 0x01}, "ES256"));
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            EcdsaSignatures.toJose(
+                new byte[] {0x30, (byte) 0x81, 0x06, 0x02, 0x01, 0x01, 0x02, 0x01, 0x01}, "ES256"));
     // trailing bytes, and a sequence length that doesn't match
-    assertThrows(IllegalArgumentException.class, () -> EcdsaSignatures.toJose(new byte[] {0x30, 0x06, 0x02, 0x01, 0x01, 0x02, 0x01, 0x01, 0x00}, "ES256"));
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            EcdsaSignatures.toJose(
+                new byte[] {0x30, 0x06, 0x02, 0x01, 0x01, 0x02, 0x01, 0x01, 0x00}, "ES256"));
     // an integer larger than the curve: 34 bytes of value for P-256's 32
     byte[] big = new byte[2 + 2 + 34 + 3];
-    big[0] = 0x30; big[1] = (byte) (big.length - 2); big[2] = 0x02; big[3] = 34; big[4] = 0x7f;
-    big[38] = 0x02; big[39] = 0x01; big[40] = 0x01;
+    big[0] = 0x30;
+    big[1] = (byte) (big.length - 2);
+    big[2] = 0x02;
+    big[3] = 34;
+    big[4] = 0x7f;
+    big[38] = 0x02;
+    big[39] = 0x01;
+    big[40] = 0x01;
     assertThrows(IllegalArgumentException.class, () -> EcdsaSignatures.toJose(big, "ES256"));
   }
 

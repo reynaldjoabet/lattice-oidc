@@ -4,8 +4,8 @@ import com.lattice.oidc.controllers.Pages;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.apache.pekko.util.ByteString;
-import play.libs.typedmap.TypedKey;
 import play.libs.streams.Accumulator;
+import play.libs.typedmap.TypedKey;
 import play.mvc.EssentialAction;
 import play.mvc.EssentialFilter;
 import play.mvc.Http;
@@ -42,7 +42,10 @@ public final class UnavailablePageFilter extends EssentialFilter {
                         result.status(),
                         "Temporarily unavailable",
                         "Signing in is temporarily unavailable. Please try again in a minute.");
-                return result.header("Retry-After").map(value -> page.withHeader("Retry-After", value)).orElse(page);
+                return result
+                    .header("Retry-After")
+                    .map(value -> page.withHeader("Retry-After", value))
+                    .orElse(page);
               },
               FilterSupport.DIRECT);
         });

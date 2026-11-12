@@ -3,10 +3,10 @@ package com.lattice.oidc.client;
 import com.lattice.oidc.metrics.Metrics;
 import com.typesafe.config.Config;
 import io.micrometer.core.instrument.Gauge;
-import java.util.concurrent.Semaphore;
-import java.util.concurrent.atomic.AtomicInteger;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.pekko.actor.ActorSystem;
 import play.libs.concurrent.CustomExecutionContext;
 
@@ -14,13 +14,14 @@ import play.libs.concurrent.CustomExecutionContext;
  * Executor for blocking Authlete calls (the {@code authlete-dispatcher}). Controllers must run
  * Authlete calls here, never on Play's default dispatcher.
  *
- * <p>Each call blocks while it waits for Authlete (tens of milliseconds), so with a fixed pool of 32
- * threads a server could make at most 32 / 0.025 s, about 1,300 Authlete calls a second, however fast
- * everything else was. The dispatcher therefore runs every task on its own <b>virtual thread</b>
- * (a thread that waits costs almost nothing), and what limits concurrency is {@code
+ * <p>Each call blocks while it waits for Authlete (tens of milliseconds), so with a fixed pool of
+ * 32 threads a server could make at most 32 / 0.025 s, about 1,300 Authlete calls a second, however
+ * fast everything else was. The dispatcher therefore runs every task on its own <b>virtual
+ * thread</b> (a thread that waits costs almost nothing), and what limits concurrency is {@code
  * authlete.max-concurrent-calls}: the number of calls in flight to Authlete at once, which protects
- * Authlete and the connection pool. Further tasks wait for a permit. On a JVM without virtual threads
- * (before 21) the dispatcher falls back to the fixed pool, and the limit then rarely matters.
+ * Authlete and the connection pool. Further tasks wait for a permit. On a JVM without virtual
+ * threads (before 21) the dispatcher falls back to the fixed pool, and the limit then rarely
+ * matters.
  *
  * <p>Tasks waiting for a permit and tasks running are gauges ({@code
  * lattice_authlete_executor_tasks}), next to the limit: a queue that keeps growing while the active
@@ -29,7 +30,8 @@ import play.libs.concurrent.CustomExecutionContext;
 @Singleton
 public final class AuthleteExecutionContext extends CustomExecutionContext {
 
-  private static final String POOL_SIZE = "authlete-dispatcher.thread-pool-executor.fixed-pool-size";
+  private static final String POOL_SIZE =
+      "authlete-dispatcher.thread-pool-executor.fixed-pool-size";
   private static final String MAX_CONCURRENT = "authlete.max-concurrent-calls";
 
   private final AtomicInteger queued = new AtomicInteger();
@@ -37,8 +39,8 @@ public final class AuthleteExecutionContext extends CustomExecutionContext {
 
   /**
    * One permit per call in flight to Authlete (and per other blocking task: webhooks, cleanup).
-   * Spelled "prmits" on purpose: the Scala 3 compiler reads Java sources too, and rejects the Java 17
-   * keyword "permits" as an identifier (the clean build fails, while an incremental one passes).
+   * Spelled "prmits" on purpose: the Scala 3 compiler reads Java sources too, and rejects the Java
+   * 17 keyword "permits" as an identifier (the clean build fails, while an incremental one passes).
    */
   private final Semaphore prmits;
 
@@ -75,7 +77,8 @@ public final class AuthleteExecutionContext extends CustomExecutionContext {
     try {
       super.execute(
           () -> {
-            // Waits for a permit; on a virtual thread this costs almost nothing. Not interruptible: a
+            // Waits for a permit; on a virtual thread this costs almost nothing. Not interruptible:
+            // a
             // task that gave up here would never complete the request that is waiting for it.
             prmits.acquireUninterruptibly();
             queued.decrementAndGet();

@@ -8,7 +8,9 @@ import jakarta.inject.Singleton;
 import java.time.Instant;
 import java.util.Optional;
 
-/** {@link ConsentStore} through JPA (entity {@link ObbConsentEntity}, table {@code obb_consents}). */
+/**
+ * {@link ConsentStore} through JPA (entity {@link ObbConsentEntity}, table {@code obb_consents}).
+ */
 @Singleton
 public final class JpaConsentStore implements ConsentStore {
 
@@ -26,7 +28,10 @@ public final class JpaConsentStore implements ConsentStore {
     }
     return database.transaction(
         em ->
-            em.createQuery("select c from ObbConsentEntity c where c.consentId = :id and c.keepUntil > :now", ObbConsentEntity.class)
+            em.createQuery(
+                    "select c from ObbConsentEntity c where c.consentId = :id and c.keepUntil >"
+                        + " :now",
+                    ObbConsentEntity.class)
                 .setParameter("id", consentId)
                 .setParameter("now", Instant.now())
                 .getResultStream()
@@ -53,6 +58,9 @@ public final class JpaConsentStore implements ConsentStore {
   @Override
   public void delete(String consentId) {
     database.transaction(
-        em -> em.createQuery("delete from ObbConsentEntity c where c.consentId = :id").setParameter("id", consentId).executeUpdate());
+        em ->
+            em.createQuery("delete from ObbConsentEntity c where c.consentId = :id")
+                .setParameter("id", consentId)
+                .executeUpdate());
   }
 }

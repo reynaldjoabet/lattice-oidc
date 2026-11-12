@@ -6,18 +6,18 @@ import com.authlete.common.types.JWEAlg;
 import com.authlete.common.types.JWEEnc;
 import com.authlete.common.types.JWSAlg;
 import com.authlete.common.web.BasicCredentials;
-import com.lattice.oidc.common.LatticeConfig.ResourceServer;
 import com.lattice.oidc.common.LatticeConfig;
+import com.lattice.oidc.common.LatticeConfig.ResourceServer;
 import com.lattice.oidc.common.Requests;
 import com.lattice.oidc.common.Responses;
 import com.lattice.oidc.security.JoseAlgorithms;
+import jakarta.inject.Inject;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Optional;
 import java.util.concurrent.CompletionStage;
 import java.util.stream.Stream;
-import jakarta.inject.Inject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import play.mvc.Http;
@@ -28,10 +28,13 @@ import play.mvc.Result;
  *
  * <p>Callers authenticate as a configured resource server with HTTP Basic authentication. When the
  * resource server asks for a JWT response ({@code Accept: application/token-introspection+jwt}),
- * the response is signed and optionally encrypted as configured for that resource server (RFC 9701).
+ * the response is signed and optionally encrypted as configured for that resource server (RFC
+ * 9701).
  *
- * @see <a href="https://www.rfc-editor.org/rfc/rfc7662.html">RFC 7662, OAuth 2.0 Token Introspection</a>
- * @see <a href="https://www.rfc-editor.org/rfc/rfc9701.html">RFC 9701, JWT Response for OAuth Token Introspection</a>
+ * @see <a href="https://www.rfc-editor.org/rfc/rfc7662.html">RFC 7662, OAuth 2.0 Token
+ *     Introspection</a>
+ * @see <a href="https://www.rfc-editor.org/rfc/rfc9701.html">RFC 9701, JWT Response for OAuth Token
+ *     Introspection</a>
  */
 public final class IntrospectionController extends BaseController {
 
@@ -53,20 +56,27 @@ public final class IntrospectionController extends BaseController {
    * Checks a resource server's settings when the application starts. Settings that would weaken its
    * JWT introspection responses fail the start (see {@link JoseAlgorithms}): signing with {@code
    * none}, encrypting keys with {@code RSA1_5} or {@code PBES2-*}, or an HMAC key shorter than its
-   * hash. A short Basic secret only logs a warning, since the development default is one: the secret
-   * is the resource server's password, and it should be random and at least 256 bits.
+   * hash. A short Basic secret only logs a warning, since the development default is one: the
+   * secret is the resource server's password, and it should be random and at least 256 bits.
    */
   static void check(ResourceServer server) {
     String prefix = "lattice.resource-servers (id " + server.id() + "): ";
     Optional<String> signAlg = server.introspectionSignAlg();
     Stream.of(
-            signAlg.flatMap(alg -> JoseAlgorithms.signingProblem(prefix + "introspection-sign-alg", alg)),
-            server.introspectionEncryptionAlg()
-                .flatMap(alg -> JoseAlgorithms.keyEncryptionProblem(prefix + "introspection-encryption-alg", alg)),
+            signAlg.flatMap(
+                alg -> JoseAlgorithms.signingProblem(prefix + "introspection-sign-alg", alg)),
+            server
+                .introspectionEncryptionAlg()
+                .flatMap(
+                    alg ->
+                        JoseAlgorithms.keyEncryptionProblem(
+                            prefix + "introspection-encryption-alg", alg)),
             signAlg.flatMap(
                 alg ->
                     JoseAlgorithms.hmacKeyProblem(
-                        prefix + "shared-key-for-sign", alg, server.sharedKeyForSign().orElse(null))))
+                        prefix + "shared-key-for-sign",
+                        alg,
+                        server.sharedKeyForSign().orElse(null))))
         .flatMap(Optional::stream)
         .findFirst()
         .ifPresent(
@@ -75,7 +85,8 @@ public final class IntrospectionController extends BaseController {
             });
     if (server.secret().length() < RECOMMENDED_SECRET_LENGTH) {
       LOG.warn(
-          "Resource server '{}' has a {}-character secret; use a random one of at least {} characters (256 bits).",
+          "Resource server '{}' has a {}-character secret; use a random one of at least {}"
+              + " characters (256 bits).",
           server.id(),
           server.secret().length(),
           RECOMMENDED_SECRET_LENGTH);
@@ -85,12 +96,14 @@ public final class IntrospectionController extends BaseController {
   /**
    * The introspection endpoint.
    *
-   * @see <a href="https://www.rfc-editor.org/rfc/rfc7662.html#section-2.1">RFC 7662, 2.1. Introspection Request</a>
+   * @see <a href="https://www.rfc-editor.org/rfc/rfc7662.html#section-2.1">RFC 7662, 2.1.
+   *     Introspection Request</a>
    */
   public CompletionStage<Result> introspect(Http.Request request) {
     return async(
         () -> {
-          Optional<ResourceServer> resourceServer = authenticate(Requests.basicCredentials(request));
+          Optional<ResourceServer> resourceServer =
+              authenticate(Requests.basicCredentials(request));
           if (resourceServer.isEmpty()) {
             return Responses.unauthorized(
                 Responses.error("invalid_client", "Resource server authentication failed."),
@@ -133,13 +146,18 @@ public final class IntrospectionController extends BaseController {
 
   /** Constant-time secret comparison against the configured resource servers. */
   private Optional<ResourceServer> authenticate(BasicCredentials credentials) {
-    if (credentials == null || credentials.getUserId() == null || credentials.getPassword() == null) {
+    if (credentials == null
+        || credentials.getUserId() == null
+        || credentials.getPassword() == null) {
       return Optional.empty();
     }
     byte[] presented = credentials.getPassword().getBytes(StandardCharsets.UTF_8);
     return config.resourceServers().stream()
         .filter(resourceServer -> resourceServer.id().equals(credentials.getUserId()))
-        .filter(resourceServer -> MessageDigest.isEqual(resourceServer.secret().getBytes(StandardCharsets.UTF_8), presented))
+        .filter(
+            resourceServer ->
+                MessageDigest.isEqual(
+                    resourceServer.secret().getBytes(StandardCharsets.UTF_8), presented))
         .findFirst();
   }
 }

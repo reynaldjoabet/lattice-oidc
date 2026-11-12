@@ -1,6 +1,8 @@
 package com.lattice.oidc.common;
 
 import com.lattice.oidc.metrics.Metrics;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import jakarta.mail.Authenticator;
 import jakarta.mail.Message;
 import jakarta.mail.MessagingException;
@@ -14,8 +16,6 @@ import java.time.Duration;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import play.inject.ApplicationLifecycle;
@@ -74,7 +74,11 @@ public final class SmtpMailer implements Mailer {
   @Override
   public void send(String to, String subject, String text) {
     if (session == null) {
-      LOG.info("No SMTP host configured (lattice.mail.smtp.host); email to {}:\nSubject: {}\n\n{}", to, subject, text);
+      LOG.info(
+          "No SMTP host configured (lattice.mail.smtp.host); email to {}:\nSubject: {}\n\n{}",
+          to,
+          subject,
+          text);
       metrics.mail("logged", Duration.ZERO);
       return;
     }

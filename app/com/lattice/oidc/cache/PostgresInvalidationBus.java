@@ -3,6 +3,8 @@ package com.lattice.oidc.cache;
 import com.lattice.oidc.metrics.Metrics;
 import com.lattice.oidc.stores.postgres.PostgresDatabase;
 import com.typesafe.config.Config;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -11,8 +13,6 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BiConsumer;
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 import org.postgresql.PGConnection;
 import org.postgresql.PGNotification;
 import org.slf4j.Logger;
@@ -20,9 +20,9 @@ import org.slf4j.LoggerFactory;
 import play.inject.ApplicationLifecycle;
 
 /**
- * {@link InvalidationBus} over PostgreSQL {@code LISTEN}/{@code NOTIFY}: every server listens on one
- * channel on a dedicated connection. If that connection drops, announcements may be missed, so on
- * reconnecting each server drops its whole cache.
+ * {@link InvalidationBus} over PostgreSQL {@code LISTEN}/{@code NOTIFY}: every server listens on
+ * one channel on a dedicated connection. If that connection drops, announcements may be missed, so
+ * on reconnecting each server drops its whole cache.
  */
 @Singleton
 public final class PostgresInvalidationBus implements InvalidationBus {
@@ -66,7 +66,9 @@ public final class PostgresInvalidationBus implements InvalidationBus {
     while (running) {
       try (Connection connection =
           DriverManager.getConnection(
-              postgres.getString("url"), postgres.getString("username"), postgres.getString("password"))) {
+              postgres.getString("url"),
+              postgres.getString("username"),
+              postgres.getString("password"))) {
         try (Statement statement = connection.createStatement()) {
           statement.execute("LISTEN " + CHANNEL);
         }

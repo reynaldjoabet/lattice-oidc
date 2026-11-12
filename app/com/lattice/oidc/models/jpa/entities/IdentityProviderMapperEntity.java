@@ -1,7 +1,5 @@
 package com.lattice.oidc.models.jpa.entities;
 
-import java.util.Map;
-
 import jakarta.persistence.Access;
 import jakarta.persistence.AccessType;
 import jakarta.persistence.CollectionTable;
@@ -12,96 +10,103 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.MapKeyColumn;
 import jakarta.persistence.Table;
+import java.util.Map;
 
 @Entity
-@Table(name="IDENTITY_PROVIDER_MAPPER")
+@Table(name = "IDENTITY_PROVIDER_MAPPER")
 public class IdentityProviderMapperEntity {
 
-    @Id
-    @Column(name="ID", length = 36)
-    @Access(AccessType.PROPERTY) // we do this because relationships often fetch id, but not entity.  This avoids an extra SQL
-    protected String id;
+  @Id
+  @Column(name = "ID", length = 36)
+  @Access(
+      AccessType
+          .PROPERTY) // we do this because relationships often fetch id, but not entity.  This
+                     // avoids an extra SQL
+  protected String id;
 
-    @Column(name="NAME")
-    protected String name;
+  @Column(name = "NAME")
+  protected String name;
 
-    @Column(name = "IDP_ALIAS")
-    protected String identityProviderAlias;
-    @Column(name = "IDP_MAPPER_NAME")
-    protected String identityProviderMapper;
+  @Column(name = "IDP_ALIAS")
+  protected String identityProviderAlias;
 
-    @ElementCollection
-    @MapKeyColumn(name="NAME")
-    @Column(name="VALUE")
-    @CollectionTable(name="IDP_MAPPER_CONFIG", joinColumns={ @JoinColumn(name="IDP_MAPPER_ID") })
-    private Map<String, String> config;
+  @Column(name = "IDP_MAPPER_NAME")
+  protected String identityProviderMapper;
 
-    @Column(name = "REALM_ID")
-    private String realmId;
+  @ElementCollection
+  @MapKeyColumn(name = "NAME")
+  @Column(name = "VALUE")
+  @CollectionTable(
+      name = "IDP_MAPPER_CONFIG",
+      joinColumns = {@JoinColumn(name = "IDP_MAPPER_ID")})
+  private Map<String, String> config;
 
-    public String getId() {
-        return id;
-    }
+  @Column(name = "REALM_ID")
+  private String realmId;
 
-    public void setId(String id) {
-        this.id = id;
-    }
+  public String getId() {
+    return id;
+  }
 
-    public String getName() {
-        return name;
-    }
+  public void setId(String id) {
+    this.id = id;
+  }
 
-    public void setName(String name) {
-        this.name = name;
-    }
+  public String getName() {
+    return name;
+  }
 
-    public String getIdentityProviderAlias() {
-        return identityProviderAlias;
-    }
+  public void setName(String name) {
+    this.name = name;
+  }
 
-    public void setIdentityProviderAlias(String identityProviderAlias) {
-        this.identityProviderAlias = identityProviderAlias;
-    }
+  public String getIdentityProviderAlias() {
+    return identityProviderAlias;
+  }
 
-    public String getIdentityProviderMapper() {
-        return identityProviderMapper;
-    }
+  public void setIdentityProviderAlias(String identityProviderAlias) {
+    this.identityProviderAlias = identityProviderAlias;
+  }
 
-    public void setIdentityProviderMapper(String identityProviderMapper) {
-        this.identityProviderMapper = identityProviderMapper;
-    }
+  public String getIdentityProviderMapper() {
+    return identityProviderMapper;
+  }
 
-    public String getRealmId() {
-        return realmId;
-    }
+  public void setIdentityProviderMapper(String identityProviderMapper) {
+    this.identityProviderMapper = identityProviderMapper;
+  }
 
-    public void setRealmId(String realmId) {
-        this.realmId = realmId;
-    }
+  public String getRealmId() {
+    return realmId;
+  }
 
-    public Map<String, String> getConfig() {
-        return config;
-    }
+  public void setRealmId(String realmId) {
+    this.realmId = realmId;
+  }
 
-    public void setConfig(Map<String, String> config) {
-        this.config = config;
-    }
+  public Map<String, String> getConfig() {
+    return config;
+  }
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null) return false;
-        if (!(o instanceof IdentityProviderMapperEntity)) return false;
+  public void setConfig(Map<String, String> config) {
+    this.config = config;
+  }
 
-        IdentityProviderMapperEntity that = (IdentityProviderMapperEntity) o;
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (o == null) return false;
+    if (!(o instanceof IdentityProviderMapperEntity)) return false;
 
-        if (!id.equals(that.id)) return false;
+    IdentityProviderMapperEntity that = (IdentityProviderMapperEntity) o;
 
-        return true;
-    }
+    if (!id.equals(that.id)) return false;
 
-    @Override
-    public int hashCode() {
-        return id.hashCode();
-    }
+    return true;
+  }
+
+  @Override
+  public int hashCode() {
+    return id.hashCode();
+  }
 }

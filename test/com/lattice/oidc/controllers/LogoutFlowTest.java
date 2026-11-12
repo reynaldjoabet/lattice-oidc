@@ -33,19 +33,23 @@ public class LogoutFlowTest {
     client.setClientId(42L);
     client.setRedirectUris(new String[] {"https://client.example/cb"});
     fake.answer("getClient", args -> client)
-        .answer("backchannelLogoutToken", args -> {
-          BackchannelLogoutTokenResponse r = new BackchannelLogoutTokenResponse();
-          r.setAction(BackchannelLogoutTokenResponse.Action.OK);
-          return r;
-        })
+        .answer(
+            "backchannelLogoutToken",
+            args -> {
+              BackchannelLogoutTokenResponse r = new BackchannelLogoutTokenResponse();
+              r.setAction(BackchannelLogoutTokenResponse.Action.OK);
+              return r;
+            })
         .answer("nativeSsoLogout", args -> new NativeSsoLogoutResponse())
         .answer("authorization", args -> interaction())
-        .answer("authorizationIssue", args -> {
-          var r = new com.authlete.common.dto.AuthorizationIssueResponse();
-          r.setAction(com.authlete.common.dto.AuthorizationIssueResponse.Action.LOCATION);
-          r.setResponseContent("https://client.example/cb?code=x");
-          return r;
-        });
+        .answer(
+            "authorizationIssue",
+            args -> {
+              var r = new com.authlete.common.dto.AuthorizationIssueResponse();
+              r.setAction(com.authlete.common.dto.AuthorizationIssueResponse.Action.LOCATION);
+              r.setResponseContent("https://client.example/cb?code=x");
+              return r;
+            });
     app = app(fake);
     Helpers.start(app);
   }
@@ -73,7 +77,15 @@ public class LogoutFlowTest {
             withCsrf(
                     post(
                         "/api/authorization/decision",
-                        Map.of("ticket", "t1", "loginId", "john", "password", "john", "authorized", "true")))
+                        Map.of(
+                            "ticket",
+                            "t1",
+                            "loginId",
+                            "john",
+                            "password",
+                            "john",
+                            "authorized",
+                            "true")))
                 .session(page.session().data()));
     assertEquals(302, done.status());
     return done.session().data();
@@ -89,7 +101,10 @@ public class LogoutFlowTest {
   @Test
   public void withoutSessionRedirectsToRegisteredUriWithState() {
     Result r =
-        route(app, get("/api/logout?client_id=42&post_logout_redirect_uri=https://client.example/cb&state=s1"));
+        route(
+            app,
+            get(
+                "/api/logout?client_id=42&post_logout_redirect_uri=https://client.example/cb&state=s1"));
     assertEquals(302, r.status());
     assertEquals("https://client.example/cb?state=s1", r.redirectLocation().orElse(null));
   }
@@ -104,7 +119,8 @@ public class LogoutFlowTest {
     assertEquals(0, fake.count("backchannelLogoutToken"));
 
     Result done =
-        route(app, withCsrf(post("/api/logout/confirm", Map.of("confirm", "true"))).session(session));
+        route(
+            app, withCsrf(post("/api/logout/confirm", Map.of("confirm", "true"))).session(session));
     assertEquals(200, done.status());
     assertFalse(done.session().get("session_id").isPresent());
     assertEquals("client from the session is notified", 1, fake.count("backchannelLogoutToken"));

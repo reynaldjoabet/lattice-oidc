@@ -27,12 +27,16 @@ public class ResilienceBehaviourTest {
 
   private AuthleteApi api() {
     ResilienceConfig config =
-        new ResilienceConfig(ConfigFactory.parseMap(Map.of("retry.base-delay", "1 ms", "retry.jitter", "0 ms")));
-    return ResilientAuthleteApi.wrap(fake.api(), config, (method, event) -> events.add(method + ":" + event)).api();
+        new ResilienceConfig(
+            ConfigFactory.parseMap(Map.of("retry.base-delay", "1 ms", "retry.jitter", "0 ms")));
+    return ResilientAuthleteApi.wrap(
+            fake.api(), config, (method, event) -> events.add(method + ":" + event))
+        .api();
   }
 
   /** Throws {@code error} for the first call, then answers. */
-  private static java.util.function.Function<Object[], Object> failingOnce(RuntimeException error, Object answer) {
+  private static java.util.function.Function<Object[], Object> failingOnce(
+      RuntimeException error, Object answer) {
     AtomicInteger calls = new AtomicInteger();
     return args -> {
       if (calls.incrementAndGet() == 1) {
@@ -48,27 +52,40 @@ public class ResilienceBehaviourTest {
 
   @Test
   public void aWriteIsNotRetriedAfterA5xx() {
-    fake.answer("authorizationIssue", failingOnce(FakeAuthleteApi.failure(503), new AuthorizationIssueResponse()));
-    assertThrows(AuthleteApiException.class, () -> api().authorizationIssue(new AuthorizationIssueRequest()));
+    fake.answer(
+        "authorizationIssue",
+        failingOnce(FakeAuthleteApi.failure(503), new AuthorizationIssueResponse()));
+    assertThrows(
+        AuthleteApiException.class,
+        () -> api().authorizationIssue(new AuthorizationIssueRequest()));
     assertEquals("Authlete may have issued the code already", 1, fake.count("authorizationIssue"));
   }
 
   @Test
   public void aWriteIsNotRetriedAfterAReadTimeout() {
     fake.answer(
-        "authorizationIssue", failingOnce(noResponse(new TimeoutException("read timed out")), new AuthorizationIssueResponse()));
-    assertThrows(AuthleteApiException.class, () -> api().authorizationIssue(new AuthorizationIssueRequest()));
+        "authorizationIssue",
+        failingOnce(
+            noResponse(new TimeoutException("read timed out")), new AuthorizationIssueResponse()));
+    assertThrows(
+        AuthleteApiException.class,
+        () -> api().authorizationIssue(new AuthorizationIssueRequest()));
     assertEquals(1, fake.count("authorizationIssue"));
   }
 
   @Test
   public void aWriteIsRetriedWhenAuthleteCertainlyDidntProcessIt() {
     fake.answer(
-        "authorizationIssue", failingOnce(noResponse(new ConnectException("Connection refused")), new AuthorizationIssueResponse()));
+        "authorizationIssue",
+        failingOnce(
+            noResponse(new ConnectException("Connection refused")),
+            new AuthorizationIssueResponse()));
     api().authorizationIssue(new AuthorizationIssueRequest());
     assertEquals("never reached Authlete: safe to retry", 2, fake.count("authorizationIssue"));
 
-    fake.answer("token", failingOnce(FakeAuthleteApi.failure(429), new com.authlete.common.dto.TokenResponse()));
+    fake.answer(
+        "token",
+        failingOnce(FakeAuthleteApi.failure(429), new com.authlete.common.dto.TokenResponse()));
     api().token(new com.authlete.common.dto.TokenRequest());
     assertEquals("a 429 was rejected unprocessed: safe to retry", 2, fake.count("token"));
   }
@@ -97,7 +114,8 @@ public class ResilienceBehaviourTest {
     assertTrue(events.contains("getClient:cache_hit"));
 
     api.updateClient(after);
-    assertEquals("the console shows the change at once", "After", api.getClient(42L).getClientName());
+    assertEquals(
+        "the console shows the change at once", "After", api.getClient(42L).getClientName());
     assertEquals(2, fake.count("getClient"));
   }
 
@@ -107,6 +125,9 @@ public class ResilienceBehaviourTest {
     AuthleteApi api = api();
     api.introspection(new com.authlete.common.dto.IntrospectionRequest().setToken("t"));
     api.introspection(new com.authlete.common.dto.IntrospectionRequest().setToken("t"));
-    assertEquals("a revoked token must not introspect as active from a cache", 2, fake.count("introspection"));
+    assertEquals(
+        "a revoked token must not introspect as active from a cache",
+        2,
+        fake.count("introspection"));
   }
 }

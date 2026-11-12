@@ -15,8 +15,14 @@ public class LockoutBackoffTest {
   private static final Instant T0 = Instant.parse("2026-01-01T00:00:00Z");
 
   private final LockoutBackoff policy =
-      new LockoutBackoff(3, Duration.ofMinutes(1), Duration.ofMinutes(5), Duration.ofHours(1),
-          Duration.ofSeconds(1), Duration.ofSeconds(30), 0);
+      new LockoutBackoff(
+          3,
+          Duration.ofMinutes(1),
+          Duration.ofMinutes(5),
+          Duration.ofHours(1),
+          Duration.ofSeconds(1),
+          Duration.ofSeconds(30),
+          0);
 
   /** Failures spaced like a person typing: no wait before the threshold, then +1 minute each. */
   @Test
@@ -70,8 +76,14 @@ public class LockoutBackoffTest {
   @Test
   public void locksPermanentlyAfterTooManyLockoutsWhenConfigured() {
     LockoutBackoff strict =
-        new LockoutBackoff(2, Duration.ofMinutes(1), Duration.ofMinutes(5), Duration.ofHours(1),
-            Duration.ZERO, Duration.ZERO, 2);
+        new LockoutBackoff(
+            2,
+            Duration.ofMinutes(1),
+            Duration.ofMinutes(5),
+            Duration.ofHours(1),
+            Duration.ZERO,
+            Duration.ZERO,
+            2);
     State state = State.NONE;
     Instant now = T0;
     for (int i = 0; i < 4; i++) {

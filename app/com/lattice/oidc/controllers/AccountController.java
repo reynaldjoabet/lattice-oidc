@@ -16,13 +16,12 @@ import com.lattice.oidc.security.UserSessions;
 import com.lattice.oidc.security.UserSessions.LoginState;
 import com.lattice.oidc.stores.IdentityLinkStore;
 import com.lattice.oidc.stores.PasskeyStore;
+import jakarta.inject.Inject;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletionStage;
-import jakarta.inject.Inject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import play.mvc.Http;
@@ -103,19 +102,25 @@ public final class AccountController extends BaseController {
           boolean appsUnavailable = false;
           try {
             Client[] clients =
-                api().getClientAuthorizationList(new ClientAuthorizationGetListRequest(user.getSubject())).getClients();
+                api()
+                    .getClientAuthorizationList(
+                        new ClientAuthorizationGetListRequest(user.getSubject()))
+                    .getClients();
             if (clients != null) {
               for (Client client : clients) {
                 apps.add(
                     new AccountPage.App(
                         client.getClientId(),
-                        client.getClientName() != null ? client.getClientName() : String.valueOf(client.getClientId()),
+                        client.getClientName() != null
+                            ? client.getClientName()
+                            : String.valueOf(client.getClientId()),
                         Optional.ofNullable(client.getLogoUri()).map(Object::toString),
                         Optional.ofNullable(client.getClientUri()).map(Object::toString)));
               }
             }
           } catch (RuntimeException e) {
-            LOG.warn("Could not list the apps authorized by {}: {}", user.getSubject(), e.getMessage());
+            LOG.warn(
+                "Could not list the apps authorized by {}: {}", user.getSubject(), e.getMessage());
             appsUnavailable = true;
           }
           Object email = user.getClaim("email", null);
@@ -126,7 +131,9 @@ public final class AccountController extends BaseController {
                   apps,
                   appsUnavailable,
                   signInMethods(user),
-                  config.ciba().mode() == LatticeConfig.CibaMode.BUILTIN ? ciba.pendingFor(user.getSubject()).size() : 0,
+                  config.ciba().mode() == LatticeConfig.CibaMode.BUILTIN
+                      ? ciba.pendingFor(user.getSubject()).size()
+                      : 0,
                   AdminController.isAdmin(user, config),
                   passkeys.forSubject(user.getSubject()),
                   sessions.sessionsOf(user.getSubject()).size(),
@@ -135,7 +142,8 @@ public final class AccountController extends BaseController {
                       secondFactors.enrolled(user.getSubject()),
                       secondFactors.remainingRecoveryCodes(user.getSubject()),
                       user.passwordHash() != null));
-          return Responses.of(200, views.html.oidc.account.render(page, request).body(), Responses.HTML, null);
+          return Responses.of(
+              200, views.html.oidc.account.render(page, request).body(), Responses.HTML, null);
         });
   }
 
@@ -143,18 +151,26 @@ public final class AccountController extends BaseController {
     return async(
         () -> {
           Map<String, String[]> form = Requests.form(request);
-          String next = DESTINATIONS.containsKey(Requests.first(form, "next")) ? Requests.first(form, "next") : "account";
+          String next =
+              DESTINATIONS.containsKey(Requests.first(form, "next"))
+                  ? Requests.first(form, "next")
+                  : "account";
           String loginId = Requests.first(form, "loginId");
-          LoginService.Result result = login.authenticate(loginId, Requests.first(form, "password"), request.remoteAddress());
+          LoginService.Result result =
+              login.authenticate(
+                  loginId, Requests.first(form, "password"), request.remoteAddress());
           auditLogin(request, loginId, result);
           if (result.outcome() != LoginService.Outcome.SUCCESS) {
-            return loginPage(request, next, Optional.of(AuthorizationController.failureMessage(result)), 401);
+            return loginPage(
+                request, next, Optional.of(AuthorizationController.failureMessage(result)), 401);
           }
           boolean rememberMe = form.containsKey("rememberMe");
           if (flow.needsSecondFactor(result.user().get())) {
-            return flow.challenge(request, result.user().get(), "Password", rememberMe, next, Optional.empty());
+            return flow.challenge(
+                request, result.user().get(), "Password", rememberMe, next, Optional.empty());
           }
-          return flow.startAndRedirect(request, result.user().get(), "Password", null, rememberMe, next);
+          return flow.startAndRedirect(
+              request, result.user().get(), "Password", null, rememberMe, next);
         });
   }
 
@@ -169,7 +185,13 @@ public final class AccountController extends BaseController {
           api().deleteClientAuthorization(clientId, subject);
           // The next sign-in to the app asks for consent again.
           appConsents.delete(subject, clientId);
-          audit.record(request, AuditService.Event.APP_ACCESS_REMOVED, "subject", subject, "client_id", clientId);
+          audit.record(
+              request,
+              AuditService.Event.APP_ACCESS_REMOVED,
+              "subject",
+              subject,
+              "client_id",
+              clientId);
           return Results.seeOther(DESTINATIONS.get("account"));
         });
   }
@@ -180,11 +202,15 @@ public final class AccountController extends BaseController {
       methods.add(new AccountPage.SignInMethod("Password", "login ID " + user.loginId()));
     } else if (com.lattice.oidc.security.LdapDirectory.isFederated(user)) {
       // From the LDAP directory: the password is checked, and changed, there.
-      methods.add(new AccountPage.SignInMethod("Organisation password", "login ID " + user.loginId() + ", managed by your organisation's directory"));
+      methods.add(
+          new AccountPage.SignInMethod(
+              "Organisation password",
+              "login ID " + user.loginId() + ", managed by your organisation's directory"));
     } else if (user.getSubject().contains("@")) {
       // A brokered account ({@code sub@provider-id}) signs in only through its provider.
       String providerId = user.getSubject().substring(user.getSubject().lastIndexOf('@') + 1);
-      methods.add(new AccountPage.SignInMethod(providerName(providerId), "Used to create this account"));
+      methods.add(
+          new AccountPage.SignInMethod(providerName(providerId), "Used to create this account"));
     }
     for (IdentityLinkStore.Link link : links.linksOf(user.getSubject())) {
       methods.add(new AccountPage.SignInMethod(providerName(link.providerId()), "Linked"));
@@ -205,6 +231,9 @@ public final class AccountController extends BaseController {
           default -> "to manage your account";
         };
     return Responses.of(
-        status, views.html.oidc.login.render(next, purpose, error, request).body(), Responses.HTML, null);
+        status,
+        views.html.oidc.login.render(next, purpose, error, request).body(),
+        Responses.HTML,
+        null);
   }
 }

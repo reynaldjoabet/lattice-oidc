@@ -75,7 +75,10 @@ public class ConsoleTest {
               response.setNewClientSecret("new-secret-value");
               return response;
             })
-        .answer("getServiceConfiguration", args -> "{\"issuer\":\"https://lattice.example\",\"scopes_supported\":[\"openid\",\"profile\",\"email\"]}")
+        .answer(
+            "getServiceConfiguration",
+            args ->
+                "{\"issuer\":\"https://lattice.example\",\"scopes_supported\":[\"openid\",\"profile\",\"email\"]}")
         .answer("getServiceJwks", args -> "{\"keys\":[]}");
     app = app(fake, Map.of("lattice.admin.login-ids", List.of("john")));
     Helpers.start(app);
@@ -87,7 +90,12 @@ public class ConsoleTest {
   }
 
   private Map<String, String> signIn(String loginId) {
-    return route(app, withCsrf(post("/account/login", Map.of("loginId", loginId, "password", loginId, "next", "admin"))))
+    return route(
+            app,
+            withCsrf(
+                post(
+                    "/account/login",
+                    Map.of("loginId", loginId, "password", loginId, "next", "admin"))))
         .session()
         .data();
   }
@@ -111,7 +119,8 @@ public class ConsoleTest {
     assertTrue(all.contains("Device (public)"));
     assertTrue(all.contains("Dynamic (RFC 7591)"));
 
-    String dynamic = contentAsString(route(app, get("/admin/clients?registration=dynamic").session(admin)));
+    String dynamic =
+        contentAsString(route(app, get("/admin/clients?registration=dynamic").session(admin)));
     assertFalse(dynamic.contains("Acme Notes"));
     assertTrue(dynamic.contains("Living Room TV"));
 
@@ -124,7 +133,9 @@ public class ConsoleTest {
     Map<String, String> form = new HashMap<>();
     form.put("name", "Acme Notes 2");
     form.put("website", "https://notes.example");
-    form.put("redirectUris", "https://notes.example/cb\r\nhttp://localhost:3000/cb\r\ncom.example.notes:/cb");
+    form.put(
+        "redirectUris",
+        "https://notes.example/cb\r\nhttp://localhost:3000/cb\r\ncom.example.notes:/cb");
     form.put("tokenAuthMethod", "private_key_jwt");
     form.put("pkceRequired", "true");
     form.put("scope", "openid");
@@ -133,13 +144,16 @@ public class ConsoleTest {
 
   @Test
   public void editingAClientUpdatesItInAuthlete() {
-    Result saved = route(app, withCsrf(post("/admin/clients/42", validForm())).session(signIn("john")));
+    Result saved =
+        route(app, withCsrf(post("/admin/clients/42", validForm())).session(signIn("john")));
     assertEquals(200, saved.status());
     assertTrue(contentAsString(saved).contains("Changes saved."));
     Client updated = fake.lastRequest("updateClient");
     assertEquals("Acme Notes 2", updated.getClientName());
     assertArrayEquals(
-        new String[] {"https://notes.example/cb", "http://localhost:3000/cb", "com.example.notes:/cb"},
+        new String[] {
+          "https://notes.example/cb", "http://localhost:3000/cb", "com.example.notes:/cb"
+        },
         updated.getRedirectUris());
     assertEquals(ClientAuthMethod.PRIVATE_KEY_JWT, updated.getTokenAuthMethod());
     assertTrue(updated.isPkceRequired());
@@ -160,7 +174,8 @@ public class ConsoleTest {
 
   @Test
   public void rotatingTheSecretShowsItOnceWithoutCaching() {
-    Result rotated = route(app, withCsrf(post("/admin/clients/42/secret", Map.of())).session(signIn("john")));
+    Result rotated =
+        route(app, withCsrf(post("/admin/clients/42/secret", Map.of())).session(signIn("john")));
     assertEquals(200, rotated.status());
     assertEquals("no-store", rotated.header("Cache-Control").orElse(null));
     String html = contentAsString(rotated);
@@ -170,7 +185,8 @@ public class ConsoleTest {
 
   @Test
   public void deletingAClientCallsAuthlete() {
-    Result deleted = route(app, withCsrf(post("/admin/clients/43/delete", Map.of())).session(signIn("john")));
+    Result deleted =
+        route(app, withCsrf(post("/admin/clients/43/delete", Map.of())).session(signIn("john")));
     assertEquals(303, deleted.status());
     assertEquals(43L, (long) (Long) fake.lastArgs.get("deleteClient")[0]);
   }
@@ -178,9 +194,19 @@ public class ConsoleTest {
   @Test
   public void securityPageCountsFailedSignInsByIp() {
     for (int attempt = 0; attempt < 3; attempt++) {
-      route(app, withCsrf(post("/account/login", Map.of("loginId", "jane", "password", "wrong", "next", "account"))));
+      route(
+          app,
+          withCsrf(
+              post(
+                  "/account/login",
+                  Map.of("loginId", "jane", "password", "wrong", "next", "account"))));
     }
-    route(app, withCsrf(post("/account/login", Map.of("loginId", "max", "password", "wrong", "next", "account"))));
+    route(
+        app,
+        withCsrf(
+            post(
+                "/account/login",
+                Map.of("loginId", "max", "password", "wrong", "next", "account"))));
     Result page = route(app, get("/admin/security").session(signIn("john")));
     assertEquals(200, page.status());
     String html = contentAsString(page);
@@ -191,10 +217,16 @@ public class ConsoleTest {
 
   @Test
   public void theAuditLogCanBeFilteredByEventAndSubject() {
-    route(app, withCsrf(post("/account/login", Map.of("loginId", "jane", "password", "wrong", "next", "account"))));
+    route(
+        app,
+        withCsrf(
+            post(
+                "/account/login",
+                Map.of("loginId", "jane", "password", "wrong", "next", "account"))));
     Map<String, String> admin = signIn("john");
 
-    String failures = contentAsString(route(app, get("/admin/audit?event=LOGIN_FAILED").session(admin)));
+    String failures =
+        contentAsString(route(app, get("/admin/audit?event=LOGIN_FAILED").session(admin)));
     assertTrue(failures.contains(">LOGIN_FAILED</span>"));
     assertFalse("filtered to the chosen event", failures.contains(">LOGIN_SUCCEEDED</span>"));
 
@@ -205,7 +237,8 @@ public class ConsoleTest {
   }
 
   private String subjectOn(String page) {
-    java.util.regex.Matcher m = java.util.regex.Pattern.compile("name=\"subject\" value=\"([^\"]+)\"").matcher(page);
+    java.util.regex.Matcher m =
+        java.util.regex.Pattern.compile("name=\"subject\" value=\"([^\"]+)\"").matcher(page);
     assertTrue(page, m.find());
     return m.group(1);
   }
@@ -218,34 +251,62 @@ public class ConsoleTest {
     String subject = subjectOn(page);
 
     Result refused =
-        route(app, withCsrf(post("/admin/identity", Map.of("subject", subject, "verifiedClaims", "[{\"claims\":{\"a\":1}}]"))).session(admin));
+        route(
+            app,
+            withCsrf(
+                    post(
+                        "/admin/identity",
+                        Map.of("subject", subject, "verifiedClaims", "[{\"claims\":{\"a\":1}}]")))
+                .session(admin));
     assertTrue(contentAsString(refused).contains("has no &quot;verification&quot; object"));
 
-    String json = "[{\"verification\":{\"trust_framework\":\"jp_aml\"},\"claims\":{\"given_name\":\"Jane\"}}]";
-    Result saved = route(app, withCsrf(post("/admin/identity", Map.of("subject", subject, "verifiedClaims", json))).session(admin));
+    String json =
+        "[{\"verification\":{\"trust_framework\":\"jp_aml\"},\"claims\":{\"given_name\":\"Jane\"}}]";
+    Result saved =
+        route(
+            app,
+            withCsrf(post("/admin/identity", Map.of("subject", subject, "verifiedClaims", json)))
+                .session(admin));
     assertTrue(contentAsString(saved).contains("Verification data saved."));
 
     com.lattice.oidc.models.User jane =
-        app.injector().instanceOf(com.lattice.oidc.stores.UserStore.class).bySubject(subject).orElseThrow();
+        app.injector()
+            .instanceOf(com.lattice.oidc.stores.UserStore.class)
+            .bySubject(subject)
+            .orElseThrow();
     assertEquals(1, jane.verifiedClaims().size());
-    assertEquals("jp_aml", ((Map<?, ?>) jane.verifiedClaims().get(0).get("verification")).get("trust_framework"));
+    assertEquals(
+        "jp_aml",
+        ((Map<?, ?>) jane.verifiedClaims().get(0).get("verification")).get("trust_framework"));
     assertEquals(
         1,
         app.injector()
             .instanceOf(com.lattice.oidc.stores.AuditEventStore.class)
             .search(
                 new com.lattice.oidc.stores.AuditEventStore.Query(
-                    java.util.Optional.of("VERIFIED_CLAIMS_UPDATED"), java.util.Optional.empty(), java.util.Optional.empty(), 10))
+                    java.util.Optional.of("VERIFIED_CLAIMS_UPDATED"),
+                    java.util.Optional.empty(),
+                    java.util.Optional.empty(),
+                    10))
             .size());
   }
 
   @Test
   public void onlyAdminsEditIdentityData() {
-    String subject = subjectOn(contentAsString(route(app, get("/admin/identity?account=jane").session(signIn("john")))));
-    com.lattice.oidc.stores.UserStore users = app.injector().instanceOf(com.lattice.oidc.stores.UserStore.class);
+    String subject =
+        subjectOn(
+            contentAsString(
+                route(app, get("/admin/identity?account=jane").session(signIn("john")))));
+    com.lattice.oidc.stores.UserStore users =
+        app.injector().instanceOf(com.lattice.oidc.stores.UserStore.class);
     int before = users.bySubject(subject).orElseThrow().verifiedClaims().size();
-    String json = "[{\"verification\":{\"trust_framework\":\"jp_aml\"},\"claims\":{\"given_name\":\"Mallory\"}}]";
-    Result jane = route(app, withCsrf(post("/admin/identity", Map.of("subject", subject, "verifiedClaims", json))).session(signIn("jane")));
+    String json =
+        "[{\"verification\":{\"trust_framework\":\"jp_aml\"},\"claims\":{\"given_name\":\"Mallory\"}}]";
+    Result jane =
+        route(
+            app,
+            withCsrf(post("/admin/identity", Map.of("subject", subject, "verifiedClaims", json)))
+                .session(signIn("jane")));
     assertEquals(403, jane.status());
     assertEquals(before, users.bySubject(subject).orElseThrow().verifiedClaims().size());
   }

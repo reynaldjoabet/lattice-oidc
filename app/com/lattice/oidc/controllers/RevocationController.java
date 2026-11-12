@@ -15,7 +15,8 @@ import play.mvc.Result;
 /**
  * An implementation of the revocation endpoint (RFC 7009): {@code POST /api/revocation}.
  *
- * @see <a href="https://www.rfc-editor.org/rfc/rfc7009.html">RFC 7009: OAuth 2.0 Token Revocation</a>
+ * @see <a href="https://www.rfc-editor.org/rfc/rfc7009.html">RFC 7009: OAuth 2.0 Token
+ *     Revocation</a>
  */
 public final class RevocationController extends BaseController {
 
@@ -25,7 +26,8 @@ public final class RevocationController extends BaseController {
    * The revocation endpoint for the {@code POST} method. Client authentication works as on the
    * token endpoint.
    *
-   * @see <a href="https://www.rfc-editor.org/rfc/rfc7009.html#section-2.1">RFC 7009, 2.1. Revocation Request</a>
+   * @see <a href="https://www.rfc-editor.org/rfc/rfc7009.html#section-2.1">RFC 7009, 2.1.
+   *     Revocation Request</a>
    */
   public CompletionStage<Result> revoke(Http.Request request) {
     return async(
@@ -42,7 +44,8 @@ public final class RevocationController extends BaseController {
                           .setClientSecret(basic == null ? null : basic.getPassword())
                           .setClientCertificate(chain == null ? null : chain[0])
                           .setClientCertificatePath(rest(chain))
-                          .setOauthClientAttestation(Requests.header(request, "OAuth-Client-Attestation"))
+                          .setOauthClientAttestation(
+                              Requests.header(request, "OAuth-Client-Attestation"))
                           .setOauthClientAttestationPop(
                               Requests.header(request, "OAuth-Client-Attestation-PoP")));
           Map<String, String> headers = new LinkedHashMap<>();
@@ -66,9 +69,7 @@ public final class RevocationController extends BaseController {
         });
   }
 
-  /**
-   * The second and subsequent elements in the client certificate path.
-   */
+  /** The second and subsequent elements in the client certificate path. */
   static String[] rest(String[] chain) {
     return chain == null || chain.length < 2 ? null : Arrays.copyOfRange(chain, 1, chain.length);
   }

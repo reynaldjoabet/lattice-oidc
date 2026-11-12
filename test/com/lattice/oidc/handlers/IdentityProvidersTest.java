@@ -25,7 +25,8 @@ public class IdentityProvidersTest {
     file.toFile().deleteOnExit();
     Files.writeString(file, json);
     return new IdentityProviders(
-        new LatticeConfig(TestSettings.config(Map.of("lattice.identity-providers.file", file.toString()))));
+        new LatticeConfig(
+            TestSettings.config(Map.of("lattice.identity-providers.file", file.toString()))));
   }
 
   @Test
@@ -41,7 +42,9 @@ public class IdentityProvidersTest {
         new IdentityProviders(
             new LatticeConfig(
                 TestSettings.config(
-                    Map.of("lattice.identity-providers.file", "conf/identity-providers.example.json"))));
+                    Map.of(
+                        "lattice.identity-providers.file",
+                        "conf/identity-providers.example.json"))));
     assertEquals(
         List.of("okta", "azure", "google", "keycloak", "pingfederate", "partner-es256"),
         providers.links().stream().map(IdentityProviders.Link::id).toList());

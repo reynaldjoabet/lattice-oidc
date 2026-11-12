@@ -7,11 +7,11 @@ import com.lattice.oidc.common.ObbSupport;
 import com.lattice.oidc.common.Responses;
 import com.lattice.oidc.common.WebException;
 import com.lattice.oidc.stores.ConsentStore;
-import java.util.Map;
-import java.util.Optional;
 import jakarta.inject.Inject;
 import jakarta.inject.Provider;
 import jakarta.inject.Singleton;
+import java.util.Map;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,7 +44,8 @@ public final class ObbTokenHandler {
     Map<String, Object> body = JsonHelpers.readMap(responseJson);
     Object refreshToken = body.get("refresh_token");
     Object scope = body.get("scope");
-    if (!(refreshToken instanceof String refreshTokenValue) || !(scope instanceof String scopeValue)) {
+    if (!(refreshToken instanceof String refreshTokenValue)
+        || !(scope instanceof String scopeValue)) {
       return;
     }
     String consentScope = ObbSupport.consentScope(scopeValue.split(" +"));

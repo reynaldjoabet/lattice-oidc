@@ -15,13 +15,19 @@ public final class Responses {
   public static final String JWT = "application/jwt";
   public static final String JAVASCRIPT = "application/javascript;charset=UTF-8";
   public static final String ENTITY_STATEMENT = "application/entity-statement+jwt";
-  /** OpenID Federation 1.0 §12.2.3: the media type of a successful explicit registration response. */
-  public static final String EXPLICIT_REGISTRATION_RESPONSE = "application/explicit-registration-response+jwt";
+
+  /**
+   * OpenID Federation 1.0 §12.2.3: the media type of a successful explicit registration response.
+   */
+  public static final String EXPLICIT_REGISTRATION_RESPONSE =
+      "application/explicit-registration-response+jwt";
+
   public static final String TOKEN_INTROSPECTION = "application/token-introspection+jwt";
 
   private Responses() {}
 
-  public static Result of(int status, String body, String contentType, Map<String, String> headers) {
+  public static Result of(
+      int status, String body, String contentType, Map<String, String> headers) {
     Result r =
         (body == null ? Results.status(status) : Results.status(status, body).as(contentType))
             .withHeader("Cache-Control", "no-store")
@@ -103,7 +109,8 @@ public final class Responses {
     return of(200, html, HTML, null)
         .withHeader(
             "Content-Security-Policy",
-            "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; form-action *");
+            "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; form-action"
+                + " *");
   }
 
   /** Bearer token error: the challenge goes into WWW-Authenticate, with no body (RFC 6750). */

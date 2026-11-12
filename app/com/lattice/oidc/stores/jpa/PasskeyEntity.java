@@ -48,7 +48,17 @@ public class PasskeyEntity {
   /** For JPA. */
   protected PasskeyEntity() {}
 
-  PasskeyEntity(String id, String subject, String userHandle, String publicKeyCose, long signatureCount, String name, Instant createdAt, Instant lastUsedAt, boolean backedUp, String transports) {
+  PasskeyEntity(
+      String id,
+      String subject,
+      String userHandle,
+      String publicKeyCose,
+      long signatureCount,
+      String name,
+      Instant createdAt,
+      Instant lastUsedAt,
+      boolean backedUp,
+      String transports) {
     this.id = id;
     this.subject = subject;
     this.userHandle = userHandle;

@@ -28,7 +28,8 @@ public final class JpaEphemeralStore implements EphemeralStore {
   }
 
   @Override
-  public void put(String namespace, String key, String owner, String subject, String json, Duration ttl) {
+  public void put(
+      String namespace, String key, String owner, String subject, String json, Duration ttl) {
     // Native SQL: an atomic upsert, with the expiry computed from the database clock.
     database.transaction(
         em ->
@@ -54,7 +55,8 @@ public final class JpaEphemeralStore implements EphemeralStore {
     return database.transaction(
         em ->
             em.createQuery(
-                    "select e from EphemeralEntity e where e.namespace = :namespace and e.entryKey = :key and e.expiresAt > instant",
+                    "select e from EphemeralEntity e where e.namespace = :namespace and e.entryKey"
+                        + " = :key and e.expiresAt > instant",
                     EphemeralEntity.class)
                 .setParameter("namespace", namespace)
                 .setParameter("key", key)
@@ -65,7 +67,8 @@ public final class JpaEphemeralStore implements EphemeralStore {
 
   @Override
   public Optional<Entry> take(String namespace, String key) {
-    // Native SQL: one statement, so of two concurrent callers only one deletes (and so receives) the
+    // Native SQL: one statement, so of two concurrent callers only one deletes (and so receives)
+    // the
     // row. A JPA find-then-remove would let both read it first.
     return database.transaction(
         em ->
@@ -105,7 +108,9 @@ public final class JpaEphemeralStore implements EphemeralStore {
   public void delete(String namespace, String key) {
     database.transaction(
         em ->
-            em.createQuery("delete from EphemeralEntity e where e.namespace = :namespace and e.entryKey = :key")
+            em.createQuery(
+                    "delete from EphemeralEntity e where e.namespace = :namespace and e.entryKey ="
+                        + " :key")
                 .setParameter("namespace", namespace)
                 .setParameter("key", key)
                 .executeUpdate());
@@ -115,7 +120,9 @@ public final class JpaEphemeralStore implements EphemeralStore {
   public int deleteBySubject(String namespace, String subject) {
     return database.transaction(
         em ->
-            em.createQuery("delete from EphemeralEntity e where e.namespace = :namespace and e.subject = :subject")
+            em.createQuery(
+                    "delete from EphemeralEntity e where e.namespace = :namespace and e.subject ="
+                        + " :subject")
                 .setParameter("namespace", namespace)
                 .setParameter("subject", subject)
                 .executeUpdate());
@@ -126,7 +133,9 @@ public final class JpaEphemeralStore implements EphemeralStore {
     return database.transaction(
         em ->
             em.createQuery(
-                    "select count(e) from EphemeralEntity e where e.namespace = :namespace and e.expiresAt > instant", Long.class)
+                    "select count(e) from EphemeralEntity e where e.namespace = :namespace and"
+                        + " e.expiresAt > instant",
+                    Long.class)
                 .setParameter("namespace", namespace)
                 .getSingleResult());
   }
@@ -137,7 +146,8 @@ public final class JpaEphemeralStore implements EphemeralStore {
         em -> {
           Map<String, Long> counts = new TreeMap<>();
           em.createQuery(
-                  "select e.namespace, count(e) from EphemeralEntity e where e.expiresAt > instant group by e.namespace",
+                  "select e.namespace, count(e) from EphemeralEntity e where e.expiresAt > instant"
+                      + " group by e.namespace",
                   Object[].class)
               .getResultStream()
               .forEach(row -> counts.put((String) row[0], (Long) row[1]));

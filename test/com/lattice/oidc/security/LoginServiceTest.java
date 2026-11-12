@@ -35,8 +35,13 @@ public class LoginServiceTest {
           String old = hashFromBeforeTheUpgrade("max");
           users.save(max.withPasswordHash(old));
 
-          assertEquals(LoginService.Outcome.INVALID_CREDENTIALS, login.authenticate("max", "wrong").outcome());
-          assertEquals("a wrong password changes nothing", old, users.bySubject(max.getSubject()).orElseThrow().passwordHash());
+          assertEquals(
+              LoginService.Outcome.INVALID_CREDENTIALS,
+              login.authenticate("max", "wrong").outcome());
+          assertEquals(
+              "a wrong password changes nothing",
+              old,
+              users.bySubject(max.getSubject()).orElseThrow().passwordHash());
 
           assertEquals(LoginService.Outcome.SUCCESS, login.authenticate("max", "max").outcome());
           String upgraded = users.bySubject(max.getSubject()).orElseThrow().passwordHash();
@@ -46,13 +51,16 @@ public class LoginServiceTest {
           assertFalse(PasswordHasher.check("wrong", upgraded));
 
           assertEquals(LoginService.Outcome.SUCCESS, login.authenticate("max", "max").outcome());
-          assertEquals("a current hash is not replaced again", upgraded, users.bySubject(max.getSubject()).orElseThrow().passwordHash());
+          assertEquals(
+              "a current hash is not replaced again",
+              upgraded,
+              users.bySubject(max.getSubject()).orElseThrow().passwordHash());
         });
   }
 
   /**
-   * The replacement is conditional: if the owner changed their password after the old one was verified
-   * but before the upgrade was written, the new password must survive.
+   * The replacement is conditional: if the owner changed their password after the old one was
+   * verified but before the upgrade was written, the new password must survive.
    */
   @Test
   public void aHashIsReplacedOnlyIfItIsStillTheOneThatWasVerified() {
@@ -64,7 +72,9 @@ public class LoginServiceTest {
           User max = users.byLoginId("max").orElseThrow();
           users.save(max.withPasswordHash("hash-A"));
 
-          assertFalse("changed since it was checked", users.replacePasswordHash(max.getSubject(), "hash-OLD", "hash-B"));
+          assertFalse(
+              "changed since it was checked",
+              users.replacePasswordHash(max.getSubject(), "hash-OLD", "hash-B"));
           assertEquals("hash-A", users.bySubject(max.getSubject()).orElseThrow().passwordHash());
           assertTrue(users.replacePasswordHash(max.getSubject(), "hash-A", "hash-B"));
           assertEquals("hash-B", users.bySubject(max.getSubject()).orElseThrow().passwordHash());
@@ -83,11 +93,14 @@ public class LoginServiceTest {
           assertEquals(LoginService.Outcome.SUCCESS, login.authenticate("max", "max").outcome());
           for (int i = 0; i < 4; i++) {
             assertEquals(
-                LoginService.Outcome.INVALID_CREDENTIALS, login.authenticate("MAX", "bad").outcome());
+                LoginService.Outcome.INVALID_CREDENTIALS,
+                login.authenticate("MAX", "bad").outcome());
           }
           assertEquals(LoginService.Outcome.LOCKED, login.authenticate("max", "bad").outcome());
-          assertEquals("even the right password is refused while locked",
-              LoginService.Outcome.LOCKED, login.authenticate("max", "max").outcome());
+          assertEquals(
+              "even the right password is refused while locked",
+              LoginService.Outcome.LOCKED,
+              login.authenticate("max", "max").outcome());
           assertEquals(
               LoginService.Outcome.INVALID_CREDENTIALS, login.authenticate("ghost", "x").outcome());
         });
@@ -117,7 +130,8 @@ public class LoginServiceTest {
   @Test
   public void guessesFromManyAddressesStillLockTheAccount() {
     Application app =
-        OidcTestSupport.app(new FakeAuthleteApi(), Map.of("lattice.login.max-failures-per-account", 6));
+        OidcTestSupport.app(
+            new FakeAuthleteApi(), Map.of("lattice.login.max-failures-per-account", 6));
     Helpers.running(
         app,
         () -> {
@@ -126,13 +140,15 @@ public class LoginServiceTest {
             login.authenticate("max", "bad", "203.0.113." + i);
           }
           assertEquals(
-              LoginService.Outcome.LOCKED, login.authenticate("max", "max", "198.51.100.7").outcome());
+              LoginService.Outcome.LOCKED,
+              login.authenticate("max", "max", "198.51.100.7").outcome());
         });
   }
 
   @Test
   public void sprayingManyAccountsFromOneAddressIsLimited() {
-    Application app = OidcTestSupport.app(new FakeAuthleteApi(), Map.of("lattice.login.max-failures-per-ip", 3));
+    Application app =
+        OidcTestSupport.app(new FakeAuthleteApi(), Map.of("lattice.login.max-failures-per-ip", 3));
     Helpers.running(
         app,
         () -> {
@@ -159,7 +175,9 @@ public class LoginServiceTest {
           }
           User max = app.injector().instanceOf(UserStore.class).byLoginId("max").orElseThrow();
           login.unlock(max);
-          assertEquals(LoginService.Outcome.SUCCESS, login.authenticate("max", "max", "203.0.113.9").outcome());
+          assertEquals(
+              LoginService.Outcome.SUCCESS,
+              login.authenticate("max", "max", "203.0.113.9").outcome());
         });
   }
 
@@ -167,7 +185,8 @@ public class LoginServiceTest {
   @Test
   public void aRaisedCostIsAppliedAtTheNextSignIn() {
     Application app =
-        OidcTestSupport.app(new FakeAuthleteApi(), Map.of("lattice.login.argon2.memory-kib", 24_576));
+        OidcTestSupport.app(
+            new FakeAuthleteApi(), Map.of("lattice.login.argon2.memory-kib", 24_576));
     try {
       Helpers.running(
           app,
@@ -175,9 +194,11 @@ public class LoginServiceTest {
             UserStore users = app.injector().instanceOf(UserStore.class);
             LoginService login = app.injector().instanceOf(LoginService.class);
             User max = users.byLoginId("max").orElseThrow();
-            String atDefault = "$argon2id$v=19$m=19456,t=2,p=1$BLsu3zxC5eXb3nouktgyYw$Li1yWpFfMWW1I00InB2XPkcFo56t+rHyoxTdgrfj5xQ";
+            String atDefault =
+                "$argon2id$v=19$m=19456,t=2,p=1$BLsu3zxC5eXb3nouktgyYw$Li1yWpFfMWW1I00InB2XPkcFo56t+rHyoxTdgrfj5xQ";
             users.save(max.withPasswordHash(atDefault));
-            assertEquals(LoginService.Outcome.SUCCESS, login.authenticate("max", "secret").outcome());
+            assertEquals(
+                LoginService.Outcome.SUCCESS, login.authenticate("max", "secret").outcome());
             String upgraded = users.bySubject(max.getSubject()).orElseThrow().passwordHash();
             assertTrue(upgraded, upgraded.startsWith("$argon2id$v=19$m=24576,t=2,p=1$"));
           });
@@ -186,14 +207,19 @@ public class LoginServiceTest {
     }
   }
 
-  /** A cost below OWASP's minimum stops the server from starting rather than weakening new hashes. */
+  /**
+   * A cost below OWASP's minimum stops the server from starting rather than weakening new hashes.
+   */
   @Test
   public void aCostBelowTheMinimumStopsStartup() {
     try {
-      OidcTestSupport.app(new FakeAuthleteApi(), Map.of("lattice.login.argon2.memory-kib", 4_096)).injector().instanceOf(LoginService.class);
+      OidcTestSupport.app(new FakeAuthleteApi(), Map.of("lattice.login.argon2.memory-kib", 4_096))
+          .injector()
+          .instanceOf(LoginService.class);
       throw new AssertionError("started with 4 MiB and 2 passes");
     } catch (RuntimeException e) {
-      assertTrue(String.valueOf(e.getMessage()), String.valueOf(e.getMessage()).contains("below OWASP"));
+      assertTrue(
+          String.valueOf(e.getMessage()), String.valueOf(e.getMessage()).contains("below OWASP"));
     } finally {
       PasswordHasher.configure(PasswordHasher.Cost.DEFAULT);
     }

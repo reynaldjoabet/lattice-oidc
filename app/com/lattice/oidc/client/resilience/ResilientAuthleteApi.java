@@ -16,7 +16,8 @@ public final class ResilientAuthleteApi {
 
   private ResilientAuthleteApi() {}
 
-  public static Wrapped wrap(AuthleteApi delegate, ResilienceConfig config, ResilienceListener listener) {
+  public static Wrapped wrap(
+      AuthleteApi delegate, ResilienceConfig config, ResilienceListener listener) {
     if (!config.isEnabled()) {
       return new Wrapped(delegate, () -> 0);
     }
@@ -24,7 +25,8 @@ public final class ResilientAuthleteApi {
         new ResilientAuthleteApiInvocationHandler(delegate, config, listener);
     AuthleteApi api =
         (AuthleteApi)
-            Proxy.newProxyInstance(AuthleteApi.class.getClassLoader(), new Class<?>[] {AuthleteApi.class}, handler);
+            Proxy.newProxyInstance(
+                AuthleteApi.class.getClassLoader(), new Class<?>[] {AuthleteApi.class}, handler);
     return new Wrapped(api, handler::openBreakers);
   }
 }

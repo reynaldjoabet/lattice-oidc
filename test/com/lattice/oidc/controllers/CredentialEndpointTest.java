@@ -83,7 +83,9 @@ public class CredentialEndpointTest {
     r.setAction(action);
     r.setSubject("1001");
     r.setIssuableCredentials(
-        JsonHelpers.write(List.of(Map.of("credential_configuration_id", "pid", "format", "dc+sd-jwt", "vct", PID))));
+        JsonHelpers.write(
+            List.of(
+                Map.of("credential_configuration_id", "pid", "format", "dc+sd-jwt", "vct", PID))));
     r.setResponseContent("Bearer error=\"invalid_token\"");
     return r;
   }

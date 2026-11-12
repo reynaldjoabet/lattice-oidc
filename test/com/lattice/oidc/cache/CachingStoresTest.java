@@ -26,10 +26,13 @@ import org.junit.Test;
 public class CachingStoresTest {
 
   private static final Metrics METRICS =
-      new Metrics(new play.inject.DelegateApplicationLifecycle(new play.api.inject.DefaultApplicationLifecycle()));
+      new Metrics(
+          new play.inject.DelegateApplicationLifecycle(
+              new play.api.inject.DefaultApplicationLifecycle()));
 
   private static final Config CONFIG =
-      ConfigFactory.parseMap(Map.of("lattice.cache.ttl", "30 seconds", "lattice.cache.maximum-size", 1000));
+      ConfigFactory.parseMap(
+          Map.of("lattice.cache.ttl", "30 seconds", "lattice.cache.maximum-size", 1000));
 
   /** A user store that counts lookups by subject. */
   private static final class CountingUserStore implements UserStore {
@@ -123,26 +126,41 @@ public class CachingStoresTest {
   }
 
   private static User user(String subject, String passwordHash) {
-    return new User(subject, "john", passwordHash, Map.of("name", "John", "email", "john@example.com"), Map.of(), List.of());
+    return new User(
+        subject,
+        "john",
+        passwordHash,
+        Map.of("name", "John", "email", "john@example.com"),
+        Map.of(),
+        List.of());
   }
 
   private static Session session(String id, Instant lastSeen, Instant expires) {
-    return new Session(id, "1001", "ua", "127.0.0.1", "Password", lastSeen, lastSeen, expires, false);
+    return new Session(
+        id, "1001", "ua", "127.0.0.1", "Password", lastSeen, lastSeen, expires, false);
   }
 
   @Test
   public void usersAreServedFromTheCacheUntilTheyChange() {
     CountingUserStore backing = new CountingUserStore();
     backing.save(user("1001", "old-hash"));
-    CachingUserStore users = new CachingUserStore(backing, new LocalReadCache(CONFIG, new LocalInvalidationBus(), METRICS), METRICS);
+    CachingUserStore users =
+        new CachingUserStore(
+            backing, new LocalReadCache(CONFIG, new LocalInvalidationBus(), METRICS), METRICS);
 
     assertEquals("old-hash", users.bySubject("1001").orElseThrow().passwordHash());
     assertEquals("old-hash", users.bySubject("1001").orElseThrow().passwordHash());
     assertEquals("the second lookup is a cache hit", 1, backing.lookups.get());
-    assertEquals("claims survive the cache", "John", users.bySubject("1001").orElseThrow().getClaim("name", null));
+    assertEquals(
+        "claims survive the cache",
+        "John",
+        users.bySubject("1001").orElseThrow().getClaim("name", null));
 
     users.save(user("1001", "new-hash"));
-    assertEquals("a new password is seen at once", "new-hash", users.bySubject("1001").orElseThrow().passwordHash());
+    assertEquals(
+        "a new password is seen at once",
+        "new-hash",
+        users.bySubject("1001").orElseThrow().passwordHash());
   }
 
   /** A hash upgraded at sign-in must not be shadowed by the cached copy of the old one. */
@@ -150,10 +168,14 @@ public class CachingStoresTest {
   public void anUpgradedPasswordHashIsSeenAtOnce() {
     CountingUserStore backing = new CountingUserStore();
     backing.save(user("1001", "old-hash"));
-    CachingUserStore users = new CachingUserStore(backing, new LocalReadCache(CONFIG, new LocalInvalidationBus(), METRICS), METRICS);
+    CachingUserStore users =
+        new CachingUserStore(
+            backing, new LocalReadCache(CONFIG, new LocalInvalidationBus(), METRICS), METRICS);
 
     assertEquals("old-hash", users.bySubject("1001").orElseThrow().passwordHash()); // now cached
-    assertFalse("changed meanwhile: refused", users.replacePasswordHash("1001", "another-hash", "new-hash"));
+    assertFalse(
+        "changed meanwhile: refused",
+        users.replacePasswordHash("1001", "another-hash", "new-hash"));
     assertEquals("old-hash", users.bySubject("1001").orElseThrow().passwordHash());
 
     assertTrue(users.replacePasswordHash("1001", "old-hash", "new-hash"));
@@ -164,8 +186,10 @@ public class CachingStoresTest {
   public void aSignOutOnOneServerIsSeenOnEveryServer() {
     CountingSessionStore shared = new CountingSessionStore();
     LocalInvalidationBus bus = new LocalInvalidationBus();
-    CachingSessionStore serverA = new CachingSessionStore(shared, new LocalReadCache(CONFIG, bus, METRICS), METRICS);
-    CachingSessionStore serverB = new CachingSessionStore(shared, new LocalReadCache(CONFIG, bus, METRICS), METRICS);
+    CachingSessionStore serverA =
+        new CachingSessionStore(shared, new LocalReadCache(CONFIG, bus, METRICS), METRICS);
+    CachingSessionStore serverB =
+        new CachingSessionStore(shared, new LocalReadCache(CONFIG, bus, METRICS), METRICS);
     Instant now = Instant.now();
     shared.create(session("s1", now, now.plusSeconds(3600)));
 
@@ -180,7 +204,9 @@ public class CachingStoresTest {
   @Test
   public void anExpiredSessionIsNotServedFromTheCache() throws InterruptedException {
     CountingSessionStore backing = new CountingSessionStore();
-    CachingSessionStore sessions = new CachingSessionStore(backing, new LocalReadCache(CONFIG, new LocalInvalidationBus(), METRICS), METRICS);
+    CachingSessionStore sessions =
+        new CachingSessionStore(
+            backing, new LocalReadCache(CONFIG, new LocalInvalidationBus(), METRICS), METRICS);
     Instant now = Instant.now();
     backing.create(session("s1", now, now.plusMillis(300)));
     assertTrue(sessions.find("s1").isPresent());
@@ -191,7 +217,9 @@ public class CachingStoresTest {
   @Test
   public void recentActivityIsNotWrittenAgain() {
     CountingSessionStore backing = new CountingSessionStore();
-    CachingSessionStore sessions = new CachingSessionStore(backing, new LocalReadCache(CONFIG, new LocalInvalidationBus(), METRICS), METRICS);
+    CachingSessionStore sessions =
+        new CachingSessionStore(
+            backing, new LocalReadCache(CONFIG, new LocalInvalidationBus(), METRICS), METRICS);
     Instant now = Instant.now();
     backing.create(session("s1", now, now.plusSeconds(3600)));
     sessions.find("s1");

@@ -40,7 +40,8 @@ public class ClientRegistrationTest {
 
   @Before
   public void start() {
-    fake.answer("dynamicClientRegister", args -> response(ClientRegistrationResponse.Action.CREATED))
+    fake.answer(
+            "dynamicClientRegister", args -> response(ClientRegistrationResponse.Action.CREATED))
         .answer("dynamicClientGet", args -> response(ClientRegistrationResponse.Action.OK))
         .answer("dynamicClientDelete", args -> response(ClientRegistrationResponse.Action.DELETED))
         .answer("getClient", args -> new Client().setClientId(7L));
@@ -48,10 +49,14 @@ public class ClientRegistrationTest {
         app(
             fake,
             Map.of(
-                "lattice.obb.enabled", true,
-                "lattice.obb.root-certificates", List.of(ObbTestPki.rootFile()),
-                "lattice.obb.directory-jwks-uri", directory.jwksUri,
-                "lattice.mtls.trust-proxy-headers", true));
+                "lattice.obb.enabled",
+                true,
+                "lattice.obb.root-certificates",
+                List.of(ObbTestPki.rootFile()),
+                "lattice.obb.directory-jwks-uri",
+                directory.jwksUri,
+                "lattice.mtls.trust-proxy-headers",
+                true));
     Helpers.start(app);
   }
 
@@ -68,18 +73,17 @@ public class ClientRegistrationTest {
     return r;
   }
 
-  private static Http.RequestBuilder request(String method, String uri, String body, String certPem) {
+  private static Http.RequestBuilder request(
+      String method, String uri, String body, String certPem) {
     Http.RequestBuilder b =
-        new Http.RequestBuilder()
-            .method(method)
-            .uri(uri)
-            .header("Authorization", "Bearer rat-123");
+        new Http.RequestBuilder().method(method).uri(uri).header("Authorization", "Bearer rat-123");
     if (body != null) {
       b.bodyText(body).header("Content-Type", "application/json");
     }
     if (certPem != null) {
       // As forwarded by a TLS-terminating proxy: URL-encoded PEM.
-      b.header("X-Ssl-Cert", URLEncoder.encode(certPem, StandardCharsets.UTF_8).replace("+", "%20"));
+      b.header(
+          "X-Ssl-Cert", URLEncoder.encode(certPem, StandardCharsets.UTF_8).replace("+", "%20"));
     }
     return b;
   }
@@ -116,18 +120,24 @@ public class ClientRegistrationTest {
     assertEquals(0, fake.count("dynamicClientRegister"));
     assertEquals(0, fake.count("dynamicClientUpdate"));
 
-    String safe = "{\"redirect_uris\":[\"https://client.example/cb\"],\"id_token_encrypted_response_alg\":\"RSA-OAEP-256\"}";
+    String safe =
+        "{\"redirect_uris\":[\"https://client.example/cb\"],\"id_token_encrypted_response_alg\":\"RSA-OAEP-256\"}";
     assertEquals(201, route(app, request("POST", "/api/register", safe, null)).status());
   }
 
-  /** OIDC allows unsigned UserInfo and request objects; they are no weaker than the unsigned defaults. */
+  /**
+   * OIDC allows unsigned UserInfo and request objects; they are no weaker than the unsigned
+   * defaults.
+   */
   @Test
   public void noneIsAllowedWhereOpenIdConnectAllowsIt() {
     for (String member : List.of("userinfo_signed_response_alg", "request_object_signing_alg")) {
-      String body = "{\"redirect_uris\":[\"https://client.example/cb\"],\"" + member + "\":\"none\"}";
+      String body =
+          "{\"redirect_uris\":[\"https://client.example/cb\"],\"" + member + "\":\"none\"}";
       assertEquals(member, 201, route(app, request("POST", "/api/register", body, null)).status());
     }
-    String clientAuth = "{\"redirect_uris\":[\"https://client.example/cb\"],\"token_endpoint_auth_signing_alg\":\"none\"}";
+    String clientAuth =
+        "{\"redirect_uris\":[\"https://client.example/cb\"],\"token_endpoint_auth_signing_alg\":\"none\"}";
     assertEquals(400, route(app, request("POST", "/api/register", clientAuth, null)).status());
   }
 
@@ -142,7 +152,9 @@ public class ClientRegistrationTest {
   @Test
   public void obbRegistrationWithCertificateFromAnotherRootIsRejected() {
     Result r =
-        route(app, request("POST", "/api/register", directory.validRequestBody(), ObbTestPki.STRANGER));
+        route(
+            app,
+            request("POST", "/api/register", directory.validRequestBody(), ObbTestPki.STRANGER));
     assertEquals(401, r.status());
     assertEquals(0, fake.count("dynamicClientRegister"));
   }
@@ -169,11 +181,14 @@ public class ClientRegistrationTest {
   public void managingAnObbClientRequiresItsCertificate() {
     obbClient();
     assertEquals(401, route(app, request("GET", "/api/register/7", null, null)).status());
-    assertEquals(401, route(app, request("DELETE", "/api/register/7", null, ObbTestPki.STRANGER)).status());
+    assertEquals(
+        401, route(app, request("DELETE", "/api/register/7", null, ObbTestPki.STRANGER)).status());
     assertEquals(0, fake.count("dynamicClientGet") + fake.count("dynamicClientDelete"));
 
-    assertEquals(200, route(app, request("GET", "/api/register/7", null, ObbTestPki.LEAF)).status());
-    assertEquals(204, route(app, request("DELETE", "/api/register/7", null, ObbTestPki.LEAF)).status());
+    assertEquals(
+        200, route(app, request("GET", "/api/register/7", null, ObbTestPki.LEAF)).status());
+    assertEquals(
+        204, route(app, request("DELETE", "/api/register/7", null, ObbTestPki.LEAF)).status());
     ClientRegistrationRequest deleted = fake.lastRequest("dynamicClientDelete");
     assertEquals("7", deleted.getClientId());
     assertEquals("rat-123", deleted.getToken());
@@ -191,8 +206,10 @@ public class ClientRegistrationTest {
         app(
             fake,
             Map.of(
-                "lattice.obb.root-certificates", List.of(ObbTestPki.rootFile()),
-                "lattice.obb.directory-jwks-uri", directory.jwksUri));
+                "lattice.obb.root-certificates",
+                List.of(ObbTestPki.rootFile()),
+                "lattice.obb.directory-jwks-uri",
+                directory.jwksUri));
     Helpers.start(app);
     Result r =
         route(app, request("POST", "/api/register", directory.validRequestBody(), ObbTestPki.LEAF));

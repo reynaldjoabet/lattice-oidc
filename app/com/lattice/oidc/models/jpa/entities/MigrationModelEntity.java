@@ -9,64 +9,69 @@ import jakarta.persistence.NamedQueries;
 import jakarta.persistence.NamedQuery;
 import jakarta.persistence.Table;
 
-@Table(name="MIGRATION_MODEL")
+@Table(name = "MIGRATION_MODEL")
 @Entity
 @NamedQueries({
-        @NamedQuery(name = "getLatest", query = "select m from MigrationModelEntity m ORDER BY m.updatedTime DESC")
+  @NamedQuery(
+      name = "getLatest",
+      query = "select m from MigrationModelEntity m ORDER BY m.updatedTime DESC")
 })
 public class MigrationModelEntity {
-    public static final String SINGLETON_ID = "SINGLETON";
-    @Id
-    @Column(name="ID", length = 36)
-    @Access(AccessType.PROPERTY) // we do this because relationships often fetch id, but not entity.  This avoids an extra SQL
-    private String id;
+  public static final String SINGLETON_ID = "SINGLETON";
 
-    @Column(name="VERSION", length = 36)
-    protected String version;
+  @Id
+  @Column(name = "ID", length = 36)
+  @Access(
+      AccessType
+          .PROPERTY) // we do this because relationships often fetch id, but not entity.  This
+                     // avoids an extra SQL
+  private String id;
 
-    @Column(name="UPDATE_TIME")
-    protected long updatedTime;
+  @Column(name = "VERSION", length = 36)
+  protected String version;
 
-    public String getId() {
-        return id;
-    }
+  @Column(name = "UPDATE_TIME")
+  protected long updatedTime;
 
-    public void setId(String id) {
-        this.id = id;
-    }
+  public String getId() {
+    return id;
+  }
 
-    public String getVersion() {
-        return version;
-    }
+  public void setId(String id) {
+    this.id = id;
+  }
 
-    public void setVersion(String version) {
-        this.version = version;
-    }
+  public String getVersion() {
+    return version;
+  }
 
-    public long getUpdateTime() {
-        return updatedTime;
-    }
+  public void setVersion(String version) {
+    this.version = version;
+  }
 
-    public void setUpdatedTime(long updatedTime) {
-        this.updatedTime = updatedTime;
-    }
+  public long getUpdateTime() {
+    return updatedTime;
+  }
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null) return false;
-        if (!(o instanceof MigrationModelEntity)) return false;
+  public void setUpdatedTime(long updatedTime) {
+    this.updatedTime = updatedTime;
+  }
 
-        MigrationModelEntity that = (MigrationModelEntity) o;
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (o == null) return false;
+    if (!(o instanceof MigrationModelEntity)) return false;
 
-        if (!id.equals(that.id)) return false;
+    MigrationModelEntity that = (MigrationModelEntity) o;
 
-        return true;
-    }
+    if (!id.equals(that.id)) return false;
 
-    @Override
-    public int hashCode() {
-        return id.hashCode();
-    }
+    return true;
+  }
 
+  @Override
+  public int hashCode() {
+    return id.hashCode();
+  }
 }

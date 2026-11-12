@@ -22,8 +22,12 @@ public class InMemoryStoresTest {
       store.put("interaction:authz", "flood-" + i, "attacker", null, "{}", Duration.ofMinutes(10));
     }
     long kept = store.count("interaction:authz");
-    assertTrue("each kind is bounded, and trimmed to a little under its cap: " + kept, kept >= 9 && kept <= 10);
-    assertTrue("the entry closest to expiry went first", store.get("interaction:authz", "first").isEmpty());
+    assertTrue(
+        "each kind is bounded, and trimmed to a little under its cap: " + kept,
+        kept >= 9 && kept <= 10);
+    assertTrue(
+        "the entry closest to expiry went first",
+        store.get("interaction:authz", "first").isEmpty());
     assertTrue("other kinds are untouched", store.get("reset-token", "real").isPresent());
   }
 
@@ -42,8 +46,10 @@ public class InMemoryStoresTest {
     }
     long millis = (System.nanoTime() - start) / 1_000_000;
     assertTrue("still bounded", store.count("interaction:authz") <= 20_000);
-    assertTrue("the newest entry is kept", store.get("interaction:authz", "flood-39999").isPresent());
-    assertTrue("40,000 puts took " + millis + " ms; a scan per put takes many seconds", millis < 3_000);
+    assertTrue(
+        "the newest entry is kept", store.get("interaction:authz", "flood-39999").isPresent());
+    assertTrue(
+        "40,000 puts took " + millis + " ms; a scan per put takes many seconds", millis < 3_000);
   }
 
   @Test
@@ -64,7 +70,9 @@ public class InMemoryStoresTest {
     store.put("alerts", "a", null, "1001", "{}", Duration.ofMinutes(1));
     store.put("alerts", "b", null, "1001", "{}", Duration.ofMinutes(2));
     store.put("alerts", "c", null, "1002", "{}", Duration.ofMinutes(1));
-    assertEquals(List.of("a", "b"), store.bySubject("alerts", "1001").stream().map(EphemeralStore.Entry::key).toList());
+    assertEquals(
+        List.of("a", "b"),
+        store.bySubject("alerts", "1001").stream().map(EphemeralStore.Entry::key).toList());
     assertEquals(2, store.deleteBySubject("alerts", "1001"));
     assertEquals(1, store.count("alerts"));
   }
@@ -73,9 +81,20 @@ public class InMemoryStoresTest {
   public void sessionsAreTouchedAtMostOncePerInterval() {
     InMemorySessionStore store = new InMemorySessionStore();
     Instant start = Instant.now().minusSeconds(120);
-    store.create(new Session("s1", "1001", "ua", "127.0.0.1", "Password", start, start, start.plusSeconds(3600), false));
+    store.create(
+        new Session(
+            "s1",
+            "1001",
+            "ua",
+            "127.0.0.1",
+            "Password",
+            start,
+            start,
+            start.plusSeconds(3600),
+            false));
     store.touch("s1", start.plusSeconds(30), Duration.ofMinutes(1));
-    assertEquals("within the interval: no write", start, store.find("s1").orElseThrow().lastSeenAt());
+    assertEquals(
+        "within the interval: no write", start, store.find("s1").orElseThrow().lastSeenAt());
     Instant later = start.plusSeconds(90);
     store.touch("s1", later, Duration.ofMinutes(1));
     assertEquals(later, store.find("s1").orElseThrow().lastSeenAt());
@@ -92,7 +111,8 @@ public class InMemoryStoresTest {
   public void sessionsPastTheirLifetimeAreGone() {
     InMemorySessionStore store = new InMemorySessionStore();
     Instant past = Instant.now().minusSeconds(60);
-    store.create(new Session("s1", "1001", null, null, "Password", past, past, past.plusSeconds(1), false));
+    store.create(
+        new Session("s1", "1001", null, null, "Password", past, past, past.plusSeconds(1), false));
     assertTrue(store.find("s1").isEmpty());
     assertEquals(0, store.countActive());
   }

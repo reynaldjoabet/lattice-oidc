@@ -13,10 +13,10 @@ import com.lattice.oidc.handlers.ObbDcrHandler;
 import com.lattice.oidc.security.AuditService;
 import com.lattice.oidc.security.JoseAlgorithms;
 import com.lattice.oidc.security.ObbCertValidator;
+import jakarta.inject.Inject;
 import java.security.GeneralSecurityException;
 import java.util.Map;
 import java.util.concurrent.CompletionStage;
-import jakarta.inject.Inject;
 import play.mvc.BodyParser;
 import play.mvc.Http;
 import play.mvc.Result;
@@ -35,7 +35,8 @@ import play.mvc.Result;
  *
  * @see <a href="https://www.rfc-editor.org/rfc/rfc7591.html">RFC 7591</a>
  * @see <a href="https://www.rfc-editor.org/rfc/rfc7592.html">RFC 7592</a>
- * @see <a href="https://openid.net/specs/openid-connect-registration-1_0.html">OpenID Connect Dynamic Client Registration</a>
+ * @see <a href="https://openid.net/specs/openid-connect-registration-1_0.html">OpenID Connect
+ *     Dynamic Client Registration</a>
  */
 public final class ClientRegistrationController extends BaseController {
 
@@ -51,9 +52,7 @@ public final class ClientRegistrationController extends BaseController {
     this.obbCerts = obbCerts;
   }
 
-  /**
-   * Dynamic client registration endpoint. The optional bearer token is an initial access token.
-   */
+  /** Dynamic client registration endpoint. The optional bearer token is an initial access token. */
   @BodyParser.Of(BodyParser.TolerantText.class)
   public CompletionStage<Result> register(Http.Request request) {
     String body = request.body().asText();
@@ -69,9 +68,7 @@ public final class ClientRegistrationController extends BaseController {
         });
   }
 
-  /**
-   * Dynamic client registration management endpoint, "read" functionality.
-   */
+  /** Dynamic client registration management endpoint, "read" functionality. */
   public CompletionStage<Result> read(Http.Request request, String clientId) {
     return async(
         () -> {
@@ -81,13 +78,13 @@ public final class ClientRegistrationController extends BaseController {
               clientId,
               api()
                   .dynamicClientGet(
-                      new ClientRegistrationRequest().setClientId(clientId).setToken(bearer(request))));
+                      new ClientRegistrationRequest()
+                          .setClientId(clientId)
+                          .setToken(bearer(request))));
         });
   }
 
-  /**
-   * Dynamic client registration management endpoint, "update" functionality.
-   */
+  /** Dynamic client registration management endpoint, "update" functionality. */
   @BodyParser.Of(BodyParser.TolerantText.class)
   public CompletionStage<Result> update(Http.Request request, String clientId) {
     String body = request.body().asText();
@@ -106,9 +103,7 @@ public final class ClientRegistrationController extends BaseController {
         });
   }
 
-  /**
-   * Dynamic client registration management endpoint, "delete" functionality.
-   */
+  /** Dynamic client registration management endpoint, "delete" functionality. */
   public CompletionStage<Result> delete(Http.Request request, String clientId) {
     return async(
         () -> {
@@ -118,7 +113,9 @@ public final class ClientRegistrationController extends BaseController {
               clientId,
               api()
                   .dynamicClientDelete(
-                      new ClientRegistrationRequest().setClientId(clientId).setToken(bearer(request))));
+                      new ClientRegistrationRequest()
+                          .setClientId(clientId)
+                          .setToken(bearer(request))));
         });
   }
 
@@ -140,7 +137,10 @@ public final class ClientRegistrationController extends BaseController {
     return obbDcr.process(body);
   }
 
-  /** Refuses metadata asking for {@code none}, {@code RSA1_5} or {@code PBES2-*} (see {@link JoseAlgorithms}). */
+  /**
+   * Refuses metadata asking for {@code none}, {@code RSA1_5} or {@code PBES2-*} (see {@link
+   * JoseAlgorithms}).
+   */
   private static void rejectUnsafeAlgorithms(String body) {
     Map<String, Object> metadata;
     try {
@@ -154,7 +154,8 @@ public final class ClientRegistrationController extends BaseController {
     JoseAlgorithms.problem(metadata)
         .ifPresent(
             problem -> {
-              throw new WebException(Responses.badRequest(Responses.error("invalid_client_metadata", problem)));
+              throw new WebException(
+                  Responses.badRequest(Responses.error("invalid_client_metadata", problem)));
             });
   }
 
@@ -181,7 +182,8 @@ public final class ClientRegistrationController extends BaseController {
     } catch (GeneralSecurityException e) {
       throw new WebException(
           Responses.unauthorized(
-              Responses.error("invalid_client", "Client certificate validation failed: " + e.getMessage()),
+              Responses.error(
+                  "invalid_client", "Client certificate validation failed: " + e.getMessage()),
               null,
               null));
     }
@@ -195,8 +197,10 @@ public final class ClientRegistrationController extends BaseController {
               AuditService.Event.CLIENT_REGISTERED,
               "client_id",
               JsonHelpers.readMap(r.getResponseContent()).get("client_id"));
-      case UPDATED -> audit.record(request, AuditService.Event.CLIENT_UPDATED, "client_id", clientId);
-      case DELETED -> audit.record(request, AuditService.Event.CLIENT_DELETED, "client_id", clientId);
+      case UPDATED ->
+          audit.record(request, AuditService.Event.CLIENT_UPDATED, "client_id", clientId);
+      case DELETED ->
+          audit.record(request, AuditService.Event.CLIENT_DELETED, "client_id", clientId);
       default -> {}
     }
     String content = r.getResponseContent();

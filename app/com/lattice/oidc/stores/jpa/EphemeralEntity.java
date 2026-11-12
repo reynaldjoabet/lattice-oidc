@@ -43,7 +43,13 @@ public class EphemeralEntity {
   /** For JPA. */
   protected EphemeralEntity() {}
 
-  EphemeralEntity(String namespace, String entryKey, String owner, String subject, String json, Instant expiresAt) {
+  EphemeralEntity(
+      String namespace,
+      String entryKey,
+      String owner,
+      String subject,
+      String json,
+      Instant expiresAt) {
     this.namespace = namespace;
     this.entryKey = entryKey;
     this.owner = owner;

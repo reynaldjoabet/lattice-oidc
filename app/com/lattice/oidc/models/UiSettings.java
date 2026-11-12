@@ -6,8 +6,8 @@ import play.libs.typedmap.TypedKey;
 import play.mvc.Http;
 
 /**
- * Branding of the end-user pages, from {@code lattice.ui}, and whether password sign-in offers "keep
- * me signed in" ({@code lattice.session.remember-me.enabled}). Read by the page templates.
+ * Branding of the end-user pages, from {@code lattice.ui}, and whether password sign-in offers
+ * "keep me signed in" ({@code lattice.session.remember-me.enabled}). Read by the page templates.
  */
 public record UiSettings(
     String brandName,

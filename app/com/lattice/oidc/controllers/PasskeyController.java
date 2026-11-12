@@ -5,7 +5,6 @@ import com.lattice.oidc.common.Requests;
 import com.lattice.oidc.common.Responses;
 import com.lattice.oidc.common.UserAgents;
 import com.lattice.oidc.handlers.CibaHandler;
-import com.lattice.oidc.models.AuthorizationInteraction;
 import com.lattice.oidc.models.CibaApproval;
 import com.lattice.oidc.models.Passkey;
 import com.lattice.oidc.models.User;
@@ -19,14 +18,13 @@ import com.lattice.oidc.stores.PasskeyStore;
 import com.lattice.oidc.stores.UserStore;
 import com.yubico.webauthn.AssertionRequest;
 import com.yubico.webauthn.data.PublicKeyCredentialCreationOptions;
+import jakarta.inject.Inject;
 import java.time.Instant;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletionStage;
 import java.util.regex.Pattern;
-import jakarta.inject.Inject;
 import play.mvc.BodyParser;
 import play.mvc.Http;
 import play.mvc.Result;
@@ -54,8 +52,10 @@ public final class PasskeyController extends BaseController {
   private static final String KIND = "passkey";
   static final String REAUTH = "reauth";
   private static final String AUTHZ = AuthorizationController.KIND;
+
   /** How long a passkey or password confirmation allows sensitive account changes. */
   static final long REAUTH_SECONDS = 300;
+
   private static final Pattern TICKET = Pattern.compile("[A-Za-z0-9_.~-]{1,200}");
 
   /** A started ceremony, waiting for the browser's response. */
@@ -67,7 +67,8 @@ public final class PasskeyController extends BaseController {
       String creationJson,
       String assertionJson) {
 
-    static Ceremony registration(String next, String subject, PublicKeyCredentialCreationOptions options) {
+    static Ceremony registration(
+        String next, String subject, PublicKeyCredentialCreationOptions options) {
       try {
         return new Ceremony("register", next, subject, null, options.toJson(), null);
       } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
@@ -75,7 +76,8 @@ public final class PasskeyController extends BaseController {
       }
     }
 
-    static Ceremony assertion(String purpose, String next, String subject, String approvalId, AssertionRequest request) {
+    static Ceremony assertion(
+        String purpose, String next, String subject, String approvalId, AssertionRequest request) {
       try {
         return new Ceremony(purpose, next, subject, approvalId, null, request.toJson());
       } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
@@ -145,7 +147,9 @@ public final class PasskeyController extends BaseController {
   public static String url(String next) {
     String safe = safeNext(next);
     if (safe.startsWith("authz:")) {
-      return com.lattice.oidc.controllers.routes.AuthorizationController.continueAuthorization(safe.substring(6)).url();
+      return com.lattice.oidc.controllers.routes.AuthorizationController.continueAuthorization(
+              safe.substring(6))
+          .url();
     }
     return AccountController.DESTINATIONS.get(safe);
   }
@@ -166,9 +170,15 @@ public final class PasskeyController extends BaseController {
     PublicKeyCredentialCreationOptions options = passkeys.startRegistration(current.get().user());
     String id = UserSessions.randomId();
     String browserId = sessions.browserId(request);
-    interactions.put(KIND, id, browserId, Ceremony.registration(next, current.get().user().getSubject(), options));
+    interactions.put(
+        KIND,
+        id,
+        browserId,
+        Ceremony.registration(next, current.get().user().getSubject(), options));
     return sessions.withBrowserId(
-        json(Map.of("ceremony", id, "options", JsonHelpers.readMap(toJson(options)))), request, browserId);
+        json(Map.of("ceremony", id, "options", JsonHelpers.readMap(toJson(options)))),
+        request,
+        browserId);
   }
 
   @BodyParser.Of(BodyParser.Json.class)
@@ -183,17 +193,21 @@ public final class PasskeyController extends BaseController {
               || ceremony.isEmpty()
               || !"register".equals(ceremony.get().purpose())
               || !ceremony.get().subject().equals(current.get().user().getSubject())) {
-            return error(400, "This request has expired.", ceremony.map(Ceremony::next).orElse("account"));
+            return error(
+                400, "This request has expired.", ceremony.map(Ceremony::next).orElse("account"));
           }
           String defaultName = UserAgents.describe(request.header("User-Agent").orElse(null));
           try {
             Passkey passkey =
-                passkeys.finishRegistration(current.get().user(), ceremony.get().creation(), credential, defaultName);
+                passkeys.finishRegistration(
+                    current.get().user(), ceremony.get().creation(), credential, defaultName);
             audit.record(request, AuditService.Event.PASSKEY_ADDED, "subject", passkey.subject());
             return json(
                 Map.of(
                     "redirect",
-                    com.lattice.oidc.controllers.routes.PasskeyController.created(passkey.id(), ceremony.get().next()).url()));
+                    com.lattice.oidc.controllers.routes.PasskeyController.created(
+                            passkey.id(), ceremony.get().next())
+                        .url()));
           } catch (Passkeys.PasskeyException e) {
             return error(400, e.getMessage(), ceremony.get().next());
           }
@@ -203,12 +217,21 @@ public final class PasskeyController extends BaseController {
   /** "Passkey created": name it, then continue. */
   public Result created(Http.Request request, String id, String next) {
     Optional<LoginState> current = sessions.current(request);
-    Optional<Passkey> passkey = store.byId(id).filter(found -> current.isPresent() && found.subject().equals(current.get().user().getSubject()));
+    Optional<Passkey> passkey =
+        store
+            .byId(id)
+            .filter(
+                found ->
+                    current.isPresent()
+                        && found.subject().equals(current.get().user().getSubject()));
     if (passkey.isEmpty()) {
       return Results.seeOther(url(next));
     }
     return Responses.of(
-        200, views.html.oidc.passkeyCreated.render(passkey.get(), safeNext(next), request).body(), Responses.HTML, null);
+        200,
+        views.html.oidc.passkeyCreated.render(passkey.get(), safeNext(next), request).body(),
+        Responses.HTML,
+        null);
   }
 
   public Result name(Http.Request request) {
@@ -216,13 +239,20 @@ public final class PasskeyController extends BaseController {
     String next = safeNext(Requests.first(form, "next"));
     Optional<LoginState> current = sessions.current(request);
     String name = Optional.ofNullable(Requests.first(form, "name")).map(String::trim).orElse("");
-    current.flatMap(state -> store.byId(Requests.first(form, "id")).filter(found -> found.subject().equals(state.user().getSubject())))
+    current
+        .flatMap(
+            state ->
+                store
+                    .byId(Requests.first(form, "id"))
+                    .filter(found -> found.subject().equals(state.user().getSubject())))
         .filter(found -> !name.isEmpty())
-        .ifPresent(found -> store.save(found.withName(name.length() > 60 ? name.substring(0, 60) : name)));
+        .ifPresent(
+            found -> store.save(found.withName(name.length() > 60 ? name.substring(0, 60) : name)));
     return Results.seeOther(url(next));
   }
 
-  // ---------------------------------------------------------------- sign-in, step-up, re-authentication, approval
+  // ---------------------------------------------------------------- sign-in, step-up,
+  // re-authentication, approval
 
   @BodyParser.Of(BodyParser.Json.class)
   public Result assertionOptions(Http.Request request) {
@@ -247,7 +277,10 @@ public final class PasskeyController extends BaseController {
         }
         subject = current.get().user().getSubject();
         approvalId = text(request, "approval");
-        Optional<CibaApproval> approval = ciba.pendingFor(subject).stream().filter(found -> found.id().equals(text(request, "approval"))).findFirst();
+        Optional<CibaApproval> approval =
+            ciba.pendingFor(subject).stream()
+                .filter(found -> found.id().equals(text(request, "approval")))
+                .findFirst();
         if (approval.isEmpty()) {
           return error(400, "This request is no longer waiting.", "ciba");
         }
@@ -259,9 +292,12 @@ public final class PasskeyController extends BaseController {
     }
     String id = UserSessions.randomId();
     String browserId = sessions.browserId(request);
-    interactions.put(KIND, id, browserId, Ceremony.assertion(purpose, next, subject, approvalId, assertion));
+    interactions.put(
+        KIND, id, browserId, Ceremony.assertion(purpose, next, subject, approvalId, assertion));
     return sessions.withBrowserId(
-        json(Map.of("ceremony", id, "options", JsonHelpers.readMap(toJson(assertion)))), request, browserId);
+        json(Map.of("ceremony", id, "options", JsonHelpers.readMap(toJson(assertion)))),
+        request,
+        browserId);
   }
 
   @BodyParser.Of(BodyParser.Json.class)
@@ -283,7 +319,8 @@ public final class PasskeyController extends BaseController {
             return error(400, e.getMessage(), started.next());
           }
           Optional<User> user = users.bySubject(verified.subject());
-          if (user.isEmpty() || (started.subject() != null && !started.subject().equals(verified.subject()))) {
+          if (user.isEmpty()
+              || (started.subject() != null && !started.subject().equals(verified.subject()))) {
             return error(400, "This passkey belongs to another account.", started.next());
           }
           return switch (started.purpose()) {
@@ -295,17 +332,31 @@ public final class PasskeyController extends BaseController {
             case "reauth" -> {
               Optional<LoginState> current = sessions.current(request);
               current.ifPresent(
-                  state -> interactions.put(REAUTH, state.sessionId(), sessions.browserId(request), Instant.now()));
+                  state ->
+                      interactions.put(
+                          REAUTH, state.sessionId(), sessions.browserId(request), Instant.now()));
               yield json(Map.of("ok", true));
             }
             case "approval" -> {
               Optional<CibaApproval> decided =
-                  ciba.decide(verified.subject(), started.approvalId(), true, Optional.of(passkeys.acr()));
+                  ciba.decide(
+                      verified.subject(), started.approvalId(), true, Optional.of(passkeys.acr()));
               if (decided.isEmpty()) {
                 yield error(400, "This request is no longer waiting.", "ciba");
               }
-              audit.record(request, AuditService.Event.CIBA_APPROVED, "subject", verified.subject(), "client", decided.get().clientName(), "method", "passkey");
-              yield json(Map.of("redirect", com.lattice.oidc.controllers.routes.CibaApprovalController.approved().url()));
+              audit.record(
+                  request,
+                  AuditService.Event.CIBA_APPROVED,
+                  "subject",
+                  verified.subject(),
+                  "client",
+                  decided.get().clientName(),
+                  "method",
+                  "passkey");
+              yield json(
+                  Map.of(
+                      "redirect",
+                      com.lattice.oidc.controllers.routes.CibaApprovalController.approved().url()));
             }
             default -> error(400, "Unknown purpose.", started.next());
           };
@@ -317,15 +368,25 @@ public final class PasskeyController extends BaseController {
    * continue. A passkey is itself two factors, so no authenticator code is asked for.
    */
   private Result signIn(Http.Request request, User user, String next) {
-    audit.record(request, AuditService.Event.LOGIN_SUCCEEDED, "subject", user.getSubject(), "method", "passkey");
+    audit.record(
+        request,
+        AuditService.Event.LOGIN_SUCCEEDED,
+        "subject",
+        user.getSubject(),
+        "method",
+        "passkey");
     SignInFlow.Started started = flow.start(request, user, "Passkey", passkeys.acr(), false, next);
-    return sessions.apply(json(Map.of("redirect", started.destination())), request, started.sessionOut());
+    return sessions.apply(
+        json(Map.of("redirect", started.destination())), request, started.sessionOut());
   }
 
   public Result failed(Http.Request request, String next) {
     String safe = safeNext(next);
     return Responses.of(
-        200, views.html.oidc.passkeyFailed.render(url(safe), safe, request).body(), Responses.HTML, null);
+        200,
+        views.html.oidc.passkeyFailed.render(url(safe), safe, request).body(),
+        Responses.HTML,
+        null);
   }
 
   // ---------------------------------------------------------------- removal
@@ -357,15 +418,22 @@ public final class PasskeyController extends BaseController {
           boolean confirmed = recentlyConfirmed(request, current.get());
           String password = Requests.first(Requests.form(request), "password");
           if (!confirmed && password != null && !password.isEmpty() && user.loginId() != null) {
-            LoginService.Result check = login.authenticate(user.loginId(), password, request.remoteAddress());
+            LoginService.Result check =
+                login.authenticate(user.loginId(), password, request.remoteAddress());
             auditPasswordConfirmation(request, user.getSubject(), check);
             if (check.outcome() != LoginService.Outcome.SUCCESS) {
-              return removeView(request, current.get(), passkey.get(), Optional.of(AuthorizationController.failureMessage(check)), 401);
+              return removeView(
+                  request,
+                  current.get(),
+                  passkey.get(),
+                  Optional.of(AuthorizationController.failureMessage(check)),
+                  401);
             }
             confirmed = true;
           }
           if (!confirmed) {
-            return removeView(request, current.get(), passkey.get(), Optional.of("Confirm it's you first."), 401);
+            return removeView(
+                request, current.get(), passkey.get(), Optional.of("Confirm it's you first."), 401);
           }
           store.delete(passkey.get().id());
           audit.record(request, AuditService.Event.PASSKEY_REMOVED, "subject", user.getSubject());
@@ -373,11 +441,17 @@ public final class PasskeyController extends BaseController {
         });
   }
 
-  private Result removeView(Http.Request request, LoginState state, Passkey passkey, Optional<String> error, int status) {
-    boolean otherPasskeys = store.forSubject(state.user().getSubject()).stream().anyMatch(other -> !other.id().equals(passkey.id()));
+  private Result removeView(
+      Http.Request request, LoginState state, Passkey passkey, Optional<String> error, int status) {
+    boolean otherPasskeys =
+        store.forSubject(state.user().getSubject()).stream()
+            .anyMatch(other -> !other.id().equals(passkey.id()));
     return Responses.of(
         status,
-        views.html.oidc.passkeyRemove
+        views
+            .html
+            .oidc
+            .passkeyRemove
             .render(passkey, state.user().passwordHash() != null, otherPasskeys, error, request)
             .body(),
         Responses.HTML,
@@ -386,7 +460,11 @@ public final class PasskeyController extends BaseController {
 
   private boolean recentlyConfirmed(Http.Request request, LoginState state) {
     return interactions
-        .get(REAUTH, state.sessionId(), sessions.existingBrowserId(request).orElse(null), Instant.class)
+        .get(
+            REAUTH,
+            state.sessionId(),
+            sessions.existingBrowserId(request).orElse(null),
+            Instant.class)
         .map(at -> at.plusSeconds(REAUTH_SECONDS).isAfter(Instant.now()))
         .orElse(false);
   }
@@ -398,7 +476,8 @@ public final class PasskeyController extends BaseController {
   // ---------------------------------------------------------------- helpers
 
   private Optional<Ceremony> take(Http.Request request, String id) {
-    return interactions.take(KIND, id, sessions.existingBrowserId(request).orElse(null), Ceremony.class);
+    return interactions.take(
+        KIND, id, sessions.existingBrowserId(request).orElse(null), Ceremony.class);
   }
 
   private static String text(Http.Request request, String field) {

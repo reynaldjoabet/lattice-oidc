@@ -1,9 +1,9 @@
 package com.lattice.oidc.stores.postgres;
 
 import com.lattice.oidc.stores.CounterStore;
-import java.time.Duration;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import java.time.Duration;
 
 /** {@link CounterStore} in PostgreSQL (table {@code counters}). Windows use the database clock. */
 @Singleton
@@ -31,7 +31,8 @@ public final class PostgresCounterStore implements CounterStore {
             RETURNING count
             """,
             row -> row.getLong(1),
-            key, window)
+            key,
+            window)
         .orElseThrow();
   }
 
@@ -39,7 +40,9 @@ public final class PostgresCounterStore implements CounterStore {
   public long count(String key) {
     return database
         .queryOne(
-            "SELECT count FROM counters WHERE key = ? AND window_ends_at > now()", row -> row.getLong(1), key)
+            "SELECT count FROM counters WHERE key = ? AND window_ends_at > now()",
+            row -> row.getLong(1),
+            key)
         .orElse(0L);
   }
 
@@ -57,9 +60,11 @@ public final class PostgresCounterStore implements CounterStore {
   public long countAtLeast(String prefix, long minimum) {
     return database
         .queryOne(
-            "SELECT count(*) FROM counters WHERE starts_with(key, ?) AND count >= ? AND window_ends_at > now()",
+            "SELECT count(*) FROM counters WHERE starts_with(key, ?) AND count >= ? AND"
+                + " window_ends_at > now()",
             row -> row.getLong(1),
-            prefix, minimum)
+            prefix,
+            minimum)
         .orElse(0L);
   }
 }

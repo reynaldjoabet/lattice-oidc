@@ -2,9 +2,9 @@ package com.lattice.oidc.controllers;
 
 import static com.lattice.oidc.OidcTestSupport.app;
 import static com.lattice.oidc.OidcTestSupport.get;
-import static com.lattice.oidc.OidcTestSupport.withCsrf;
 import static com.lattice.oidc.OidcTestSupport.post;
 import static com.lattice.oidc.OidcTestSupport.route;
+import static com.lattice.oidc.OidcTestSupport.withCsrf;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -59,7 +59,8 @@ public class CibaTest {
         ex -> {
           Map<String, Object> body =
               new HashMap<>(
-                  JsonHelpers.readMap(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8)));
+                  JsonHelpers.readMap(
+                      new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8)));
           body.put("path", ex.getRequestURI().getPath());
           deviceRequests.add(body);
           String response =
@@ -111,7 +112,9 @@ public class CibaTest {
     }
   }
 
-  /** Scripts the /backchannel/authentication response: john by email, adjustable by {@code setup}. */
+  /**
+   * Scripts the /backchannel/authentication response: john by email, adjustable by {@code setup}.
+   */
   private void authleteSays(Consumer<BackchannelAuthenticationResponse> setup) {
     fake.answer(
         "backchannelAuthentication",
@@ -131,11 +134,13 @@ public class CibaTest {
   }
 
   private Result authenticate() {
-    return route(app, post("/api/backchannel/authentication", Map.of("login_hint", "john@example.com")));
+    return route(
+        app, post("/api/backchannel/authentication", Map.of("login_hint", "john@example.com")));
   }
 
   private BackchannelAuthenticationFailRequest.Reason failureReason() {
-    BackchannelAuthenticationFailRequest failRequest = fake.lastRequest("backchannelAuthenticationFail");
+    BackchannelAuthenticationFailRequest failRequest =
+        fake.lastRequest("backchannelAuthenticationFail");
     return failRequest.getReason();
   }
 
@@ -151,7 +156,9 @@ public class CibaTest {
     return fake.lastRequest("backchannelAuthenticationComplete");
   }
 
-  /** Sends the device's callback, retrying while the background task has not cached the request yet. */
+  /**
+   * Sends the device's callback, retrying while the background task has not cached the request yet.
+   */
   private Result awaitAcceptedCallback(String body) throws InterruptedException {
     long deadline = System.currentTimeMillis() + 10_000;
     while (true) {
@@ -221,7 +228,10 @@ public class CibaTest {
     assertEquals(200, authenticate().status());
   }
 
-  /** The user code works like a password: after 5 wrong ones, even the right one is refused for a while. */
+  /**
+   * The user code works like a password: after 5 wrong ones, even the right one is refused for a
+   * while.
+   */
   @Test
   public void repeatedWrongUserCodesBlockEvenTheRightOne() throws Exception {
     start("sync");
@@ -270,12 +280,20 @@ public class CibaTest {
                 .setResponseContent("{\"auth_req_id\":\"arid-1\",\"access_token\":\"at-1\"}"));
   }
 
-  /** Push mode carries the tokens, so a failed notification is sent again until the client takes it. */
+  /**
+   * Push mode carries the tokens, so a failed notification is sent again until the client takes it.
+   */
   @Test
   public void aFailedNotificationIsRetried() throws Exception {
     Receiver client = Receiver.answering(500, 204);
     try {
-      start("sync", Map.of("lattice.outbound.allow-private-addresses", true, "lattice.ciba.notification-retry-delays", List.of("100ms", "100ms")));
+      start(
+          "sync",
+          Map.of(
+              "lattice.outbound.allow-private-addresses",
+              true,
+              "lattice.ciba.notification-retry-delays",
+              List.of("100ms", "100ms")));
       authleteNotifies(client.url());
       assertEquals(200, authenticate().status());
       long deadline = System.currentTimeMillis() + 10_000;
@@ -313,7 +331,8 @@ public class CibaTest {
     start("sync");
     authleteSays(r -> r.setBindingMessage("Pay 100\u0007"));
     assertEquals(400, authenticate().status());
-    assertEquals(BackchannelAuthenticationFailRequest.Reason.INVALID_BINDING_MESSAGE, failureReason());
+    assertEquals(
+        BackchannelAuthenticationFailRequest.Reason.INVALID_BINDING_MESSAGE, failureReason());
 
     authleteSays(r -> r.setBindingMessage("x".repeat(129)));
     assertEquals(400, authenticate().status());
@@ -335,9 +354,13 @@ public class CibaTest {
     assertEquals(200, authenticate().status());
     assertEquals(400, deviceCallback("{\"request_id\":\"forged\",\"result\":\"allow\"}").status());
 
-    assertEquals(204, awaitAcceptedCallback("{\"request_id\":\"dev-failRequest-1\",\"result\":\"allow\"}").status());
+    assertEquals(
+        204,
+        awaitAcceptedCallback("{\"request_id\":\"dev-failRequest-1\",\"result\":\"allow\"}")
+            .status());
     assertTrue(String.valueOf(deviceRequests.get(0).get("path")).endsWith("/async"));
-    BackchannelAuthenticationCompleteRequest done = fake.lastRequest("backchannelAuthenticationComplete");
+    BackchannelAuthenticationCompleteRequest done =
+        fake.lastRequest("backchannelAuthenticationComplete");
     assertEquals(BackchannelAuthenticationCompleteRequest.Result.AUTHORIZED, done.getResult());
 
     assertEquals(
@@ -360,7 +383,10 @@ public class CibaTest {
   private Map<String, String> signIn(String loginId) {
     return route(
             app,
-            withCsrf(post("/account/login", Map.of("loginId", loginId, "password", loginId, "next", "ciba"))))
+            withCsrf(
+                post(
+                    "/account/login",
+                    Map.of("loginId", loginId, "password", loginId, "next", "ciba"))))
         .session()
         .data();
   }
@@ -390,13 +416,15 @@ public class CibaTest {
     String id = waitingRequestId(john, "Reference 7Q4K");
 
     Map<String, String> jane = signIn("jane");
-    assertEquals("someone else cannot decide john's request", 400, decide(jane, id, "approve").status());
+    assertEquals(
+        "someone else cannot decide john's request", 400, decide(jane, id, "approve").status());
     assertEquals(0, fake.count("backchannelAuthenticationComplete"));
 
     Result approved = decide(john, id, "approve");
     assertEquals(200, approved.status());
     assertTrue(Helpers.contentAsString(approved).contains("Sign-in approved"));
-    BackchannelAuthenticationCompleteRequest done = fake.lastRequest("backchannelAuthenticationComplete");
+    BackchannelAuthenticationCompleteRequest done =
+        fake.lastRequest("backchannelAuthenticationComplete");
     assertEquals(BackchannelAuthenticationCompleteRequest.Result.AUTHORIZED, done.getResult());
     assertEquals("1001", done.getSubject());
 
@@ -410,7 +438,8 @@ public class CibaTest {
     authenticate();
     Map<String, String> john = signIn("john");
     assertEquals(200, decide(john, waitingRequestId(john, "Bank App"), "deny").status());
-    BackchannelAuthenticationCompleteRequest done = fake.lastRequest("backchannelAuthenticationComplete");
+    BackchannelAuthenticationCompleteRequest done =
+        fake.lastRequest("backchannelAuthenticationComplete");
     assertEquals(BackchannelAuthenticationCompleteRequest.Result.ACCESS_DENIED, done.getResult());
   }
 
@@ -436,8 +465,16 @@ public class CibaTest {
         .instanceOf(com.lattice.oidc.stores.PasskeyStore.class)
         .save(
             new com.lattice.oidc.models.Passkey(
-                "credential-1", "1001", "handle", "cose", 0L, "Phone", java.time.Instant.now(),
-                java.util.Optional.empty(), true, java.util.Set.of("hybrid")));
+                "credential-1",
+                "1001",
+                "handle",
+                "cose",
+                0L,
+                "Phone",
+                java.time.Instant.now(),
+                java.util.Optional.empty(),
+                true,
+                java.util.Set.of("hybrid")));
 
     Map<String, String> john = signIn("john");
     String html = Helpers.contentAsString(route(app, get("/ciba").session(john)));
@@ -449,7 +486,8 @@ public class CibaTest {
     assertTrue("no plain approve button", !html.contains("name=\"approve\""));
 
     String id = waitingRequestId(john, "Merchant A");
-    assertEquals("a form post can't approve for a passkey user", 400, decide(john, id, "approve").status());
+    assertEquals(
+        "a form post can't approve for a passkey user", 400, decide(john, id, "approve").status());
     assertEquals(0, fake.count("backchannelAuthenticationComplete"));
   }
 }

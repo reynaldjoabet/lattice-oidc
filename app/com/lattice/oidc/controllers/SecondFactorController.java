@@ -14,12 +14,12 @@ import com.lattice.oidc.security.UserSessions.LoginState;
 import com.lattice.oidc.stores.CounterStore;
 import com.lattice.oidc.stores.IdentityLinkStore;
 import com.lattice.oidc.stores.UserStore;
+import jakarta.inject.Inject;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletionStage;
-import jakarta.inject.Inject;
 import play.mvc.Http;
 import play.mvc.Result;
 
@@ -27,12 +27,12 @@ import play.mvc.Result;
  * Authenticator apps (TOTP) and recovery codes.
  *
  * <ul>
- *   <li>{@code POST /sign-in/code}: the second step of a password sign-in, with a code from the
- *       app or a recovery code ({@link SignInFlow#challenge}).
+ *   <li>{@code POST /sign-in/code}: the second step of a password sign-in, with a code from the app
+ *       or a recovery code ({@link SignInFlow#challenge}).
  *   <li>{@code GET|POST /account/two-step}: set up an authenticator app (scan the QR code, enter a
  *       code to confirm); new recovery codes are shown once.
- *   <li>{@code POST /account/two-step/remove}, {@code POST /account/recovery-codes}: remove the app,
- *       or replace the recovery codes, after confirming it's you.
+ *   <li>{@code POST /account/two-step/remove}, {@code POST /account/recovery-codes}: remove the
+ *       app, or replace the recovery codes, after confirming it's you.
  * </ul>
  *
  * Wrong codes count against the account: after {@code lattice.login.max-failures} within {@code
@@ -95,12 +95,20 @@ public final class SecondFactorController extends BaseController {
           String failuresKey = "second-factor:" + subject;
           if (counters.count(failuresKey) >= config.loginMaxFailures()) {
             interactions.take(SignInFlow.SECOND_FACTOR, id, browserId, SignInFlow.Pending.class);
-            audit.record(request, AuditService.Event.LOGIN_LOCKED, "subject", subject, "step", "second_factor");
-            return Pages.message(request, 429, "Too many wrong codes", "Wait a while, then sign in again.");
+            audit.record(
+                request,
+                AuditService.Event.LOGIN_LOCKED,
+                "subject",
+                subject,
+                "step",
+                "second_factor");
+            return Pages.message(
+                request, 429, "Too many wrong codes", "Wait a while, then sign in again.");
           }
 
           String code = Optional.ofNullable(Requests.first(form, "code")).orElse("");
-          String recoveryCode = Optional.ofNullable(Requests.first(form, "recoveryCode")).orElse("");
+          String recoveryCode =
+              Optional.ofNullable(Requests.first(form, "recoveryCode")).orElse("");
           boolean usedRecoveryCode = code.isBlank() && !recoveryCode.isBlank();
           boolean accepted =
               usedRecoveryCode
@@ -109,14 +117,25 @@ public final class SecondFactorController extends BaseController {
           if (!accepted) {
             counters.increment(failuresKey, config.loginLockout());
             audit.record(
-                request, AuditService.Event.SECOND_FACTOR_FAILED, "subject", subject, "factor", usedRecoveryCode ? "recovery_code" : "totp");
+                request,
+                AuditService.Event.SECOND_FACTOR_FAILED,
+                "subject",
+                subject,
+                "factor",
+                usedRecoveryCode ? "recovery_code" : "totp");
             return Responses.of(
                 401,
-                views.html.oidc.secondFactor
+                views
+                    .html
+                    .oidc
+                    .secondFactor
                     .render(
                         id,
                         secondFactors.remainingRecoveryCodes(subject) > 0,
-                        Optional.of(usedRecoveryCode ? "That recovery code isn't valid." : "That code isn't valid. Try the current one."),
+                        Optional.of(
+                            usedRecoveryCode
+                                ? "That recovery code isn't valid."
+                                : "That code isn't valid. Try the current one."),
                         request)
                     .body(),
                 Responses.HTML,
@@ -124,17 +143,31 @@ public final class SecondFactorController extends BaseController {
           }
 
           // Single use: of two concurrent submissions, only one continues.
-          if (interactions.take(SignInFlow.SECOND_FACTOR, id, browserId, SignInFlow.Pending.class).isEmpty()) {
+          if (interactions
+              .take(SignInFlow.SECOND_FACTOR, id, browserId, SignInFlow.Pending.class)
+              .isEmpty()) {
             return Pages.message(request, 400, "Sign-in expired", "Please sign in again.");
           }
           counters.reset(failuresKey);
           SignInFlow.Pending signIn = pending.get();
           if (signIn.linkProviderId() != null) {
             links.link(signIn.linkProviderId(), signIn.linkExternalSubject(), subject);
-            audit.record(request, AuditService.Event.ACCOUNT_LINKED, "subject", subject, "provider", signIn.linkProviderId());
+            audit.record(
+                request,
+                AuditService.Event.ACCOUNT_LINKED,
+                "subject",
+                subject,
+                "provider",
+                signIn.linkProviderId());
           }
           String factor = usedRecoveryCode ? "recovery_code" : "totp";
-          audit.record(request, AuditService.Event.LOGIN_SUCCEEDED, "subject", subject, "method", "password + " + factor);
+          audit.record(
+              request,
+              AuditService.Event.LOGIN_SUCCEEDED,
+              "subject",
+              subject,
+              "method",
+              "password + " + factor);
           if (usedRecoveryCode) {
             audit.record(
                 request,
@@ -145,7 +178,12 @@ public final class SecondFactorController extends BaseController {
                 secondFactors.remainingRecoveryCodes(subject));
           }
           return flow.startAndRedirect(
-              request, user.get(), signIn.method() + " + " + factor, secondFactors.acr(), signIn.rememberMe(), signIn.next());
+              request,
+              user.get(),
+              signIn.method() + " + " + factor,
+              secondFactors.acr(),
+              signIn.rememberMe(),
+              signIn.next());
         });
   }
 
@@ -157,8 +195,19 @@ public final class SecondFactorController extends BaseController {
         state -> {
           SecondFactors.Enrollment enrollment = secondFactors.startEnrollment(state.user());
           // The secret waits, encrypted and bound to this browser, until a code confirms it.
-          interactions.put(SETUP, state.sessionId(), sessions.browserId(request), cipher.encrypt(enrollment.secret()));
-          return page(200, views.html.oidc.twoStepSetup.render(enrollment, PasskeyController.safeNext(next), Optional.empty(), request).body());
+          interactions.put(
+              SETUP,
+              state.sessionId(),
+              sessions.browserId(request),
+              cipher.encrypt(enrollment.secret()));
+          return page(
+              200,
+              views
+                  .html
+                  .oidc
+                  .twoStepSetup
+                  .render(enrollment, PasskeyController.safeNext(next), Optional.empty(), request)
+                  .body());
         });
   }
 
@@ -170,23 +219,47 @@ public final class SecondFactorController extends BaseController {
           String next = PasskeyController.safeNext(Requests.first(form, "next"));
           String browserId = sessions.existingBrowserId(request).orElse(null);
           Optional<String> secret =
-              interactions.get(SETUP, state.sessionId(), browserId, String.class).map(cipher::decrypt);
+              interactions
+                  .get(SETUP, state.sessionId(), browserId, String.class)
+                  .map(cipher::decrypt);
           if (secret.isEmpty()) {
-            return play.mvc.Results.seeOther(com.lattice.oidc.controllers.routes.SecondFactorController.setupPage(next));
+            return play.mvc.Results.seeOther(
+                com.lattice.oidc.controllers.routes.SecondFactorController.setupPage(next));
           }
           String subject = state.user().getSubject();
-          if (!secondFactors.finishEnrollment(subject, secret.get(), Requests.first(form, "code"))) {
+          if (!secondFactors.finishEnrollment(
+              subject, secret.get(), Requests.first(form, "code"))) {
             SecondFactors.Enrollment again = secondFactors.enrollment(state.user(), secret.get());
             return page(
                 400,
-                views.html.oidc.twoStepSetup
-                    .render(again, next, Optional.of("That code isn't valid. Enter the current code from the app."), request)
+                views
+                    .html
+                    .oidc
+                    .twoStepSetup
+                    .render(
+                        again,
+                        next,
+                        Optional.of("That code isn't valid. Enter the current code from the app."),
+                        request)
                     .body());
           }
           interactions.take(SETUP, state.sessionId(), browserId, String.class);
-          audit.record(request, AuditService.Event.SECOND_FACTOR_ADDED, "subject", subject, "factor", "totp");
+          audit.record(
+              request,
+              AuditService.Event.SECOND_FACTOR_ADDED,
+              "subject",
+              subject,
+              "factor",
+              "totp");
           List<String> codes = secondFactors.newRecoveryCodes(subject);
-          return page(200, views.html.oidc.recoveryCodes.render(codes, SignInFlow.actionsUrl(next), request).body());
+          return page(
+              200,
+              views
+                  .html
+                  .oidc
+                  .recoveryCodes
+                  .render(codes, SignInFlow.actionsUrl(next), request)
+                  .body());
         });
   }
 
@@ -197,10 +270,20 @@ public final class SecondFactorController extends BaseController {
         request,
         state -> {
           if (!confirmed(request, state)) {
-            return Pages.message(request, 401, "Confirm it's you", "Enter your password (or confirm with a passkey) to remove the app.");
+            return Pages.message(
+                request,
+                401,
+                "Confirm it's you",
+                "Enter your password (or confirm with a passkey) to remove the app.");
           }
           secondFactors.remove(state.user().getSubject());
-          audit.record(request, AuditService.Event.SECOND_FACTOR_REMOVED, "subject", state.user().getSubject(), "factor", "totp");
+          audit.record(
+              request,
+              AuditService.Event.SECOND_FACTOR_REMOVED,
+              "subject",
+              state.user().getSubject(),
+              "factor",
+              "totp");
           return play.mvc.Results.seeOther(AccountController.DESTINATIONS.get("account"));
         });
   }
@@ -214,18 +297,30 @@ public final class SecondFactorController extends BaseController {
             return play.mvc.Results.seeOther(AccountController.DESTINATIONS.get("account"));
           }
           if (!confirmed(request, state)) {
-            return Pages.message(request, 401, "Confirm it's you", "Enter your password (or confirm with a passkey) to get new codes.");
+            return Pages.message(
+                request,
+                401,
+                "Confirm it's you",
+                "Enter your password (or confirm with a passkey) to get new codes.");
           }
           audit.record(request, AuditService.Event.RECOVERY_CODES_REPLACED, "subject", subject);
           return page(
               200,
-              views.html.oidc.recoveryCodes
-                  .render(secondFactors.newRecoveryCodes(subject), AccountController.DESTINATIONS.get("account"), request)
+              views
+                  .html
+                  .oidc
+                  .recoveryCodes
+                  .render(
+                      secondFactors.newRecoveryCodes(subject),
+                      AccountController.DESTINATIONS.get("account"),
+                      request)
                   .body());
         });
   }
 
-  /** The password, or a passkey confirmation within the last few minutes for accounts without one. */
+  /**
+   * The password, or a passkey confirmation within the last few minutes for accounts without one.
+   */
   private boolean confirmed(Http.Request request, LoginState state) {
     User user = state.user();
     String password = Requests.first(Requests.form(request), "password");
@@ -233,17 +328,23 @@ public final class SecondFactorController extends BaseController {
       if (password == null || password.isEmpty()) {
         return false;
       }
-      LoginService.Result check = login.authenticate(user.loginId(), password, request.remoteAddress());
+      LoginService.Result check =
+          login.authenticate(user.loginId(), password, request.remoteAddress());
       auditPasswordConfirmation(request, user.getSubject(), check);
       return check.outcome() == LoginService.Outcome.SUCCESS;
     }
     return interactions
-        .get(PasskeyController.REAUTH, state.sessionId(), sessions.existingBrowserId(request).orElse(null), Instant.class)
+        .get(
+            PasskeyController.REAUTH,
+            state.sessionId(),
+            sessions.existingBrowserId(request).orElse(null),
+            Instant.class)
         .map(at -> at.plusSeconds(PasskeyController.REAUTH_SECONDS).isAfter(Instant.now()))
         .orElse(false);
   }
 
-  private CompletionStage<Result> signedIn(Http.Request request, java.util.function.Function<LoginState, Result> action) {
+  private CompletionStage<Result> signedIn(
+      Http.Request request, java.util.function.Function<LoginState, Result> action) {
     return async(
         () -> {
           Optional<LoginState> current = sessions.current(request);

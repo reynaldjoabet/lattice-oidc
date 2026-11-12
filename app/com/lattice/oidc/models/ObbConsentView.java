@@ -13,7 +13,8 @@ import java.util.Optional;
  * What the consent page shows for an Open Banking consent: the account the data comes from, each
  * permission in plain language (with its code) and when access ends.
  */
-public record ObbConsentView(String account, List<Permission> permissions, Optional<String> expires) {
+public record ObbConsentView(
+    String account, List<Permission> permissions, Optional<String> expires) {
 
   public record Permission(String label, String code) {}
 
@@ -28,7 +29,8 @@ public record ObbConsentView(String account, List<Permission> permissions, Optio
           Map.entry("ACCOUNTS_OVERDRAFT_LIMITS_READ", "Overdraft limits"),
           Map.entry("CREDIT_CARDS_ACCOUNTS_READ", "Credit card accounts"),
           Map.entry("CREDIT_CARDS_ACCOUNTS_BILLS_READ", "Credit card bills"),
-          Map.entry("CREDIT_CARDS_ACCOUNTS_BILLS_TRANSACTIONS_READ", "Credit card bill transactions"),
+          Map.entry(
+              "CREDIT_CARDS_ACCOUNTS_BILLS_TRANSACTIONS_READ", "Credit card bill transactions"),
           Map.entry("CREDIT_CARDS_ACCOUNTS_LIMITS_READ", "Credit card limits"),
           Map.entry("CREDIT_CARDS_ACCOUNTS_TRANSACTIONS_READ", "Credit card transactions"),
           Map.entry("CUSTOMERS_PERSONAL_IDENTIFICATIONS_READ", "Personal identification"),

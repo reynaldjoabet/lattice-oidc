@@ -30,6 +30,8 @@ import com.yubico.webauthn.data.UserVerificationRequirement;
 import com.yubico.webauthn.data.exception.Base64UrlException;
 import com.yubico.webauthn.exception.AssertionFailedException;
 import com.yubico.webauthn.exception.RegistrationFailedException;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
@@ -40,8 +42,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 
 /**
  * Passkeys (WebAuthn) for Lattice accounts, on Yubico's WebAuthn server library.
@@ -175,7 +175,9 @@ public final class Passkeys {
   /** Usernameless sign-in: any passkey of any account on this site. */
   public AssertionRequest startSignIn() {
     return relyingParty.startAssertion(
-        StartAssertionOptions.builder().userVerification(UserVerificationRequirement.REQUIRED).build());
+        StartAssertionOptions.builder()
+            .userVerification(UserVerificationRequirement.REQUIRED)
+            .build());
   }
 
   /** Verification of a known account (step-up, re-authentication): only its passkeys. */
@@ -214,7 +216,8 @@ public final class Passkeys {
   }
 
   /** Verifies the browser's response to {@code request}; records the use of the passkey. */
-  public Verified finishAssertion(AssertionRequest request, String responseJson) throws PasskeyException {
+  public Verified finishAssertion(AssertionRequest request, String responseJson)
+      throws PasskeyException {
     try {
       AssertionResult result =
           relyingParty.finishAssertion(

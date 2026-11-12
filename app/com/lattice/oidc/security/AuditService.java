@@ -5,11 +5,11 @@ import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.filters.RequestIdFilter;
 import com.lattice.oidc.metrics.Metrics;
 import com.lattice.oidc.stores.AuditEventStore;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import play.mvc.Http;
@@ -67,7 +67,10 @@ public final class AuditService {
     EMAIL_VERIFIED,
     TERMS_ACCEPTED,
     TERMS_DECLINED,
-    /** An operator replaced an account's identity-verification data ({@code account}, {@code datasets}). */
+    /**
+     * An operator replaced an account's identity-verification data ({@code account}, {@code
+     * datasets}).
+     */
     VERIFIED_CLAIMS_UPDATED
   }
 
@@ -100,7 +103,8 @@ public final class AuditService {
   private final Webhooks webhooks;
 
   @Inject
-  public AuditService(Sink sink, SecurityStats stats, Metrics metrics, AuditEventStore store, Webhooks webhooks) {
+  public AuditService(
+      Sink sink, SecurityStats stats, Metrics metrics, AuditEventStore store, Webhooks webhooks) {
     this.sink = sink;
     this.stats = stats;
     this.metrics = metrics;
@@ -113,8 +117,8 @@ public final class AuditService {
    *
    * @param request the request that triggered the event (for request id and client address)
    * @param event what happened
-   * @param details event-specific, non-secret attributes (e.g. subject, client_id); null values
-   *     are skipped
+   * @param details event-specific, non-secret attributes (e.g. subject, client_id); null values are
+   *     skipped
    */
   public void record(Http.RequestHeader request, Event event, Object... details) {
     Map<String, Object> record = new LinkedHashMap<>();
@@ -143,7 +147,12 @@ public final class AuditService {
 
   /** The most recent events, newest first (for the operator console). */
   public java.util.List<Map<String, Object>> recent() {
-    return search(new AuditEventStore.Query(java.util.Optional.empty(), java.util.Optional.empty(), java.util.Optional.empty(), RECENT_LIMIT));
+    return search(
+        new AuditEventStore.Query(
+            java.util.Optional.empty(),
+            java.util.Optional.empty(),
+            java.util.Optional.empty(),
+            RECENT_LIMIT));
   }
 
   /** Stored events matching the query, newest first (the console's audit log). */

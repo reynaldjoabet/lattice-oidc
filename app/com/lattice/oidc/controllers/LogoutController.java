@@ -5,13 +5,13 @@ import com.lattice.oidc.common.Responses;
 import com.lattice.oidc.handlers.LogoutHandler;
 import com.lattice.oidc.models.LogoutRequest;
 import com.lattice.oidc.security.AuditService;
-import com.lattice.oidc.security.UserSessions.LoginState;
 import com.lattice.oidc.security.UserSessions;
+import com.lattice.oidc.security.UserSessions.LoginState;
+import jakarta.inject.Inject;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletionStage;
-import jakarta.inject.Inject;
 import play.mvc.Http;
 import play.mvc.Result;
 
@@ -20,8 +20,10 @@ import play.mvc.Result;
  * 1.0 notifications. Without a valid {@code id_token_hint} for the current user the end-user is
  * asked to confirm, so third-party sites cannot silently log users out.
  *
- * @see <a href="https://openid.net/specs/openid-connect-rpinitiated-1_0.html">OpenID Connect RP-Initiated Logout 1.0</a>
- * @see <a href="https://openid.net/specs/openid-connect-backchannel-1_0.html">OpenID Connect Back-Channel Logout 1.0</a>
+ * @see <a href="https://openid.net/specs/openid-connect-rpinitiated-1_0.html">OpenID Connect
+ *     RP-Initiated Logout 1.0</a>
+ * @see <a href="https://openid.net/specs/openid-connect-backchannel-1_0.html">OpenID Connect
+ *     Back-Channel Logout 1.0</a>
  */
 public final class LogoutController extends BaseController {
 
@@ -65,7 +67,12 @@ public final class LogoutController extends BaseController {
       // Ask the end-user to confirm, listing the apps they will also be signed out of.
       return Responses.of(
           200,
-          views.html.oidc.logoutConfirm.render(logoutRequest, appNames(current.get()), request).body(),
+          views
+              .html
+              .oidc
+              .logoutConfirm
+              .render(logoutRequest, appNames(current.get()), request)
+              .body(),
           Responses.HTML,
           null);
     }

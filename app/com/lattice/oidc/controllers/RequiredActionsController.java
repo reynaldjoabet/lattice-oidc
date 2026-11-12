@@ -12,13 +12,13 @@ import com.lattice.oidc.security.RequiredActions.Action;
 import com.lattice.oidc.security.UserSessions;
 import com.lattice.oidc.security.UserSessions.LoginState;
 import com.lattice.oidc.stores.UserStore;
+import jakarta.inject.Inject;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Function;
-import jakarta.inject.Inject;
 import play.mvc.Http;
 import play.mvc.Result;
 import play.mvc.Results;
@@ -67,18 +67,42 @@ public final class RequiredActionsController extends BaseController {
         });
   }
 
-  private Result show(Http.Request request, User user, Action action, String next, Optional<String> message, int status) {
+  private Result show(
+      Http.Request request,
+      User user,
+      Action action,
+      String next,
+      Optional<String> message,
+      int status) {
     String html =
         switch (action) {
-          case VERIFY_EMAIL -> views.html.oidc.requiredVerifyEmail.render(user.email().orElse(""), next, message, request).body();
+          case VERIFY_EMAIL ->
+              views
+                  .html
+                  .oidc
+                  .requiredVerifyEmail
+                  .render(user.email().orElse(""), next, message, request)
+                  .body();
           case TERMS_AND_CONDITIONS ->
-              views.html.oidc.requiredTerms.render(UiSettings.of(request).termsUrl(), actions.termsVersion(), next, request).body();
-          case UPDATE_PASSWORD -> views.html.oidc.requiredPassword.render(next, message.map(List::of).orElse(List.of()), request).body();
+              views
+                  .html
+                  .oidc
+                  .requiredTerms
+                  .render(UiSettings.of(request).termsUrl(), actions.termsVersion(), next, request)
+                  .body();
+          case UPDATE_PASSWORD ->
+              views
+                  .html
+                  .oidc
+                  .requiredPassword
+                  .render(next, message.map(List::of).orElse(List.of()), request)
+                  .body();
           case CONFIGURE_PASSKEY -> views.html.oidc.requiredPasskey.render(next, request).body();
           case CONFIGURE_TOTP -> null;
         };
     if (html == null) {
-      return Results.seeOther(com.lattice.oidc.controllers.routes.SecondFactorController.setupPage(next));
+      return Results.seeOther(
+          com.lattice.oidc.controllers.routes.SecondFactorController.setupPage(next));
     }
     return Responses.of(status, html, Responses.HTML, null).withHeader(CACHE_CONTROL, "no-store");
   }
@@ -94,13 +118,20 @@ public final class RequiredActionsController extends BaseController {
           boolean sent =
               emails.send(
                   state.user(),
-                  token -> base + com.lattice.oidc.controllers.routes.RequiredActionsController.verifyEmail(token).url());
+                  token ->
+                      base
+                          + com.lattice.oidc.controllers.routes.RequiredActionsController
+                              .verifyEmail(token)
+                              .url());
           return show(
               request,
               state.user(),
               Action.VERIFY_EMAIL,
               next,
-              Optional.of(sent ? "We've sent a new link. It works for 24 hours." : "Please wait a few minutes before asking for another link."),
+              Optional.of(
+                  sent
+                      ? "We've sent a new link. It works for 24 hours."
+                      : "Please wait a few minutes before asking for another link."),
               sent ? 200 : 429);
         });
   }
@@ -110,10 +141,16 @@ public final class RequiredActionsController extends BaseController {
         () -> {
           Optional<User> verified = emails.verify(token);
           if (verified.isEmpty()) {
-            return Pages.message(request, 400, "Link expired", "This link has expired or was already used. Sign in to get a new one.");
+            return Pages.message(
+                request,
+                400,
+                "Link expired",
+                "This link has expired or was already used. Sign in to get a new one.");
           }
-          audit.record(request, AuditService.Event.EMAIL_VERIFIED, "subject", verified.get().getSubject());
-          return Pages.success(request, "Email verified", "Thanks. You can go back to where you were signing in.");
+          audit.record(
+              request, AuditService.Event.EMAIL_VERIFIED, "subject", verified.get().getSubject());
+          return Pages.success(
+              request, "Email verified", "Thanks. You can go back to where you were signing in.");
         });
   }
 
@@ -126,14 +163,25 @@ public final class RequiredActionsController extends BaseController {
           Map<String, String[]> form = Requests.form(request);
           String next = PasskeyController.safeNext(Requests.first(form, "next"));
           if (!form.containsKey("accept")) {
-            audit.record(request, AuditService.Event.TERMS_DECLINED, "subject", state.user().getSubject());
+            audit.record(
+                request, AuditService.Event.TERMS_DECLINED, "subject", state.user().getSubject());
             return sessions.logout(
-                Pages.message(request, 200, "Signed out", "You need to accept the terms to use your account."),
+                Pages.message(
+                    request,
+                    200,
+                    "Signed out",
+                    "You need to accept the terms to use your account."),
                 request,
                 state.sessionId());
           }
           actions.acceptTerms(state.user());
-          audit.record(request, AuditService.Event.TERMS_ACCEPTED, "subject", state.user().getSubject(), "version", actions.termsVersion());
+          audit.record(
+              request,
+              AuditService.Event.TERMS_ACCEPTED,
+              "subject",
+              state.user().getSubject(),
+              "version",
+              actions.termsVersion());
           return Results.seeOther(SignInFlow.actionsUrl(next));
         });
   }
@@ -154,16 +202,28 @@ public final class RequiredActionsController extends BaseController {
           }
           if (!problems.isEmpty()) {
             return Responses.of(
-                    400, views.html.oidc.requiredPassword.render(next, problems, request).body(), Responses.HTML, null)
+                    400,
+                    views.html.oidc.requiredPassword.render(next, problems, request).body(),
+                    Responses.HTML,
+                    null)
                 .withHeader(CACHE_CONTROL, "no-store");
           }
-          users.save(actions.cleared(user.withPasswordHash(PasswordPolicy.hash(password)), Action.UPDATE_PASSWORD));
-          audit.record(request, AuditService.Event.PASSWORD_CHANGED, "subject", user.getSubject(), "required_action", true);
+          users.save(
+              actions.cleared(
+                  user.withPasswordHash(PasswordPolicy.hash(password)), Action.UPDATE_PASSWORD));
+          audit.record(
+              request,
+              AuditService.Event.PASSWORD_CHANGED,
+              "subject",
+              user.getSubject(),
+              "required_action",
+              true);
           return Results.seeOther(SignInFlow.actionsUrl(next));
         });
   }
 
-  private CompletionStage<Result> signedIn(Http.Request request, Function<LoginState, Result> action) {
+  private CompletionStage<Result> signedIn(
+      Http.Request request, Function<LoginState, Result> action) {
     return async(
         () -> {
           Optional<LoginState> current = sessions.current(request);

@@ -22,7 +22,10 @@ import org.junit.Test;
 import play.Application;
 import play.test.Helpers;
 
-/** Single-use state and rate-limit counters in PostgreSQL ({@code lattice.short-lived-state = storage}). */
+/**
+ * Single-use state and rate-limit counters in PostgreSQL ({@code lattice.short-lived-state =
+ * storage}).
+ */
 public class PostgresShortLivedStoresTest {
 
   private static Application app;
@@ -94,7 +97,10 @@ public class PostgresShortLivedStoresTest {
     String ns = unique("ns");
     entries.put(ns, "code", null, null, "{}", LONG);
     List<Optional<Entry>> taken = concurrently(8, () -> entries.take(ns, "code"));
-    assertEquals("exactly one caller receives the entry", 1, taken.stream().filter(Optional::isPresent).count());
+    assertEquals(
+        "exactly one caller receives the entry",
+        1,
+        taken.stream().filter(Optional::isPresent).count());
     assertEquals(Optional.empty(), entries.get(ns, "code"));
   }
 
@@ -104,7 +110,9 @@ public class PostgresShortLivedStoresTest {
     entries.put(ns, "later", null, "alice", "{}", Duration.ofMinutes(9));
     entries.put(ns, "sooner", null, "alice", "{}", Duration.ofMinutes(3));
     entries.put(ns, "bob", null, "bob", "{}", LONG);
-    assertEquals(List.of("sooner", "later"), entries.bySubject(ns, "alice").stream().map(Entry::key).toList());
+    assertEquals(
+        List.of("sooner", "later"),
+        entries.bySubject(ns, "alice").stream().map(Entry::key).toList());
     assertEquals(2, entries.deleteBySubject(ns, "alice"));
     assertEquals(List.of(), entries.bySubject(ns, "alice"));
     assertEquals(1, entries.count(ns));

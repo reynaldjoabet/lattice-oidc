@@ -84,7 +84,8 @@ public class AuthorizationFlowTest {
 
   private Result consentPage() {
     Result page =
-        route(app, withCsrf(get("/api/authorization?response_type=code&client_id=42&scope=openid")));
+        route(
+            app, withCsrf(get("/api/authorization?response_type=code&client_id=42&scope=openid")));
     assertEquals(200, page.status());
     return page;
   }
@@ -112,7 +113,15 @@ public class AuthorizationFlowTest {
             app,
             decision(
                 page,
-                Map.of("ticket", "ticket-1", "loginId", "john", "password", "john", "authorized", "true")));
+                Map.of(
+                    "ticket",
+                    "ticket-1",
+                    "loginId",
+                    "john",
+                    "password",
+                    "john",
+                    "authorized",
+                    "true")));
     assertEquals(302, r.status());
     assertEquals("https://client.example/cb?code=abc", r.redirectLocation().orElse(null));
 
@@ -123,21 +132,33 @@ public class AuthorizationFlowTest {
     assertEquals(issue.getSessionId(), r.session().get("session_id").orElse(null));
 
     // The ticket is single-use.
-    Result replay =
-        route(app, decision(page, Map.of("ticket", "ticket-1", "authorized", "true")));
+    Result replay = route(app, decision(page, Map.of("ticket", "ticket-1", "authorized", "true")));
     assertEquals(400, replay.status());
   }
 
   @Test
   public void theReleasedClaimsAreSentAsConsentedClaims() {
     Result page = consentPage();
-    route(app, decision(page, Map.of("ticket", "ticket-1", "loginId", "john", "password", "john", "authorized", "true")));
+    route(
+        app,
+        decision(
+            page,
+            Map.of(
+                "ticket",
+                "ticket-1",
+                "loginId",
+                "john",
+                "password",
+                "john",
+                "authorized",
+                "true")));
     AuthorizationIssueRequest issue = fake.lastRequest("authorizationIssue");
-    assertEquals(
-        java.util.Set.of("name", "email"), java.util.Set.of(issue.getConsentedClaims()));
+    assertEquals(java.util.Set.of("name", "email"), java.util.Set.of(issue.getConsentedClaims()));
   }
 
-  /** An authorization request that would merge into (or replace) the grant of {@code grantSubject}. */
+  /**
+   * An authorization request that would merge into (or replace) the grant of {@code grantSubject}.
+   */
   private void grantOf(String grantSubject) {
     fake.answer(
         "authorization",
@@ -155,7 +176,19 @@ public class AuthorizationFlowTest {
     grantOf("2002");
     Result page = consentPage();
     Result r =
-        route(app, decision(page, Map.of("ticket", "ticket-1", "loginId", "john", "password", "john", "authorized", "true")));
+        route(
+            app,
+            decision(
+                page,
+                Map.of(
+                    "ticket",
+                    "ticket-1",
+                    "loginId",
+                    "john",
+                    "password",
+                    "john",
+                    "authorized",
+                    "true")));
     assertEquals(302, r.status());
     AuthorizationFailRequest fail = fake.lastRequest("authorizationFail");
     assertEquals(AuthorizationFailRequest.Reason.DIFFERENT_SUBJECT, fail.getReason());
@@ -166,7 +199,19 @@ public class AuthorizationFlowTest {
   public void changingYourOwnGrantIsIssued() {
     grantOf("1001");
     Result page = consentPage();
-    route(app, decision(page, Map.of("ticket", "ticket-1", "loginId", "john", "password", "john", "authorized", "true")));
+    route(
+        app,
+        decision(
+            page,
+            Map.of(
+                "ticket",
+                "ticket-1",
+                "loginId",
+                "john",
+                "password",
+                "john",
+                "authorized",
+                "true")));
     assertEquals(1, fake.count("authorizationIssue"));
     assertEquals(0, fake.count("authorizationFail"));
   }
@@ -179,7 +224,15 @@ public class AuthorizationFlowTest {
             app,
             decision(
                 page,
-                Map.of("ticket", "ticket-1", "loginId", "john", "password", "nope", "authorized", "true")));
+                Map.of(
+                    "ticket",
+                    "ticket-1",
+                    "loginId",
+                    "john",
+                    "password",
+                    "nope",
+                    "authorized",
+                    "true")));
     assertEquals(401, r.status());
     assertTrue(contentAsString(r).contains("Invalid login ID or password."));
     assertEquals(0, fake.count("authorizationIssue"));
@@ -203,7 +256,15 @@ public class AuthorizationFlowTest {
             withCsrf(
                 post(
                     "/api/authorization/decision",
-                    Map.of("ticket", "ticket-1", "loginId", "john", "password", "john", "authorized", "true"))));
+                    Map.of(
+                        "ticket",
+                        "ticket-1",
+                        "loginId",
+                        "john",
+                        "password",
+                        "john",
+                        "authorized",
+                        "true"))));
     assertEquals(400, r.status());
     assertEquals(0, fake.count("authorizationIssue"));
   }
@@ -211,7 +272,8 @@ public class AuthorizationFlowTest {
   @Test
   public void promptNoneWithoutSessionFailsNotLoggedIn() {
     fake.answer(
-        "authorization", args -> interaction("t-none", AuthorizationResponse.Action.NO_INTERACTION));
+        "authorization",
+        args -> interaction("t-none", AuthorizationResponse.Action.NO_INTERACTION));
     Result r = route(app, get("/api/authorization?prompt=none"));
     assertEquals(302, r.status());
     AuthorizationFailRequest fail = fake.lastRequest("authorizationFail");
@@ -236,19 +298,28 @@ public class AuthorizationFlowTest {
   /** Step 1 of the two-step flow: sign in on the sign-in page; returns the consent page. */
   private Result signIn(Result page, String password) {
     return route(
-        app, decision(page, Map.of("ticket", "ticket-1", "loginId", "john", "password", password, "login", "true")));
+        app,
+        decision(
+            page,
+            Map.of(
+                "ticket", "ticket-1", "loginId", "john", "password", password, "login", "true")));
   }
 
   @Test
   public void signInThenConsentIssuesForTheSignedInUser() {
     Result page = consentPage();
     String identifierHtml = contentAsString(page);
-    assertTrue("step 1 asks for the email or login ID", identifierHtml.contains("name=\"identifier\""));
-    assertTrue("step 1 does not ask for the password yet", !identifierHtml.contains("name=\"password\""));
-    assertTrue("step 1 does not ask for consent yet", !identifierHtml.contains("name=\"authorized\""));
+    assertTrue(
+        "step 1 asks for the email or login ID", identifierHtml.contains("name=\"identifier\""));
+    assertTrue(
+        "step 1 does not ask for the password yet", !identifierHtml.contains("name=\"password\""));
+    assertTrue(
+        "step 1 does not ask for consent yet", !identifierHtml.contains("name=\"authorized\""));
 
     Result passwordStep =
-        route(app, decision(page, Map.of("ticket", "ticket-1", "identifier", "john", "identify", "true")));
+        route(
+            app,
+            decision(page, Map.of("ticket", "ticket-1", "identifier", "john", "identify", "true")));
     assertEquals(200, passwordStep.status());
     String passwordHtml = contentAsString(passwordStep);
     assertTrue("step 2 asks for the password", passwordHtml.contains("name=\"password\""));
@@ -265,7 +336,10 @@ public class AuthorizationFlowTest {
     Result issued =
         route(
             app,
-            withCsrf(post("/api/authorization/decision", Map.of("ticket", "ticket-1", "authorized", "true")))
+            withCsrf(
+                    post(
+                        "/api/authorization/decision",
+                        Map.of("ticket", "ticket-1", "authorized", "true")))
                 .session(consent.session().data()));
     assertEquals(302, issued.status());
     AuthorizationIssueRequest issue = fake.lastRequest("authorizationIssue");
@@ -301,7 +375,15 @@ public class AuthorizationFlowTest {
             app,
             decision(
                 page,
-                Map.of("ticket", "ticket-1", "loginId", "john", "password", "john", "authorized", "true")));
+                Map.of(
+                    "ticket",
+                    "ticket-1",
+                    "loginId",
+                    "john",
+                    "password",
+                    "john",
+                    "authorized",
+                    "true")));
     Map<String, String> session = first.session().data();
 
     // Second authorization in the same browser: john's session is offered. The app asks for consent
@@ -310,18 +392,21 @@ public class AuthorizationFlowTest {
         "authorization",
         args -> {
           AuthorizationResponse again = interaction("ticket-2", null);
-          again.setPrompts(new com.authlete.common.types.Prompt[] {com.authlete.common.types.Prompt.CONSENT});
+          again.setPrompts(
+              new com.authlete.common.types.Prompt[] {com.authlete.common.types.Prompt.CONSENT});
           return again;
         });
-    Result second =
-        route(app, withCsrf(get("/api/authorization?client_id=42")).session(session));
+    Result second = route(app, withCsrf(get("/api/authorization?client_id=42")).session(session));
     assertTrue(contentAsString(second).contains("Signed in as"));
 
     // "Use a different account" shows the login form instead.
     Result switched =
         route(
             app,
-            withCsrf(post("/api/authorization/decision", Map.of("ticket", "ticket-2", "switchAccount", "true")))
+            withCsrf(
+                    post(
+                        "/api/authorization/decision",
+                        Map.of("ticket", "ticket-2", "switchAccount", "true")))
                 .session(session));
     assertEquals(200, switched.status());
     String html = contentAsString(switched);
@@ -332,7 +417,10 @@ public class AuthorizationFlowTest {
     Result noLogin =
         route(
             app,
-            withCsrf(post("/api/authorization/decision", Map.of("ticket", "ticket-2", "authorized", "true")))
+            withCsrf(
+                    post(
+                        "/api/authorization/decision",
+                        Map.of("ticket", "ticket-2", "authorized", "true")))
                 .session(session));
     assertEquals(401, noLogin.status());
 
@@ -343,7 +431,15 @@ public class AuthorizationFlowTest {
             withCsrf(
                     post(
                         "/api/authorization/decision",
-                        Map.of("ticket", "ticket-2", "loginId", "jane", "password", "jane", "authorized", "true")))
+                        Map.of(
+                            "ticket",
+                            "ticket-2",
+                            "loginId",
+                            "jane",
+                            "password",
+                            "jane",
+                            "authorized",
+                            "true")))
                 .session(session));
     assertEquals(302, jane.status());
     AuthorizationIssueRequest issue = fake.lastRequest("authorizationIssue");
@@ -355,7 +451,8 @@ public class AuthorizationFlowTest {
     Consent consent =
         app.injector()
             .instanceOf(ConsentStore.class)
-            .create(List.of("ACCOUNTS_READ", "ACCOUNTS_BALANCES_READ"), "2030-01-01T00:00:00Z", 42L);
+            .create(
+                List.of("ACCOUNTS_READ", "ACCOUNTS_BALANCES_READ"), "2030-01-01T00:00:00Z", 42L);
     fake.answer(
         "authorization",
         args -> {

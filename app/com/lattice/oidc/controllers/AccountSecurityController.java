@@ -13,6 +13,7 @@ import com.lattice.oidc.security.UserSessions;
 import com.lattice.oidc.security.UserSessions.LoginState;
 import com.lattice.oidc.security.UserSessions.SessionInfo;
 import com.lattice.oidc.stores.UserStore;
+import jakarta.inject.Inject;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;
@@ -22,7 +23,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Function;
-import jakarta.inject.Inject;
 import play.mvc.Http;
 import play.mvc.Result;
 import play.mvc.Results;
@@ -50,7 +50,11 @@ public final class AccountSecurityController extends BaseController {
 
   @Inject
   public AccountSecurityController(
-      UserSessions sessions, LogoutHandler logout, SignInAlerts alerts, LoginService login, UserStore users) {
+      UserSessions sessions,
+      LogoutHandler logout,
+      SignInAlerts alerts,
+      LoginService login,
+      UserStore users) {
     this.sessions = sessions;
     this.logout = logout;
     this.alerts = alerts;
@@ -92,10 +96,15 @@ public final class AccountSecurityController extends BaseController {
                     session -> {
                       logout.endSession(new LoginState(state.user(), id, 0L, null));
                       sessions.end(id);
-                      audit.record(request, AuditService.Event.SESSION_ENDED, "subject", state.user().getSubject());
+                      audit.record(
+                          request,
+                          AuditService.Event.SESSION_ENDED,
+                          "subject",
+                          state.user().getSubject());
                     });
           }
-          return Results.seeOther(com.lattice.oidc.controllers.routes.AccountSecurityController.sessions());
+          return Results.seeOther(
+              com.lattice.oidc.controllers.routes.AccountSecurityController.sessions());
         });
   }
 
@@ -105,11 +114,14 @@ public final class AccountSecurityController extends BaseController {
         state -> {
           List<SessionInfo> others = others(state);
           if (others.isEmpty()) {
-            return Results.seeOther(com.lattice.oidc.controllers.routes.AccountSecurityController.sessions());
+            return Results.seeOther(
+                com.lattice.oidc.controllers.routes.AccountSecurityController.sessions());
           }
           Set<String> clients = new LinkedHashSet<>();
           others.forEach(session -> clients.addAll(session.clients()));
-          return html(200, views.html.oidc.signOutOthers.render(others.size(), names(clients), request).body());
+          return html(
+              200,
+              views.html.oidc.signOutOthers.render(others.size(), names(clients), request).body());
         });
   }
 
@@ -128,8 +140,10 @@ public final class AccountSecurityController extends BaseController {
               "tokens_revoked",
               LogoutHandler.auditValue(signedOut));
           return Requests.form(request).containsKey("changePassword")
-              ? Results.seeOther(com.lattice.oidc.controllers.routes.AccountSecurityController.passwordForm())
-              : Results.seeOther(com.lattice.oidc.controllers.routes.AccountSecurityController.sessions());
+              ? Results.seeOther(
+                  com.lattice.oidc.controllers.routes.AccountSecurityController.passwordForm())
+              : Results.seeOther(
+                  com.lattice.oidc.controllers.routes.AccountSecurityController.sessions());
         });
   }
 
@@ -145,12 +159,20 @@ public final class AccountSecurityController extends BaseController {
             return Results.seeOther(AccountController.DESTINATIONS.get("account"));
           }
           String sessionId = alert.get().sessionId();
-          if (!sessionId.equals(state.sessionId()) && sessions.sessionOf(subject, sessionId).isPresent()) {
+          if (!sessionId.equals(state.sessionId())
+              && sessions.sessionOf(subject, sessionId).isPresent()) {
             logout.endSession(new LoginState(state.user(), sessionId, 0L, null));
             sessions.end(sessionId);
           }
-          audit.record(request, AuditService.Event.SIGN_IN_REPORTED, "subject", subject, "ip", alert.get().ip());
-          return Results.seeOther(com.lattice.oidc.controllers.routes.AccountSecurityController.passwordForm());
+          audit.record(
+              request,
+              AuditService.Event.SIGN_IN_REPORTED,
+              "subject",
+              subject,
+              "ip",
+              alert.get().ip());
+          return Results.seeOther(
+              com.lattice.oidc.controllers.routes.AccountSecurityController.passwordForm());
         });
   }
 
@@ -169,10 +191,13 @@ public final class AccountSecurityController extends BaseController {
             return passwordPage(request, user, List.of(), 400);
           }
           Map<String, String[]> form = Requests.form(request);
-          LoginService.Result check = login.authenticate(user.loginId(), Requests.first(form, "current"), request.remoteAddress());
+          LoginService.Result check =
+              login.authenticate(
+                  user.loginId(), Requests.first(form, "current"), request.remoteAddress());
           auditPasswordConfirmation(request, user.getSubject(), check);
           if (check.outcome() != LoginService.Outcome.SUCCESS) {
-            return passwordPage(request, user, List.of(AuthorizationController.failureMessage(check)), 401);
+            return passwordPage(
+                request, user, List.of(AuthorizationController.failureMessage(check)), 401);
           }
           String password = Optional.ofNullable(Requests.first(form, "password")).orElse("");
           List<String> problems = new ArrayList<>(PasswordPolicy.problems(password, user));
@@ -187,7 +212,8 @@ public final class AccountSecurityController extends BaseController {
           boolean signOutEverywhere = form.containsKey("signOutEverywhere");
           Object tokensRevoked = null;
           if (signOutEverywhere) {
-            tokensRevoked = LogoutHandler.auditValue(logout.endSessionsOf(updated, state.sessionId()));
+            tokensRevoked =
+                LogoutHandler.auditValue(logout.endSessionsOf(updated, state.sessionId()));
           }
           audit.record(
               request,
@@ -208,12 +234,20 @@ public final class AccountSecurityController extends BaseController {
   }
 
   private Result passwordPage(Http.Request request, User user, List<String> problems, int status) {
-    return html(status, views.html.oidc.changePassword.render(user.passwordHash() != null, problems, request).body());
+    return html(
+        status,
+        views
+            .html
+            .oidc
+            .changePassword
+            .render(user.passwordHash() != null, problems, request)
+            .body());
   }
 
   // ---------------------------------------------------------------- helpers
 
-  private CompletionStage<Result> signedIn(Http.Request request, Function<LoginState, Result> action) {
+  private CompletionStage<Result> signedIn(
+      Http.Request request, Function<LoginState, Result> action) {
     return async(
         () -> {
           Optional<LoginState> current = sessions.current(request);
@@ -244,7 +278,9 @@ public final class AccountSecurityController extends BaseController {
             key -> {
               try {
                 Client client = api().getClient(key);
-                return client != null && client.getClientName() != null ? client.getClientName() : key;
+                return client != null && client.getClientName() != null
+                    ? client.getClientName()
+                    : key;
               } catch (RuntimeException e) {
                 return key;
               }

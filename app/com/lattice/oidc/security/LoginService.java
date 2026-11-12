@@ -4,10 +4,10 @@ import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.models.User;
 import com.lattice.oidc.stores.CounterStore;
 import com.lattice.oidc.stores.UserStore;
-import java.util.Locale;
-import java.util.Optional;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import java.util.Locale;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,9 +27,9 @@ import org.slf4j.LoggerFactory;
  * so timing does not reveal which exist. Counters are kept in the {@link CounterStore}, shared by
  * every server.
  *
- * <p>With an LDAP directory ({@link LdapDirectory}), an identifier that isn't a local account, or is
- * one that came from the directory, is checked against the directory instead. A local account with
- * the same login ID takes precedence.
+ * <p>With an LDAP directory ({@link LdapDirectory}), an identifier that isn't a local account, or
+ * is one that came from the directory, is checked against the directory instead. A local account
+ * with the same login ID takes precedence.
  */
 @Singleton
 public final class LoginService {
@@ -102,7 +102,9 @@ public final class LoginService {
       return Optional.empty();
     }
     Optional<User> byLoginId = users.byLoginId(identifier);
-    return byLoginId.isPresent() || identifier.indexOf('@') < 0 ? byLoginId : users.byEmail(identifier);
+    return byLoginId.isPresent() || identifier.indexOf('@') < 0
+        ? byLoginId
+        : users.byEmail(identifier);
   }
 
   /** As {@link #authenticate(String, String, String)} without an IP address (internal callers). */
@@ -129,7 +131,8 @@ public final class LoginService {
       try {
         authenticated = directory.authenticate(loginId.trim(), password);
       } catch (LdapDirectory.Unavailable e) {
-        LOG.warn("Sign-in for '{}' could not reach the LDAP directory: {}", loginId, e.getMessage());
+        LOG.warn(
+            "Sign-in for '{}' could not reach the LDAP directory: {}", loginId, e.getMessage());
         return new Result(Outcome.UNAVAILABLE, Optional.empty());
       }
     } else {
@@ -161,21 +164,27 @@ public final class LoginService {
   }
 
   /**
-   * A hash made with weaker parameters than a new one gets is replaced now, while the password is at
-   * hand: after raising the cost, accounts move to it as their owners sign in, with no reset for anyone.
-   * The update is conditional on the hash being unchanged, so a password the owner changed meanwhile is
-   * never overwritten. A failure here is logged and never fails the sign-in.
+   * A hash made with weaker parameters than a new one gets is replaced now, while the password is
+   * at hand: after raising the cost, accounts move to it as their owners sign in, with no reset for
+   * anyone. The update is conditional on the hash being unchanged, so a password the owner changed
+   * meanwhile is never overwritten. A failure here is logged and never fails the sign-in.
    */
   private void upgradeHash(User user, String verifiedHash, String password) {
     if (!PasswordHasher.needsRehash(verifiedHash)) {
       return;
     }
     try {
-      if (users.replacePasswordHash(user.getSubject(), verifiedHash, PasswordHasher.hash(password))) {
-        LOG.info("Upgraded the password hash of account {} to the current Argon2 parameters", user.getSubject());
+      if (users.replacePasswordHash(
+          user.getSubject(), verifiedHash, PasswordHasher.hash(password))) {
+        LOG.info(
+            "Upgraded the password hash of account {} to the current Argon2 parameters",
+            user.getSubject());
       }
     } catch (RuntimeException e) {
-      LOG.warn("Could not upgrade the password hash of account {}: {}", user.getSubject(), e.getMessage());
+      LOG.warn(
+          "Could not upgrade the password hash of account {}: {}",
+          user.getSubject(),
+          e.getMessage());
     }
   }
 

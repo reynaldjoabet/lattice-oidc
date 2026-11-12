@@ -57,7 +57,12 @@ public class TwoStepTest {
   }
 
   private Result passwordSignIn() {
-    return route(app, withCsrf(post("/account/login", Map.of("loginId", "john", "password", "john", "next", "account"))));
+    return route(
+        app,
+        withCsrf(
+            post(
+                "/account/login",
+                Map.of("loginId", "john", "password", "john", "next", "account"))));
   }
 
   private Result submitCode(Result challenge, Map<String, String> fields) {
@@ -69,14 +74,17 @@ public class TwoStepTest {
   }
 
   private boolean signedIn(Map<String, String> session) {
-    return contentAsString(route(app, get("/account").session(session))).contains("John Flibble Smith");
+    return contentAsString(route(app, get("/account").session(session)))
+        .contains("John Flibble Smith");
   }
 
   @Test
   public void codesMatchTheRfcTestVector() {
     // RFC 6238 appendix B: the ASCII secret "12345678901234567890" at T = 59 s gives 94287082,
     // whose last six digits are what a 6-digit app shows.
-    String secret = TotpCodes.base32("12345678901234567890".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+    String secret =
+        TotpCodes.base32(
+            "12345678901234567890".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
     assertEquals("287082", TotpCodes.at(secret, 59 / 30));
   }
 
@@ -95,11 +103,15 @@ public class TwoStepTest {
     Result done = submitCode(challenge, Map.of("code", code));
     assertEquals(303, done.status());
     assertEquals("/account", done.redirectLocation().orElse(null));
-    assertEquals("the session records the second factor", "mfa", done.session().get("acr").orElse(null));
+    assertEquals(
+        "the session records the second factor", "mfa", done.session().get("acr").orElse(null));
     assertTrue(signedIn(done.session().data()));
 
     Result replay = passwordSignIn();
-    assertEquals("the same code can't be used twice", 401, submitCode(replay, Map.of("code", code)).status());
+    assertEquals(
+        "the same code can't be used twice",
+        401,
+        submitCode(replay, Map.of("code", code)).status());
   }
 
   @Test
@@ -121,9 +133,14 @@ public class TwoStepTest {
     submitCode(challenge, Map.of("recoveryCode", "WRONG-CODES"));
     submitCode(challenge, Map.of("code", TotpCodes.at(secret, Totp.step(Instant.now()))));
 
-    assertEquals("the password alone isn't a sign-in", 0, events("LOGIN_SUCCEEDED").stream().filter(e -> "password".equals(e.get("method"))).count());
+    assertEquals(
+        "the password alone isn't a sign-in",
+        0,
+        events("LOGIN_SUCCEEDED").stream().filter(e -> "password".equals(e.get("method"))).count());
     assertEquals("totp", events("SECOND_FACTOR_REQUIRED").get(0).get("factor"));
-    assertEquals(List.of("recovery_code", "totp"), events("SECOND_FACTOR_FAILED").stream().map(e -> e.get("factor")).toList());
+    assertEquals(
+        List.of("recovery_code", "totp"),
+        events("SECOND_FACTOR_FAILED").stream().map(e -> e.get("factor")).toList());
     assertEquals("not a wrong password", 0, events("LOGIN_FAILED").size());
     assertEquals("password + totp", events("LOGIN_SUCCEEDED").get(0).get("method"));
   }
@@ -132,7 +149,12 @@ public class TwoStepTest {
   private List<Map<String, Object>> events(String event) {
     return app.injector()
         .instanceOf(com.lattice.oidc.stores.AuditEventStore.class)
-        .search(new com.lattice.oidc.stores.AuditEventStore.Query(java.util.Optional.of(event), java.util.Optional.empty(), java.util.Optional.empty(), 100));
+        .search(
+            new com.lattice.oidc.stores.AuditEventStore.Query(
+                java.util.Optional.of(event),
+                java.util.Optional.empty(),
+                java.util.Optional.empty(),
+                100));
   }
 
   @Test
@@ -151,24 +173,49 @@ public class TwoStepTest {
     Result setup = route(app, get("/account/two-step").session(session));
     assertEquals(200, setup.status());
     assertEquals("no-store", setup.header("Cache-Control").orElse(null));
-    Matcher key = Pattern.compile("class=\"mono key\">([A-Z2-7]+)<").matcher(contentAsString(setup));
+    Matcher key =
+        Pattern.compile("class=\"mono key\">([A-Z2-7]+)<").matcher(contentAsString(setup));
     assertTrue("the key is shown for manual entry", key.find());
 
-    Map<String, String> form = Map.of("code", TotpCodes.at(key.group(1), Totp.step(Instant.now())), "next", "account");
-    Result confirmed = route(app, withCsrf(post("/account/two-step", form)).session(setup.session().data()));
+    Map<String, String> form =
+        Map.of("code", TotpCodes.at(key.group(1), Totp.step(Instant.now())), "next", "account");
+    Result confirmed =
+        route(app, withCsrf(post("/account/two-step", form)).session(setup.session().data()));
     assertEquals(200, confirmed.status());
     assertTrue(contentAsString(confirmed).contains("Save your recovery codes"));
-    assertTrue(contentAsString(route(app, get("/account").session(session))).contains("On: password sign-ins also ask for a code"));
-    assertEquals("the audit trail names the factor", "totp", events("SECOND_FACTOR_ADDED").get(0).get("factor"));
+    assertTrue(
+        contentAsString(route(app, get("/account").session(session)))
+            .contains("On: password sign-ins also ask for a code"));
+    assertEquals(
+        "the audit trail names the factor",
+        "totp",
+        events("SECOND_FACTOR_ADDED").get(0).get("factor"));
   }
 
   @Test
   public void removingTheAppNeedsThePassword() {
     enrollJohn();
-    Result done = submitCode(passwordSignIn(), Map.of("recoveryCode", app.injector().instanceOf(SecondFactors.class).newRecoveryCodes("1001").get(0)));
+    Result done =
+        submitCode(
+            passwordSignIn(),
+            Map.of(
+                "recoveryCode",
+                app.injector().instanceOf(SecondFactors.class).newRecoveryCodes("1001").get(0)));
     Map<String, String> session = done.session().data();
-    assertEquals(401, route(app, withCsrf(post("/account/two-step/remove", Map.of("password", "wrong"))).session(session)).status());
-    assertEquals(303, route(app, withCsrf(post("/account/two-step/remove", Map.of("password", "john"))).session(session)).status());
+    assertEquals(
+        401,
+        route(
+                app,
+                withCsrf(post("/account/two-step/remove", Map.of("password", "wrong")))
+                    .session(session))
+            .status());
+    assertEquals(
+        303,
+        route(
+                app,
+                withCsrf(post("/account/two-step/remove", Map.of("password", "john")))
+                    .session(session))
+            .status());
     assertFalse(app.injector().instanceOf(SecondFactors.class).enrolled("1001"));
   }
 }

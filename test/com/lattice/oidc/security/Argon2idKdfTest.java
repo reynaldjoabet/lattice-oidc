@@ -18,7 +18,10 @@ import java.util.concurrent.TimeUnit;
 import javax.crypto.SecretKey;
 import org.junit.Test;
 
-/** Password-based key derivation: the algorithm, the stored parameters, the memory budget, calibration. */
+/**
+ * Password-based key derivation: the algorithm, the stored parameters, the memory budget,
+ * calibration.
+ */
 public class Argon2idKdfTest {
 
   private static final Argon2idKdf.Params DEFAULT = Argon2idKdf.Params.DEFAULT;
@@ -36,7 +39,9 @@ public class Argon2idKdfTest {
             "somesalt".getBytes(StandardCharsets.UTF_8),
             new Argon2idKdf.Params(65_536, 2, 1),
             32);
-    assertEquals("09316115d5cf24ed5a15a31a3ba326e5cf32edc24702987c02b6566f61913cf7", HexFormat.of().formatHex(key));
+    assertEquals(
+        "09316115d5cf24ed5a15a31a3ba326e5cf32edc24702987c02b6566f61913cf7",
+        HexFormat.of().formatHex(key));
   }
 
   @Test
@@ -44,9 +49,16 @@ public class Argon2idKdfTest {
     byte[] salt = Argon2idKdf.newSalt();
     byte[] key = kdf.deriveKey("correct horse".toCharArray(), salt, DEFAULT, 32);
     assertArrayEquals(key, kdf.deriveKey("correct horse".toCharArray(), salt, DEFAULT, 32));
-    assertFalse(Arrays.equals(key, kdf.deriveKey("correct horsf".toCharArray(), salt, DEFAULT, 32)));
-    assertFalse(Arrays.equals(key, kdf.deriveKey("correct horse".toCharArray(), Argon2idKdf.newSalt(), DEFAULT, 32)));
-    assertFalse(Arrays.equals(key, kdf.deriveKey("correct horse".toCharArray(), salt, new Argon2idKdf.Params(65_536, 4, 1), 32)));
+    assertFalse(
+        Arrays.equals(key, kdf.deriveKey("correct horsf".toCharArray(), salt, DEFAULT, 32)));
+    assertFalse(
+        Arrays.equals(
+            key, kdf.deriveKey("correct horse".toCharArray(), Argon2idKdf.newSalt(), DEFAULT, 32)));
+    assertFalse(
+        Arrays.equals(
+            key,
+            kdf.deriveKey(
+                "correct horse".toCharArray(), salt, new Argon2idKdf.Params(65_536, 4, 1), 32)));
   }
 
   @Test
@@ -67,17 +79,26 @@ public class Argon2idKdfTest {
   public void aLoneSurrogateIsRefusedNotTurnedIntoAQuestionMark() {
     // A lenient encoder would encode both as "a?", giving two passwords the same key.
     char[] lone = {'a', '\uD800'};
-    assertThrows(IllegalArgumentException.class, () -> kdf.deriveKey(lone, Argon2idKdf.newSalt(), DEFAULT, 32));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> kdf.deriveKey(lone, Argon2idKdf.newSalt(), DEFAULT, 32));
     // A proper pair is fine.
     kdf.deriveKey("a😀".toCharArray(), Argon2idKdf.newSalt(), DEFAULT, 32);
   }
 
   @Test
   public void shortSaltsAndOddKeyLengthsAreRefused() {
-    assertThrows(IllegalArgumentException.class, () -> kdf.deriveKey("pw".toCharArray(), new byte[8], DEFAULT, 32));
-    assertThrows(IllegalArgumentException.class, () -> kdf.deriveKey("pw".toCharArray(), null, DEFAULT, 32));
-    assertThrows(IllegalArgumentException.class, () -> kdf.deriveKey("pw".toCharArray(), new byte[16], DEFAULT, 8));
-    assertThrows(IllegalArgumentException.class, () -> kdf.deriveKey("pw".toCharArray(), new byte[16], DEFAULT, 65));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> kdf.deriveKey("pw".toCharArray(), new byte[8], DEFAULT, 32));
+    assertThrows(
+        IllegalArgumentException.class, () -> kdf.deriveKey("pw".toCharArray(), null, DEFAULT, 32));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> kdf.deriveKey("pw".toCharArray(), new byte[16], DEFAULT, 8));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> kdf.deriveKey("pw".toCharArray(), new byte[16], DEFAULT, 65));
   }
 
   @Test
@@ -111,7 +132,8 @@ public class Argon2idKdfTest {
   @Test
   public void weakerParametersAreDetected() {
     assertTrue(new Argon2idKdf.Params(19_456, 2, 1).isWeakerThan(DEFAULT));
-    assertTrue(new Argon2idKdf.Params(131_072, 2, 1).isWeakerThan(DEFAULT)); // more memory, fewer passes
+    assertTrue(
+        new Argon2idKdf.Params(131_072, 2, 1).isWeakerThan(DEFAULT)); // more memory, fewer passes
     assertFalse(DEFAULT.isWeakerThan(DEFAULT));
     assertFalse(new Argon2idKdf.Params(131_072, 3, 1).isWeakerThan(DEFAULT));
   }
@@ -125,7 +147,9 @@ public class Argon2idKdfTest {
   public void parametersLargerThanTheWholeBudgetAreRefusedRatherThanWaitingForever() {
     Argon2idKdf small = new Argon2idKdf(DEFAULT.memoryKib());
     Argon2idKdf.Params big = new Argon2idKdf.Params(DEFAULT.memoryKib() * 2, 3, 1);
-    assertThrows(IllegalArgumentException.class, () -> small.deriveKey("pw".toCharArray(), Argon2idKdf.newSalt(), big, 32));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> small.deriveKey("pw".toCharArray(), Argon2idKdf.newSalt(), big, 32));
   }
 
   @Test
@@ -149,7 +173,8 @@ public class Argon2idKdfTest {
         Thread.onSpinWait();
       }
       assertFalse("the first derivation holds the budget", one.hasFree(1));
-      Future<byte[]> second = pool.submit(() -> one.deriveKey("b".toCharArray(), Argon2idKdf.newSalt(), DEFAULT, 32));
+      Future<byte[]> second =
+          pool.submit(() -> one.deriveKey("b".toCharArray(), Argon2idKdf.newSalt(), DEFAULT, 32));
       assertEquals(32, first.get(30, TimeUnit.SECONDS).length);
       assertEquals(32, second.get(30, TimeUnit.SECONDS).length);
       assertTrue("the budget is returned", one.hasFree(DEFAULT.memoryKib()));
@@ -174,7 +199,8 @@ public class Argon2idKdfTest {
     assertEquals(DEFAULT, slowMachine.calibrate(Duration.ofMillis(1)));
     // Instant derivations: limited by the 256 MiB budget, not by time.
     Argon2idKdf fastMachine = new Argon2idKdf(262_144, params -> 0L);
-    assertEquals(new Argon2idKdf.Params(262_144, 3, 1), fastMachine.calibrate(Duration.ofSeconds(1)));
+    assertEquals(
+        new Argon2idKdf.Params(262_144, 3, 1), fastMachine.calibrate(Duration.ofSeconds(1)));
   }
 
   @Test
@@ -187,7 +213,8 @@ public class Argon2idKdfTest {
 
   @Test
   public void calibrationJudgesTheMedianNotAnOutlier() {
-    // Every third timing of 128 MiB is a 10-second outlier (a GC pause, say): the median still fits.
+    // Every third timing of 128 MiB is a 10-second outlier (a GC pause, say): the median still
+    // fits.
     int[] calls = {0};
     Argon2idKdf noisy =
         new Argon2idKdf(

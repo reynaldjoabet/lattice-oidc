@@ -41,8 +41,15 @@ public class PostgresRecordStoresTest {
   // ---------------------------------------------------------------- Open Banking consents
 
   private static Consent consent(String id, String status) {
-    return new Consent(id, List.of("ACCOUNTS_READ", "RESOURCES_READ"), status, "2026-01-01T00:00:00Z",
-        Instant.now().plus(Duration.ofDays(30)).toString(), "2026-01-01T00:00:00Z", 42, null);
+    return new Consent(
+        id,
+        List.of("ACCOUNTS_READ", "RESOURCES_READ"),
+        status,
+        "2026-01-01T00:00:00Z",
+        Instant.now().plus(Duration.ofDays(30)).toString(),
+        "2026-01-01T00:00:00Z",
+        42,
+        null);
   }
 
   @Test
@@ -82,12 +89,14 @@ public class PostgresRecordStoresTest {
 
     List<Map<String, Object>> mine =
         audit.search(new Query(Optional.empty(), Optional.of(subject), Optional.empty(), 10));
-    assertEquals(List.of("LOGOUT", "LOGIN_SUCCEEDED"), mine.stream().map(r -> r.get("event")).toList());
+    assertEquals(
+        List.of("LOGOUT", "LOGIN_SUCCEEDED"), mine.stream().map(r -> r.get("event")).toList());
     assertEquals("203.0.113.7", mine.get(0).get("ip"));
     assertTrue("each record carries its id", mine.get(0).get("id") instanceof Long);
 
     List<Map<String, Object>> failed =
-        audit.search(new Query(Optional.of("LOGIN_FAILED"), Optional.of(loginId), Optional.empty(), 10));
+        audit.search(
+            new Query(Optional.of("LOGIN_FAILED"), Optional.of(loginId), Optional.empty(), 10));
     assertEquals("without a subject, the login ID is the subject", 1, failed.size());
   }
 
@@ -98,7 +107,8 @@ public class PostgresRecordStoresTest {
     for (int i = 0; i < 5; i++) {
       audit.append(event("STEP_" + i, "subject", subject));
     }
-    List<Map<String, Object>> first = audit.search(new Query(Optional.empty(), Optional.of(subject), Optional.empty(), 2));
+    List<Map<String, Object>> first =
+        audit.search(new Query(Optional.empty(), Optional.of(subject), Optional.empty(), 2));
     assertEquals(List.of("STEP_4", "STEP_3"), first.stream().map(r -> r.get("event")).toList());
     long before = (Long) first.get(1).get("id");
     List<Map<String, Object>> next =
@@ -118,9 +128,29 @@ public class PostgresRecordStoresTest {
     Instant now = PostgresApp.now();
     String expiredSession = unique("s");
     // Long past, whatever the skew between this JVM's clock and the database's.
-    sessions.create(new Session(expiredSession, "u", null, null, "password", now, now, now.minus(Duration.ofHours(1)), false));
+    sessions.create(
+        new Session(
+            expiredSession,
+            "u",
+            null,
+            null,
+            "password",
+            now,
+            now,
+            now.minus(Duration.ofHours(1)),
+            false));
     String liveSession = unique("s");
-    sessions.create(new Session(liveSession, "u", null, null, "password", now, now, now.plus(Duration.ofHours(1)), false));
+    sessions.create(
+        new Session(
+            liveSession,
+            "u",
+            null,
+            null,
+            "password",
+            now,
+            now,
+            now.plus(Duration.ofHours(1)),
+            false));
     Thread.sleep(150);
 
     long entriesBefore = PostgresApp.rows(app, "ephemeral");
@@ -128,7 +158,8 @@ public class PostgresRecordStoresTest {
     app.injector().instanceOf(StorageCleanup.class).run();
 
     assertTrue("the expired entry was deleted", PostgresApp.rows(app, "ephemeral") < entriesBefore);
-    assertTrue("the expired session was deleted", PostgresApp.rows(app, "sessions") < sessionsBefore);
+    assertTrue(
+        "the expired session was deleted", PostgresApp.rows(app, "sessions") < sessionsBefore);
     assertTrue(entries.get(ns, "live").isPresent());
     assertTrue(sessions.find(liveSession).isPresent());
   }

@@ -1,10 +1,10 @@
 package com.lattice.oidc.stores.postgres;
 
 import com.lattice.oidc.stores.IdentityLinkStore;
-import java.util.List;
-import java.util.Optional;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import java.util.List;
+import java.util.Optional;
 
 /** {@link IdentityLinkStore} in PostgreSQL (table {@code identity_links}). */
 @Singleton
@@ -24,7 +24,9 @@ public final class PostgresIdentityLinkStore implements IdentityLinkStore {
         INSERT INTO identity_links (provider_id, external_subject, local_subject) VALUES (?, ?, ?)
         ON CONFLICT (provider_id, external_subject) DO UPDATE SET local_subject = EXCLUDED.local_subject
         """,
-        providerId, externalSubject, localSubject);
+        providerId,
+        externalSubject,
+        localSubject);
   }
 
   @Override
@@ -32,14 +34,15 @@ public final class PostgresIdentityLinkStore implements IdentityLinkStore {
     return database.queryOne(
         "SELECT local_subject FROM identity_links WHERE provider_id = ? AND external_subject = ?",
         row -> row.getString(1),
-        providerId, externalSubject);
+        providerId,
+        externalSubject);
   }
 
   @Override
   public List<Link> linksOf(String localSubject) {
     return database.query(
-        "SELECT provider_id, external_subject, local_subject FROM identity_links WHERE local_subject = ?"
-            + " ORDER BY created_at",
+        "SELECT provider_id, external_subject, local_subject FROM identity_links WHERE"
+            + " local_subject = ? ORDER BY created_at",
         row -> new Link(row.getString(1), row.getString(2), row.getString(3)),
         localSubject);
   }
@@ -47,6 +50,8 @@ public final class PostgresIdentityLinkStore implements IdentityLinkStore {
   @Override
   public void unlink(String providerId, String externalSubject) {
     database.update(
-        "DELETE FROM identity_links WHERE provider_id = ? AND external_subject = ?", providerId, externalSubject);
+        "DELETE FROM identity_links WHERE provider_id = ? AND external_subject = ?",
+        providerId,
+        externalSubject);
   }
 }

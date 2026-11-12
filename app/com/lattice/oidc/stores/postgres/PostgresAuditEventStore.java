@@ -2,13 +2,13 @@ package com.lattice.oidc.stores.postgres;
 
 import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.stores.AuditEventStore;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 
 /**
  * {@link AuditEventStore} in PostgreSQL (table {@code audit_events}). The event name and subject
@@ -37,20 +37,30 @@ public final class PostgresAuditEventStore implements AuditEventStore {
 
   @Override
   public List<Map<String, Object>> search(Query query) {
-    StringBuilder sql = new StringBuilder("SELECT id, record::text AS record FROM audit_events WHERE true");
+    StringBuilder sql =
+        new StringBuilder("SELECT id, record::text AS record FROM audit_events WHERE true");
     List<Object> parameters = new ArrayList<>();
-    query.event().ifPresent(event -> {
-      sql.append(" AND event = ?");
-      parameters.add(event);
-    });
-    query.subject().ifPresent(subject -> {
-      sql.append(" AND subject = ?");
-      parameters.add(subject);
-    });
-    query.beforeId().ifPresent(before -> {
-      sql.append(" AND id < ?");
-      parameters.add(before);
-    });
+    query
+        .event()
+        .ifPresent(
+            event -> {
+              sql.append(" AND event = ?");
+              parameters.add(event);
+            });
+    query
+        .subject()
+        .ifPresent(
+            subject -> {
+              sql.append(" AND subject = ?");
+              parameters.add(subject);
+            });
+    query
+        .beforeId()
+        .ifPresent(
+            before -> {
+              sql.append(" AND id < ?");
+              parameters.add(before);
+            });
     sql.append(" ORDER BY id DESC LIMIT ?");
     parameters.add(query.limit());
     return database.query(

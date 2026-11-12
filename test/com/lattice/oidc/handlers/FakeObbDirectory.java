@@ -71,11 +71,13 @@ public final class FakeObbDirectory implements AutoCloseable {
 
   /** Signs {@code claims} as the directory, with {@code alg} and an {@code iat} of {@code iat}. */
   public String sign(Map<String, Object> claims, JWSAlgorithm alg, Date iat) {
-    JWTClaimsSet.Builder b = new JWTClaimsSet.Builder().issuer("Open Banking Brasil sandbox SSA issuer");
+    JWTClaimsSet.Builder b =
+        new JWTClaimsSet.Builder().issuer("Open Banking Brasil sandbox SSA issuer");
     claims.forEach(b::claim);
     b.issueTime(iat);
     try {
-      SignedJWT jwt = new SignedJWT(new JWSHeader.Builder(alg).keyID(key.getKeyID()).build(), b.build());
+      SignedJWT jwt =
+          new SignedJWT(new JWSHeader.Builder(alg).keyID(key.getKeyID()).build(), b.build());
       jwt.sign(new RSASSASigner(key));
       return jwt.serialize();
     } catch (JOSEException e) {

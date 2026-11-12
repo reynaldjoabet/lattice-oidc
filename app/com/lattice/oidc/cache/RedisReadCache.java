@@ -2,10 +2,10 @@ package com.lattice.oidc.cache;
 
 import com.lattice.oidc.stores.redis.RedisConnection;
 import com.typesafe.config.Config;
-import java.time.Duration;
-import java.util.Optional;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import java.time.Duration;
+import java.util.Optional;
 import redis.clients.jedis.params.SetParams;
 
 /**
@@ -31,7 +31,9 @@ public final class RedisReadCache implements ReadCache {
 
   @Override
   public void put(String region, String key, String json) {
-    redis.client().set(redis.key("cache", region, key), json, SetParams.setParams().px(ttl.toMillis()));
+    redis
+        .client()
+        .set(redis.key("cache", region, key), json, SetParams.setParams().px(ttl.toMillis()));
   }
 
   @Override

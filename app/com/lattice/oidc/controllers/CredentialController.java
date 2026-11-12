@@ -31,10 +31,10 @@ import com.lattice.oidc.common.Responses;
 import com.lattice.oidc.common.WebException;
 import com.lattice.oidc.handlers.CredentialOrderHandler;
 import com.lattice.oidc.handlers.CredentialRequestException;
+import jakarta.inject.Inject;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.CompletionStage;
-import jakarta.inject.Inject;
 import play.mvc.BodyParser;
 import play.mvc.Http;
 import play.mvc.Result;
@@ -47,12 +47,14 @@ import play.mvc.Result;
  *   <li>{@code GET /.well-known/jwt-issuer}, {@code /.well-known/jwt-vc-issuer}: JWT issuer
  *       metadata (SD-JWT VC).
  *   <li>{@code GET /api/vci/jwks}: the JWK Set used to sign credentials.
- *   <li>{@code POST /api/credential}, {@code /api/batch_credential}, {@code /api/deferred_credential}.
+ *   <li>{@code POST /api/credential}, {@code /api/batch_credential}, {@code
+ *       /api/deferred_credential}.
  *   <li>{@code POST /api/nonce}: the nonce endpoint.
  *   <li>{@code GET /api/offer/:identifier}: dereferences a {@code credential_offer_uri}.
  * </ul>
  *
- * @see <a href="https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0.html">OpenID for Verifiable Credential Issuance 1.0</a>
+ * @see <a href="https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0.html">OpenID
+ *     for Verifiable Credential Issuance 1.0</a>
  */
 public final class CredentialController extends BaseController {
 
@@ -76,7 +78,10 @@ public final class CredentialController extends BaseController {
     String accessToken = Requests.accessToken(request, null);
     if (accessToken == null) {
       throw new WebException(
-          Responses.bearerError(400, "Bearer error=\"invalid_token\",error_description=\"An access token is required.\"", null));
+          Responses.bearerError(
+              400,
+              "Bearer error=\"invalid_token\",error_description=\"An access token is required.\"",
+              null));
     }
     IntrospectionResponse r =
         api()
@@ -107,7 +112,10 @@ public final class CredentialController extends BaseController {
    * {@code transaction_id} is returned instead.
    */
   private CredentialIssuanceOrder order(
-      CredentialOrderHandler.Context context, Token token, CredentialRequestInfo info, boolean deferred) {
+      CredentialOrderHandler.Context context,
+      Token token,
+      CredentialRequestInfo info,
+      boolean deferred) {
     try {
       CredentialIssuanceOrder order = orders.toOrder(context, token.info(), info);
       if (deferred) {
@@ -115,12 +123,14 @@ public final class CredentialController extends BaseController {
       }
       return order;
     } catch (CredentialRequestException e) {
-      throw new WebException(Responses.badRequest(Responses.error(e.errorCode(), e.getMessage()), token.headers()));
+      throw new WebException(
+          Responses.badRequest(Responses.error(e.errorCode(), e.getMessage()), token.headers()));
     }
   }
 
   /** Maps parse failures shared by single/batch/deferred parse APIs. */
-  private static WebException parseFailure(String action, String content, Map<String, String> headers) {
+  private static WebException parseFailure(
+      String action, String content, Map<String, String> headers) {
     return new WebException(
         switch (action) {
           case "BAD_REQUEST" -> Responses.badRequest(content, headers);
@@ -157,24 +167,32 @@ public final class CredentialController extends BaseController {
           Token token = token(request);
           // Parse the credential request with Authlete's /vci/single/parse API.
           CredentialSingleParseResponse parsed =
-              api().credentialSingleParse(
-                  new CredentialSingleParseRequest().setRequestContent(body).setAccessToken(token.value()));
+              api()
+                  .credentialSingleParse(
+                      new CredentialSingleParseRequest()
+                          .setRequestContent(body)
+                          .setAccessToken(token.value()));
           if (parsed.getAction() != CredentialSingleParseResponse.Action.OK) {
-            throw parseFailure(parsed.getAction().name(), parsed.getResponseContent(), token.headers());
+            throw parseFailure(
+                parsed.getAction().name(), parsed.getResponseContent(), token.headers());
           }
           // Issue the credential with Authlete's /vci/single/issue API.
           CredentialSingleIssueResponse r =
-              api().credentialSingleIssue(
-                  new CredentialSingleIssueRequest()
-                      .setAccessToken(token.value())
-                      .setOrder(order(CredentialOrderHandler.Context.SINGLE, token, parsed.getInfo(), deferred)));
+              api()
+                  .credentialSingleIssue(
+                      new CredentialSingleIssueRequest()
+                          .setAccessToken(token.value())
+                          .setOrder(
+                              order(
+                                  CredentialOrderHandler.Context.SINGLE,
+                                  token,
+                                  parsed.getInfo(),
+                                  deferred)));
           return issued(r.getAction().name(), r.getResponseContent(), token.headers());
         });
   }
 
-  /**
-   * The batch credential endpoint.
-   */
+  /** The batch credential endpoint. */
   @BodyParser.Of(BodyParser.TolerantText.class)
   public CompletionStage<Result> batch(Http.Request request) {
     String body = request.body().asText();
@@ -183,10 +201,14 @@ public final class CredentialController extends BaseController {
         () -> {
           Token token = token(request);
           CredentialBatchParseResponse parsed =
-              api().credentialBatchParse(
-                  new CredentialBatchParseRequest().setRequestContent(body).setAccessToken(token.value()));
+              api()
+                  .credentialBatchParse(
+                      new CredentialBatchParseRequest()
+                          .setRequestContent(body)
+                          .setAccessToken(token.value()));
           if (parsed.getAction() != CredentialBatchParseResponse.Action.OK) {
-            throw parseFailure(parsed.getAction().name(), parsed.getResponseContent(), token.headers());
+            throw parseFailure(
+                parsed.getAction().name(), parsed.getResponseContent(), token.headers());
           }
           CredentialRequestInfo[] infos = parsed.getInfo();
           CredentialIssuanceOrder[] list = new CredentialIssuanceOrder[infos.length];
@@ -194,8 +216,11 @@ public final class CredentialController extends BaseController {
             list[i] = order(CredentialOrderHandler.Context.BATCH, token, infos[i], deferred);
           }
           CredentialBatchIssueResponse r =
-              api().credentialBatchIssue(
-                  new CredentialBatchIssueRequest().setAccessToken(token.value()).setOrders(list));
+              api()
+                  .credentialBatchIssue(
+                      new CredentialBatchIssueRequest()
+                          .setAccessToken(token.value())
+                          .setOrders(list));
           return issued(r.getAction().name(), r.getResponseContent(), token.headers());
         });
   }
@@ -211,10 +236,14 @@ public final class CredentialController extends BaseController {
         () -> {
           Token token = token(request);
           CredentialDeferredParseResponse parsed =
-              api().credentialDeferredParse(
-                  new CredentialDeferredParseRequest().setRequestContent(body).setAccessToken(token.value()));
+              api()
+                  .credentialDeferredParse(
+                      new CredentialDeferredParseRequest()
+                          .setRequestContent(body)
+                          .setAccessToken(token.value()));
           if (parsed.getAction() != CredentialDeferredParseResponse.Action.OK) {
-            throw parseFailure(parsed.getAction().name(), parsed.getResponseContent(), token.headers());
+            throw parseFailure(
+                parsed.getAction().name(), parsed.getResponseContent(), token.headers());
           }
           CredentialIssuanceOrder order =
               order(CredentialOrderHandler.Context.DEFERRED, token, parsed.getInfo(), false);
@@ -232,13 +261,14 @@ public final class CredentialController extends BaseController {
    *
    * <p>From Section 7.1. Nonce Request of OpenID for Verifiable Credential Issuance 1.0: "A request
    * for a nonce is made by sending an HTTP POST request to the URL provided in the nonce_endpoint
-   * Credential Issuer Metadata parameter. The Nonce Endpoint is not a protected resource, meaning the
-   * Wallet does not need to supply an access token to access it."
+   * Credential Issuer Metadata parameter. The Nonce Endpoint is not a protected resource, meaning
+   * the Wallet does not need to supply an access token to access it."
    */
   public CompletionStage<Result> nonce() {
     return async(
         () -> {
-          CredentialNonceResponse r = api().credentialNonce(new CredentialNonceRequest().setPretty(false));
+          CredentialNonceResponse r =
+              api().credentialNonce(new CredentialNonceRequest().setPretty(false));
           return switch (r.getAction()) {
             case OK -> Responses.ok(r.getResponseContent());
             case NOT_FOUND -> Responses.notFound(r.getResponseContent());
@@ -247,48 +277,53 @@ public final class CredentialController extends BaseController {
         });
   }
 
-  /**
-   * The credential issuer metadata endpoint.
-   */
+  /** The credential issuer metadata endpoint. */
   public CompletionStage<Result> metadata() {
     return async(
         () -> {
           CredentialIssuerMetadataResponse r =
               api().credentialIssuerMetadata(new CredentialIssuerMetadataRequest().setPretty(true));
           return switch (r.getAction()) {
-            case OK -> ok(r.getResponseContent()).as(Responses.JSON).withHeader(CACHE_CONTROL, "public, max-age=300");
+            case OK ->
+                ok(r.getResponseContent())
+                    .as(Responses.JSON)
+                    .withHeader(CACHE_CONTROL, "public, max-age=300");
             case NOT_FOUND -> Responses.notFound(r.getResponseContent());
             default -> Responses.serverError(r.getResponseContent());
           };
         });
   }
 
-  /**
-   * The JWT issuer metadata endpoint (SD-JWT VC).
-   */
+  /** The JWT issuer metadata endpoint (SD-JWT VC). */
   public CompletionStage<Result> jwtIssuer() {
     return async(
         () -> {
           CredentialJwtIssuerMetadataResponse r =
-              api().credentialJwtIssuerMetadata(new CredentialJwtIssuerMetadataRequest().setPretty(true));
+              api()
+                  .credentialJwtIssuerMetadata(
+                      new CredentialJwtIssuerMetadataRequest().setPretty(true));
           return switch (r.getAction()) {
-            case OK -> ok(r.getResponseContent()).as(Responses.JSON).withHeader(CACHE_CONTROL, "public, max-age=300");
+            case OK ->
+                ok(r.getResponseContent())
+                    .as(Responses.JSON)
+                    .withHeader(CACHE_CONTROL, "public, max-age=300");
             case NOT_FOUND -> Responses.notFound(r.getResponseContent());
             default -> Responses.serverError(r.getResponseContent());
           };
         });
   }
 
-  /**
-   * The JWK Set of the credential issuer.
-   */
+  /** The JWK Set of the credential issuer. */
   public CompletionStage<Result> jwks() {
     return async(
         () -> {
           CredentialIssuerJwksResponse r =
               api().credentialIssuerJwks(new CredentialIssuerJwksRequest().setPretty(false));
           return switch (r.getAction()) {
-            case OK -> ok(r.getResponseContent()).as(Responses.JSON).withHeader(CACHE_CONTROL, "public, max-age=300");
+            case OK ->
+                ok(r.getResponseContent())
+                    .as(Responses.JSON)
+                    .withHeader(CACHE_CONTROL, "public, max-age=300");
             case NOT_FOUND -> Responses.notFound(r.getResponseContent());
             default -> Responses.serverError(r.getResponseContent());
           };

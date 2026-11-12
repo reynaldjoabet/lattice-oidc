@@ -15,6 +15,7 @@ import com.lattice.oidc.security.UserSessions;
 import com.lattice.oidc.stores.IdentityLinkStore;
 import com.lattice.oidc.stores.UserStore;
 import com.nimbusds.openid.connect.sdk.claims.UserInfo;
+import jakarta.inject.Inject;
 import java.io.IOException;
 import java.net.URI;
 import java.time.Duration;
@@ -24,7 +25,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletionStage;
-import jakarta.inject.Inject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import play.mvc.Http;
@@ -104,11 +104,12 @@ public final class IdentityBrokerController extends BaseController {
   }
 
   /**
-   * Starts sign-in with an upstream identity provider from the authorization page: redirects the browser
-   * to the provider's authorization endpoint (authorization code flow with PKCE, state and nonce).
-   * The pending authorization request is identified by its {@code ticket}.
+   * Starts sign-in with an upstream identity provider from the authorization page: redirects the
+   * browser to the provider's authorization endpoint (authorization code flow with PKCE, state and
+   * nonce). The pending authorization request is identified by its {@code ticket}.
    */
-  public CompletionStage<Result> initiation(Http.Request request, String providerId, String ticket) {
+  public CompletionStage<Result> initiation(
+      Http.Request request, String providerId, String ticket) {
     return async(
         () -> {
           Optional<IdentityProvider> provider = providers.get(providerId);
@@ -116,7 +117,9 @@ public final class IdentityBrokerController extends BaseController {
             return Pages.message(request, 404, "Unknown provider", "No such identity provider.");
           }
           String browserId = sessions.existingBrowserId(request).orElse(null);
-          if (interactions.get(AUTHZ, ticket, browserId, AuthorizationInteraction.class).isEmpty()) {
+          if (interactions
+              .get(AUTHZ, ticket, browserId, AuthorizationInteraction.class)
+              .isEmpty()) {
             return Pages.message(
                 request, 400, "Request expired", "Please start again from the application.");
           }
@@ -125,12 +128,16 @@ public final class IdentityBrokerController extends BaseController {
           String nonce = UserSessions.randomId();
           try {
             URI location = provider.get().authenticationRequest(state, verifier, nonce);
-            interactions.put(KIND, state, browserId, new Pending(providerId, ticket, verifier, nonce));
+            interactions.put(
+                KIND, state, browserId, new Pending(providerId, ticket, verifier, nonce));
             return Responses.location(location.toString());
           } catch (IOException e) {
             LOG.warn("Identity provider {} initiation failed: {}", providerId, e.getMessage());
             return Pages.message(
-                request, 502, "Provider unavailable", "The identity provider could not be reached.");
+                request,
+                502,
+                "Provider unavailable",
+                "The identity provider could not be reached.");
           }
         });
   }
@@ -161,7 +168,8 @@ public final class IdentityBrokerController extends BaseController {
                 request, 400, "Request expired", "Please start again from the application.");
           }
           Optional<AuthorizationInteraction> interaction =
-              interactions.get(AUTHZ, pending.get().ticket(), browserId, AuthorizationInteraction.class);
+              interactions.get(
+                  AUTHZ, pending.get().ticket(), browserId, AuthorizationInteraction.class);
           if (interaction.isEmpty()) {
             return Pages.message(
                 request, 400, "Request expired", "Please start again from the application.");
@@ -178,14 +186,20 @@ public final class IdentityBrokerController extends BaseController {
                         state,
                         pending.get().verifier(),
                         pending.get().nonce());
-            metrics.identityProviderSignIn(provider.get().id(), true, Duration.ofNanos(System.nanoTime() - started));
+            metrics.identityProviderSignIn(
+                provider.get().id(), true, Duration.ofNanos(System.nanoTime() - started));
           } catch (IOException e) {
-            metrics.identityProviderSignIn(provider.get().id(), false, Duration.ofNanos(System.nanoTime() - started));
+            metrics.identityProviderSignIn(
+                provider.get().id(), false, Duration.ofNanos(System.nanoTime() - started));
             LOG.warn("Identity provider {} login failed: {}", providerId, e.getMessage());
             audit.record(
                 request, AuditService.Event.BROKERED_LOGIN_FAILED, "identity_provider", providerId);
             var page =
-                interaction.get().page().withLoggedInAs(Optional.empty()).withError("Login with the external provider failed.");
+                interaction
+                    .get()
+                    .page()
+                    .withLoggedInAs(Optional.empty())
+                    .withError("Login with the external provider failed.");
             return Pages.authorization(request, page, 502);
           }
 
@@ -197,9 +211,11 @@ public final class IdentityBrokerController extends BaseController {
           String ticket = pending.get().ticket();
 
           // Already linked: sign in to the local account.
-          Optional<User> linked = links.localSubject(providerId, externalSubject).flatMap(users::bySubject);
+          Optional<User> linked =
+              links.localSubject(providerId, externalSubject).flatMap(users::bySubject);
           if (linked.isPresent()) {
-            return signIn(request, browserId, ticket, interaction.get(), linked.get(), providerId, authTime);
+            return signIn(
+                request, browserId, ticket, interaction.get(), linked.get(), providerId, authTime);
           }
 
           // The email belongs to an existing password account: offer to link them.
@@ -211,13 +227,25 @@ public final class IdentityBrokerController extends BaseController {
             String linkId = UserSessions.randomId();
             PendingLink link =
                 new PendingLink(
-                    providerId, provider.get().name(), externalSubject, claims, existing.get().getSubject(), ticket, authTime);
+                    providerId,
+                    provider.get().name(),
+                    externalSubject,
+                    claims,
+                    existing.get().getSubject(),
+                    ticket,
+                    authTime);
             interactions.put(LINK, linkId, browserId, link);
             return linkPage(request, linkId, link, existing.get(), Optional.empty(), 200);
           }
 
           return signIn(
-              request, browserId, ticket, interaction.get(), provision(providerId, externalSubject, claims), providerId, authTime);
+              request,
+              browserId,
+              ticket,
+              interaction.get(),
+              provision(providerId, externalSubject, claims),
+              providerId,
+              authTime);
         });
   }
 
@@ -233,10 +261,15 @@ public final class IdentityBrokerController extends BaseController {
           Map<String, String[]> form = Requests.form(request);
           String linkId = Requests.first(form, "linkId");
           String browserId = sessions.existingBrowserId(request).orElse(null);
-          Optional<PendingLink> pending = interactions.get(LINK, linkId, browserId, PendingLink.class);
+          Optional<PendingLink> pending =
+              interactions.get(LINK, linkId, browserId, PendingLink.class);
           Optional<AuthorizationInteraction> interaction =
-              pending.flatMap(waiting -> interactions.get(AUTHZ, waiting.ticket(), browserId, AuthorizationInteraction.class));
-          Optional<User> local = pending.flatMap(waiting -> users.bySubject(waiting.localSubject()));
+              pending.flatMap(
+                  waiting ->
+                      interactions.get(
+                          AUTHZ, waiting.ticket(), browserId, AuthorizationInteraction.class));
+          Optional<User> local =
+              pending.flatMap(waiting -> users.bySubject(waiting.localSubject()));
           if (pending.isEmpty() || interaction.isEmpty() || local.isEmpty()) {
             return Pages.message(
                 request, 400, "Request expired", "Please start again from the application.");
@@ -248,14 +281,28 @@ public final class IdentityBrokerController extends BaseController {
             User separate = provision(link.providerId(), link.externalSubject(), link.claims());
             long upstreamAuthTime =
                 authTime(link.upstreamAuthTime(), System.currentTimeMillis() / 1000L);
-            return signIn(request, browserId, link.ticket(), interaction.get(), separate, link.providerId(), upstreamAuthTime);
+            return signIn(
+                request,
+                browserId,
+                link.ticket(),
+                interaction.get(),
+                separate,
+                link.providerId(),
+                upstreamAuthTime);
           }
 
-          LoginService.Result result = login.authenticate(local.get().loginId(), Requests.first(form, "password"), request.remoteAddress());
+          LoginService.Result result =
+              login.authenticate(
+                  local.get().loginId(), Requests.first(form, "password"), request.remoteAddress());
           auditLogin(request, local.get().loginId(), result);
           if (result.outcome() != LoginService.Outcome.SUCCESS) {
             return linkPage(
-                request, linkId, link, local.get(), Optional.of(AuthorizationController.failureMessage(result)), 401);
+                request,
+                linkId,
+                link,
+                local.get(),
+                Optional.of(AuthorizationController.failureMessage(result)),
+                401);
           }
           interactions.take(LINK, linkId, browserId, PendingLink.class);
           if (flow.needsSecondFactor(local.get())) {
@@ -278,16 +325,22 @@ public final class IdentityBrokerController extends BaseController {
               link.providerId());
           // The password was checked just now: that is when the user authenticated.
           return signIn(
-              request, browserId, link.ticket(), interaction.get(), local.get(), link.providerId(), System.currentTimeMillis() / 1000L);
+              request,
+              browserId,
+              link.ticket(),
+              interaction.get(),
+              local.get(),
+              link.providerId(),
+              System.currentTimeMillis() / 1000L);
         });
   }
 
   /**
    * When the user authenticated, for {@code auth_time} in the ID tokens Lattice issues: the
-   * provider's {@code auth_time} if it gave one, otherwise now. Lattice didn't authenticate the user
-   * itself here, it accepted the provider's statement, and the provider may have reused a session
-   * from hours ago; passing "now" on would let a client's {@code max_age} be met by a sign-in far
-   * older than it allows. A time in the future (clock skew) counts as now.
+   * provider's {@code auth_time} if it gave one, otherwise now. Lattice didn't authenticate the
+   * user itself here, it accepted the provider's statement, and the provider may have reused a
+   * session from hours ago; passing "now" on would let a client's {@code max_age} be met by a
+   * sign-in far older than it allows. A time in the future (clock skew) counts as now.
    */
   static long authTime(Long upstream, long now) {
     return upstream == null || upstream > now ? now : upstream;
@@ -303,7 +356,13 @@ public final class IdentityBrokerController extends BaseController {
       String providerId,
       long authTime) {
     Map<String, String> sessionOut = new HashMap<>();
-    sessions.login(user, authTime, null, sessionOut, request, providers.get(providerId).map(provider -> provider.name()).orElse(providerId));
+    sessions.login(
+        user,
+        authTime,
+        null,
+        sessionOut,
+        request,
+        providers.get(providerId).map(provider -> provider.name()).orElse(providerId));
     audit.record(
         request,
         AuditService.Event.BROKERED_LOGIN,
@@ -311,7 +370,8 @@ public final class IdentityBrokerController extends BaseController {
         user.getSubject(),
         "identity_provider",
         providerId);
-    AuthorizationInteraction shown = interaction.shownTo(user, appConsents.find(user.getSubject(), interaction.clientId()));
+    AuthorizationInteraction shown =
+        interaction.shownTo(user, appConsents.find(user.getSubject(), interaction.clientId()));
     var page = shown.page();
     interactions.put(AUTHZ, ticket, browserId, shown);
     // Required actions come before the consent page, as for every other sign-in.
@@ -323,9 +383,16 @@ public final class IdentityBrokerController extends BaseController {
     // decides, as for every other sign-in).
     if (!interaction.consentPrompted()
         && interaction.approvalCanBeRemembered()
-        && appConsents.covers(user.getSubject(), interaction.clientId(), interaction.scopeSet(), interaction.claimSet())) {
+        && appConsents.covers(
+            user.getSubject(),
+            interaction.clientId(),
+            interaction.scopeSet(),
+            interaction.claimSet())) {
       return sessions.apply(
-          Results.seeOther(com.lattice.oidc.controllers.routes.AuthorizationController.continueAuthorization(ticket).url()),
+          Results.seeOther(
+              com.lattice.oidc.controllers.routes.AuthorizationController.continueAuthorization(
+                      ticket)
+                  .url()),
           request,
           sessionOut);
     }
@@ -354,8 +421,8 @@ public final class IdentityBrokerController extends BaseController {
 
   /** Creates/updates the local account mirroring the external user ({@code sub@provider-id}). */
   /**
-   * Creates the brokered account, or refreshes its claims from the provider. Attributes Lattice added
-   * itself (accepted terms, required actions, ...) and verified claims are kept.
+   * Creates the brokered account, or refreshes its claims from the provider. Attributes Lattice
+   * added itself (accepted terms, required actions, ...) and verified claims are kept.
    */
   private User provision(String providerId, String externalSubject, Map<String, Object> claims) {
     String subject = externalSubject + "@" + providerId;

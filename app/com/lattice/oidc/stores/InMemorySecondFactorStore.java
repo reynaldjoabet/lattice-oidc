@@ -1,12 +1,12 @@
 package com.lattice.oidc.stores;
 
+import jakarta.inject.Singleton;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import jakarta.inject.Singleton;
 
 /** {@link SecondFactorStore} in memory, for one server (development and tests). */
 @Singleton
@@ -56,7 +56,9 @@ public final class InMemorySecondFactorStore implements SecondFactorStore {
 
   @Override
   public long totpsNotUnderKey(String keyId) {
-    return totps.values().stream().filter(totp -> !totp.encryptedSecret().startsWith(keyId + ":")).count();
+    return totps.values().stream()
+        .filter(totp -> !totp.encryptedSecret().startsWith(keyId + ":"))
+        .count();
   }
 
   @Override

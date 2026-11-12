@@ -13,7 +13,8 @@ import java.util.TreeSet;
 public interface AppConsentStore {
 
   /** An account's approval for one app (Authlete's numeric client ID). */
-  record AppConsent(String subject, long clientId, Set<String> scopes, Set<String> claims, Instant grantedAt) {
+  record AppConsent(
+      String subject, long clientId, Set<String> scopes, Set<String> claims, Instant grantedAt) {
 
     /** Whether everything requested was already approved. */
     public boolean covers(Set<String> requestedScopes, Set<String> requestedClaims) {
@@ -41,7 +42,9 @@ public interface AppConsentStore {
               allScopes.addAll(existing.scopes());
               allClaims.addAll(existing.claims());
             });
-    put(new AppConsent(subject, clientId, Set.copyOf(allScopes), Set.copyOf(allClaims), Instant.now()));
+    put(
+        new AppConsent(
+            subject, clientId, Set.copyOf(allScopes), Set.copyOf(allClaims), Instant.now()));
   }
 
   /** Whether the account already approved everything requested for the app. */

@@ -10,8 +10,8 @@ import java.util.List;
 public record IdentityProviderConfig(@JsonAlias("federations") List<Entry> identityProviders) {
 
   /**
-   * One provider. {@code domains} (optional) are the email domains whose users sign in through
-   * it: "jane@acme.com" goes straight to the provider listing "acme.com" (home realm discovery).
+   * One provider. {@code domains} (optional) are the email domains whose users sign in through it:
+   * "jane@acme.com" goes straight to the provider listing "acme.com" (home realm discovery).
    */
   public record Entry(String id, Server server, Client client, List<String> domains) {}
 

@@ -49,20 +49,38 @@ public class PostgresUserStoreTest {
     return started;
   }
 
-  private static User user(String subject, String loginId, String hash, Map<String, Object> claims) {
-    return new User(subject, loginId, hash, claims, Map.of("department", "Sales"),
-        List.of(Map.of("verification", Map.of("trust_framework", "eidas"), "claims", Map.of("given_name", "Ann"))));
+  private static User user(
+      String subject, String loginId, String hash, Map<String, Object> claims) {
+    return new User(
+        subject,
+        loginId,
+        hash,
+        claims,
+        Map.of("department", "Sales"),
+        List.of(
+            Map.of(
+                "verification",
+                Map.of("trust_framework", "eidas"),
+                "claims",
+                Map.of("given_name", "Ann"))));
   }
 
   @Test
   public void theStoreIsTheDatabaseOne() {
-    assertTrue(users.getClass().getSimpleName(), users.getClass().getSimpleName().startsWith("Postgres")
-        || users.getClass().getSimpleName().startsWith("Jpa"));
+    assertTrue(
+        users.getClass().getSimpleName(),
+        users.getClass().getSimpleName().startsWith("Postgres")
+            || users.getClass().getSimpleName().startsWith("Jpa"));
   }
 
   @Test
   public void aSavedUserComesBackWithAllItsData() {
-    User ann = user("2001", "ann", "$argon2id$hash", Map.of("email", "Ann@Example.com", "name", "Ann", "age", 41));
+    User ann =
+        user(
+            "2001",
+            "ann",
+            "$argon2id$hash",
+            Map.of("email", "Ann@Example.com", "name", "Ann", "age", 41));
     users.save(ann);
     User loaded = users.bySubject("2001").orElseThrow();
     assertEquals("ann", loaded.loginId());
@@ -117,7 +135,8 @@ public class PostgresUserStoreTest {
   @Test
   public void aPasswordHashIsReplacedOnlyIfItIsStillTheExpectedOne() {
     users.save(user("2001", "ann", "old", Map.of()));
-    assertFalse("a stale expected hash changes nothing", users.replacePasswordHash("2001", "stale", "new"));
+    assertFalse(
+        "a stale expected hash changes nothing", users.replacePasswordHash("2001", "stale", "new"));
     assertEquals("old", users.bySubject("2001").orElseThrow().passwordHash());
     assertTrue(users.replacePasswordHash("2001", "old", "new"));
     assertEquals("new", users.bySubject("2001").orElseThrow().passwordHash());
@@ -142,6 +161,7 @@ public class PostgresUserStoreTest {
 
     Helpers.stop(app);
     app = start(Map.of("lattice.demo-users", true));
-    assertEquals("a second start adds nothing", seeded, app.injector().instanceOf(UserStore.class).count());
+    assertEquals(
+        "a second start adds nothing", seeded, app.injector().instanceOf(UserStore.class).count());
   }
 }

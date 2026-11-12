@@ -4,9 +4,9 @@ import com.lattice.oidc.client.AuthleteExecutionContext;
 import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.metrics.Metrics;
 import com.typesafe.config.Config;
-import java.time.Duration;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import java.time.Duration;
 import org.apache.pekko.actor.ActorSystem;
 import org.apache.pekko.actor.Cancellable;
 import org.slf4j.Logger;
@@ -16,10 +16,9 @@ import play.inject.ApplicationLifecycle;
 /**
  * Deletes expired rows every {@code lattice.postgres.cleanup-interval}: short-lived entries,
  * counters, consents past their keep date, audit events past {@code lattice.audit.retention}, and
- * sessions past their lifetime or idle for longer than
- * {@code lattice.session.idle-timeout}. Every server runs it; the deletes are idempotent, so running
- * it on several servers at once is harmless. Lookups already ignore expired rows, so the cleanup
- * only reclaims space.
+ * sessions past their lifetime or idle for longer than {@code lattice.session.idle-timeout}. Every
+ * server runs it; the deletes are idempotent, so running it on several servers at once is harmless.
+ * Lookups already ignore expired rows, so the cleanup only reclaims space.
  */
 @Singleton
 public final class StorageCleanup {
@@ -45,7 +44,10 @@ public final class StorageCleanup {
     this.config = config;
     this.auditRetention = rawConfig.getDuration("lattice.audit.retention");
     Duration interval = rawConfig.getDuration("lattice.postgres.cleanup-interval");
-    Cancellable task = actorSystem.scheduler().scheduleAtFixedRate(interval, interval, this::run, executionContext);
+    Cancellable task =
+        actorSystem
+            .scheduler()
+            .scheduleAtFixedRate(interval, interval, this::run, executionContext);
     lifecycle.addStopHook(
         () -> {
           task.cancel();
@@ -59,7 +61,9 @@ public final class StorageCleanup {
       int counters = database.update("DELETE FROM counters WHERE window_ends_at <= now()");
       int consents = database.update("DELETE FROM obb_consents WHERE keep_until <= now()");
       int auditEvents =
-          database.update("DELETE FROM audit_events WHERE occurred_at <= now() - make_interval(secs => ?)", auditRetention);
+          database.update(
+              "DELETE FROM audit_events WHERE occurred_at <= now() - make_interval(secs => ?)",
+              auditRetention);
       // Idle limits differ for "keep me signed in" sessions; zero means no idle limit.
       Duration idle = config.sessionIdleTimeout();
       Duration rememberedIdle = config.rememberMe().idleTimeout();
@@ -70,14 +74,22 @@ public final class StorageCleanup {
                 OR (NOT remember_me AND ? > 0 AND last_seen_at <= now() - make_interval(secs => ?))
                 OR (remember_me AND ? > 0 AND last_seen_at <= now() - make_interval(secs => ?))
               """,
-              idle, idle, rememberedIdle, rememberedIdle);
+              idle,
+              idle,
+              rememberedIdle,
+              rememberedIdle);
       metrics.storageCleanup("ephemeral", entries);
       metrics.storageCleanup("counters", counters);
       metrics.storageCleanup("obb_consents", consents);
       metrics.storageCleanup("audit_events", auditEvents);
       metrics.storageCleanup("sessions", sessions);
       if (entries + counters + consents + sessions > 0) {
-        LOG.debug("Storage cleanup: {} entries, {} counters, {} consents, {} sessions", entries, counters, consents, sessions);
+        LOG.debug(
+            "Storage cleanup: {} entries, {} counters, {} consents, {} sessions",
+            entries,
+            counters,
+            consents,
+            sessions);
       }
     } catch (RuntimeException e) {
       metrics.storageCleanupFailure();

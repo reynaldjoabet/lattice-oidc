@@ -43,7 +43,8 @@ public class OutboundUrlsTest {
   @Test
   public void publicAddressesAreAllowed() {
     assertEquals(Optional.empty(), OutboundUrls.problem("https://93.184.215.14/cb", false));
-    assertEquals(Optional.empty(), OutboundUrls.problem("https://[2606:4700:4700::1111]/cb", false));
+    assertEquals(
+        Optional.empty(), OutboundUrls.problem("https://[2606:4700:4700::1111]/cb", false));
   }
 
   @Test

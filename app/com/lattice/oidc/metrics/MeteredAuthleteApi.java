@@ -28,7 +28,8 @@ public final class MeteredAuthleteApi {
               } catch (InvocationTargetException e) {
                 throw e.getCause();
               } finally {
-                metrics.authleteCall(method.getName(), success, Duration.ofNanos(System.nanoTime() - start));
+                metrics.authleteCall(
+                    method.getName(), success, Duration.ofNanos(System.nanoTime() - start));
               }
             });
   }

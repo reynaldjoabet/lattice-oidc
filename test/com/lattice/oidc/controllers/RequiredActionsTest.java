@@ -59,7 +59,12 @@ public class RequiredActionsTest {
   }
 
   private Result signIn(String loginId, String password) {
-    return route(app, withCsrf(post("/account/login", Map.of("loginId", loginId, "password", password, "next", "account"))));
+    return route(
+        app,
+        withCsrf(
+            post(
+                "/account/login",
+                Map.of("loginId", loginId, "password", password, "next", "account"))));
   }
 
   @Test
@@ -71,11 +76,21 @@ public class RequiredActionsTest {
 
     Result account = route(app, get("/account").session(session));
     assertEquals("the account page waits", 303, account.status());
-    assertTrue(contentAsString(route(app, get("/account/actions?next=account").session(session))).contains("Our terms have changed"));
+    assertTrue(
+        contentAsString(route(app, get("/account/actions?next=account").session(session)))
+            .contains("Our terms have changed"));
 
-    Result accepted = route(app, withCsrf(post("/account/actions/terms", Map.of("accept", "true", "next", "account"))).session(session));
+    Result accepted =
+        route(
+            app,
+            withCsrf(post("/account/actions/terms", Map.of("accept", "true", "next", "account")))
+                .session(session));
     assertEquals(303, accepted.status());
-    assertEquals("/account", route(app, get("/account/actions?next=account").session(session)).redirectLocation().orElse(null));
+    assertEquals(
+        "/account",
+        route(app, get("/account/actions?next=account").session(session))
+            .redirectLocation()
+            .orElse(null));
     assertEquals(200, route(app, get("/account").session(session)).status());
   }
 
@@ -83,7 +98,11 @@ public class RequiredActionsTest {
   public void decliningTheTermsSignsOut() {
     start(Map.of("lattice.required-actions.terms-version", "2026-10"));
     Map<String, String> session = signIn("john", "john").session().data();
-    Result declined = route(app, withCsrf(post("/account/actions/terms", Map.of("decline", "true", "next", "account"))).session(session));
+    Result declined =
+        route(
+            app,
+            withCsrf(post("/account/actions/terms", Map.of("decline", "true", "next", "account")))
+                .session(session));
     assertTrue(contentAsString(declined).contains("Signed out"));
     assertFalse(declined.session().get("session_id").isPresent());
   }
@@ -92,21 +111,33 @@ public class RequiredActionsTest {
   public void anEmailIsVerifiedByItsLink() {
     start(Map.of("lattice.required-actions.verify-email", true));
     Map<String, String> jane = signIn("jane", "jane").session().data();
-    assertTrue(contentAsString(route(app, get("/account/actions?next=account").session(jane))).contains("Verify your email"));
-    route(app, withCsrf(post("/account/actions/verify-email", Map.of("next", "account"))).session(jane));
+    assertTrue(
+        contentAsString(route(app, get("/account/actions?next=account").session(jane)))
+            .contains("Verify your email"));
+    route(
+        app,
+        withCsrf(post("/account/actions/verify-email", Map.of("next", "account"))).session(jane));
     Matcher token = Pattern.compile("token=([A-Za-z0-9_-]+)").matcher(mail.get(mail.size() - 1));
     assertTrue(token.find());
 
     Result opened = route(app, get("/account/verify-email?token=" + token.group(1)));
-    assertTrue("the link works without signing in", contentAsString(opened).contains("Email verified"));
+    assertTrue(
+        "the link works without signing in", contentAsString(opened).contains("Email verified"));
     assertEquals(400, route(app, get("/account/verify-email?token=" + token.group(1))).status());
-    assertEquals("/account", route(app, get("/account/actions?next=account").session(jane)).redirectLocation().orElse(null));
+    assertEquals(
+        "/account",
+        route(app, get("/account/actions?next=account").session(jane))
+            .redirectLocation()
+            .orElse(null));
   }
+
   @Test
   public void aLinkVerifiesOnlyTheAddressItWasSentTo() {
     start(Map.of("lattice.required-actions.verify-email", true));
     Map<String, String> jane = signIn("jane", "jane").session().data();
-    route(app, withCsrf(post("/account/actions/verify-email", Map.of("next", "account"))).session(jane));
+    route(
+        app,
+        withCsrf(post("/account/actions/verify-email", Map.of("next", "account"))).session(jane));
     Matcher token = Pattern.compile("token=([A-Za-z0-9_-]+)").matcher(mail.get(mail.size() - 1));
     assertTrue(token.find());
 
@@ -115,13 +146,24 @@ public class RequiredActionsTest {
     User before = users.byLoginId("jane").orElseThrow();
     Map<String, Object> claims = new java.util.HashMap<>(before.claims());
     claims.put("email", "jane.new@example.com");
-    users.save(new User(before.getSubject(), before.loginId(), before.passwordHash(), claims, before.attributes(), before.verifiedClaims()));
+    users.save(
+        new User(
+            before.getSubject(),
+            before.loginId(),
+            before.passwordHash(),
+            claims,
+            before.attributes(),
+            before.verifiedClaims()));
 
     assertEquals(400, route(app, get("/account/verify-email?token=" + token.group(1))).status());
-    assertFalse(Boolean.TRUE.equals(users.byLoginId("jane").orElseThrow().getClaim("email_verified", null)));
-    assertTrue("still asked to verify", contentAsString(route(app, get("/account/actions?next=account").session(jane))).contains("Verify your email"));
+    assertFalse(
+        Boolean.TRUE.equals(
+            users.byLoginId("jane").orElseThrow().getClaim("email_verified", null)));
+    assertTrue(
+        "still asked to verify",
+        contentAsString(route(app, get("/account/actions?next=account").session(jane)))
+            .contains("Verify your email"));
   }
-
 
   @Test
   public void aFlaggedAccountChoosesANewPassword() {
@@ -130,16 +172,39 @@ public class RequiredActionsTest {
     User john = users.byLoginId("john").orElseThrow();
     Map<String, Object> attributes = new HashMap<>(john.attributes());
     attributes.put("requiredActions", List.of("UPDATE_PASSWORD"));
-    users.save(new User(john.getSubject(), john.loginId(), john.passwordHash(), john.claims(), attributes, john.verifiedClaims()));
+    users.save(
+        new User(
+            john.getSubject(),
+            john.loginId(),
+            john.passwordHash(),
+            john.claims(),
+            attributes,
+            john.verifiedClaims()));
 
     Map<String, String> session = signIn("john", "john").session().data();
     String strong = "correct horse battery";
-    Result weak = route(app, withCsrf(post("/account/actions/password", Map.of("password", "short", "confirmation", "short", "next", "account"))).session(session));
+    Result weak =
+        route(
+            app,
+            withCsrf(
+                    post(
+                        "/account/actions/password",
+                        Map.of("password", "short", "confirmation", "short", "next", "account")))
+                .session(session));
     assertEquals(400, weak.status());
-    Result saved = route(app, withCsrf(post("/account/actions/password", Map.of("password", strong, "confirmation", strong, "next", "account"))).session(session));
+    Result saved =
+        route(
+            app,
+            withCsrf(
+                    post(
+                        "/account/actions/password",
+                        Map.of("password", strong, "confirmation", strong, "next", "account")))
+                .session(session));
     assertEquals(303, saved.status());
     assertEquals(200, route(app, get("/account").session(session)).status());
-    assertEquals(LoginService.Outcome.SUCCESS, app.injector().instanceOf(LoginService.class).authenticate("john", strong).outcome());
+    assertEquals(
+        LoginService.Outcome.SUCCESS,
+        app.injector().instanceOf(LoginService.class).authenticate("john", strong).outcome());
   }
 
   @Test
@@ -149,14 +214,32 @@ public class RequiredActionsTest {
     Result signedIn =
         route(
             app,
-            withCsrf(post("/api/authorization/decision", Map.of("ticket", "ticket-1", "loginId", "john", "password", "john", "login", "true")))
+            withCsrf(
+                    post(
+                        "/api/authorization/decision",
+                        Map.of(
+                            "ticket",
+                            "ticket-1",
+                            "loginId",
+                            "john",
+                            "password",
+                            "john",
+                            "login",
+                            "true")))
                 .session(page.session().data()));
-    assertEquals("/account/actions?next=authz%3Aticket-1", signedIn.redirectLocation().orElse(null));
+    assertEquals(
+        "/account/actions?next=authz%3Aticket-1", signedIn.redirectLocation().orElse(null));
     Map<String, String> session = signedIn.session().data();
-    route(app, withCsrf(post("/account/actions/terms", Map.of("accept", "true", "next", "authz:ticket-1"))).session(session));
+    route(
+        app,
+        withCsrf(post("/account/actions/terms", Map.of("accept", "true", "next", "authz:ticket-1")))
+            .session(session));
     Result onward = route(app, get("/account/actions?next=authz:ticket-1").session(session));
-    assertEquals("/api/authorization/continue?ticket=ticket-1", onward.redirectLocation().orElse(null));
-    assertTrue(contentAsString(route(app, get(onward.redirectLocation().get()).session(session))).contains("name=\"authorized\""));
+    assertEquals(
+        "/api/authorization/continue?ticket=ticket-1", onward.redirectLocation().orElse(null));
+    assertTrue(
+        contentAsString(route(app, get(onward.redirectLocation().get()).session(session)))
+            .contains("name=\"authorized\""));
   }
 
   @Test
@@ -180,7 +263,12 @@ public class RequiredActionsTest {
               response.setResponseContent("{\"error\":\"invalid_grant\"}");
               return response;
             });
-    Result token = route(app, post("/api/token", Map.of("grant_type", "password", "username", "john", "password", "john")));
+    Result token =
+        route(
+            app,
+            post(
+                "/api/token",
+                Map.of("grant_type", "password", "username", "john", "password", "john")));
     assertEquals(400, token.status());
     assertEquals(0, fake.count("tokenIssue"));
   }

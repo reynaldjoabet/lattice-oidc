@@ -47,12 +47,27 @@ public class SmallHelpersTest {
 
   @Test
   public void trustworthyOriginsAreHttpsOrLoopback() {
-    for (String uri : List.of("https://a.example", "wss://a.example", "http://localhost:9000", "http://app.localhost",
-        "http://127.0.0.1", "http://127.8.9.10:80", "http://[::1]:8080", "http://localhost.")) {
+    for (String uri :
+        List.of(
+            "https://a.example",
+            "wss://a.example",
+            "http://localhost:9000",
+            "http://app.localhost",
+            "http://127.0.0.1",
+            "http://127.8.9.10:80",
+            "http://[::1]:8080",
+            "http://localhost.")) {
       assertTrue(uri, SecureContexts.isPotentiallyTrustworthy(URI.create(uri)));
     }
-    for (String uri : List.of("http://a.example", "http://localhost.evil.example", "http://128.0.0.1",
-        "http://127.0.0.300", "http://[::2]", "ftp://localhost", "file:///etc/passwd")) {
+    for (String uri :
+        List.of(
+            "http://a.example",
+            "http://localhost.evil.example",
+            "http://128.0.0.1",
+            "http://127.0.0.300",
+            "http://[::2]",
+            "ftp://localhost",
+            "file:///etc/passwd")) {
       assertFalse(uri, SecureContexts.isPotentiallyTrustworthy(URI.create(uri)));
     }
   }
@@ -70,8 +85,16 @@ public class SmallHelpersTest {
 
   @Test
   public void acceptsRealAddresses() {
-    for (String address : List.of("a@example.com", "first.last+tag@sub.example.co.uk", "o'brien@example.ie",
-        "\"john..doe\"@example.org", "\"a@b\"@example.org", "user@bücher.example", "用户@例子.广告", "x@localhost")) {
+    for (String address :
+        List.of(
+            "a@example.com",
+            "first.last+tag@sub.example.co.uk",
+            "o'brien@example.ie",
+            "\"john..doe\"@example.org",
+            "\"a@b\"@example.org",
+            "user@bücher.example",
+            "用户@例子.广告",
+            "x@localhost")) {
       assertTrue(address, EmailAddresses.isValid(address));
     }
     assertTrue(EmailAddresses.isValid("a@[192.0.2.1]", true));
@@ -80,11 +103,26 @@ public class SmallHelpersTest {
 
   @Test
   public void refusesMalformedAddresses() {
-    for (String address : List.of("", "plain", "@example.com", "a@", "a..b@example.com", ".a@example.com",
-        "a.@example.com", "a b@example.com", "a@example.com.", "a@-example.com", "a@exa_mple.com",
-        "a@example..com", "a@example.com\r\nBcc: x@evil.example", "a@[192.0.2.1]",
-        "a@[300.0.0.1]", "a".repeat(65) + "@example.com", "a@" + "b".repeat(64) + ".com",
-        "a@" + "b.".repeat(130) + "com")) {
+    for (String address :
+        List.of(
+            "",
+            "plain",
+            "@example.com",
+            "a@",
+            "a..b@example.com",
+            ".a@example.com",
+            "a.@example.com",
+            "a b@example.com",
+            "a@example.com.",
+            "a@-example.com",
+            "a@exa_mple.com",
+            "a@example..com",
+            "a@example.com\r\nBcc: x@evil.example",
+            "a@[192.0.2.1]",
+            "a@[300.0.0.1]",
+            "a".repeat(65) + "@example.com",
+            "a@" + "b".repeat(64) + ".com",
+            "a@" + "b.".repeat(130) + "com")) {
       assertFalse(address, EmailAddresses.isValid(address, address.contains("300")));
     }
   }

@@ -18,22 +18,22 @@ import com.lattice.oidc.security.AuditService;
 import com.lattice.oidc.security.Interactions;
 import com.lattice.oidc.security.LoginService;
 import com.lattice.oidc.security.Passkeys;
-import com.lattice.oidc.security.UserSessions.LoginState;
 import com.lattice.oidc.security.UserSessions;
+import com.lattice.oidc.security.UserSessions.LoginState;
 import com.lattice.oidc.stores.AppConsentStore;
 import com.lattice.oidc.stores.ConsentStore;
+import jakarta.inject.Inject;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletionStage;
-import jakarta.inject.Inject;
 import play.mvc.Http;
 import play.mvc.Result;
 
 /**
- * An implementation of the OAuth 2.0 authorization endpoint with OpenID Connect support, and of
- * the endpoint that receives the end-user's decision from the authorization (consent) page.
+ * An implementation of the OAuth 2.0 authorization endpoint with OpenID Connect support, and of the
+ * endpoint that receives the end-user's decision from the authorization (consent) page.
  *
  * <ul>
  *   <li>{@code GET|POST /api/authorization}
@@ -43,10 +43,16 @@ import play.mvc.Result;
  * <p>The end-user interaction has two steps: sign in (skipped when a reusable login session
  * exists), then consent. Both pages post to the decision endpoint.
  *
- * @see <a href="https://www.rfc-editor.org/rfc/rfc6749.html#section-3.1">RFC 6749, 3.1. Authorization Endpoint</a>
- * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#AuthorizationEndpoint">OpenID Connect Core 1.0, 3.1.2. Authorization Endpoint (Authorization Code Flow)</a>
- * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#ImplicitAuthorizationEndpoint">OpenID Connect Core 1.0, 3.2.2. Authorization Endpoint (Implicit Flow)</a>
- * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#HybridAuthorizationEndpoint">OpenID Connect Core 1.0, 3.3.2. Authorization Endpoint (Hybrid Flow)</a>
+ * @see <a href="https://www.rfc-editor.org/rfc/rfc6749.html#section-3.1">RFC 6749, 3.1.
+ *     Authorization Endpoint</a>
+ * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#AuthorizationEndpoint">OpenID
+ *     Connect Core 1.0, 3.1.2. Authorization Endpoint (Authorization Code Flow)</a>
+ * @see <a
+ *     href="https://openid.net/specs/openid-connect-core-1_0.html#ImplicitAuthorizationEndpoint">OpenID
+ *     Connect Core 1.0, 3.2.2. Authorization Endpoint (Implicit Flow)</a>
+ * @see <a
+ *     href="https://openid.net/specs/openid-connect-core-1_0.html#HybridAuthorizationEndpoint">OpenID
+ *     Connect Core 1.0, 3.3.2. Authorization Endpoint (Hybrid Flow)</a>
  */
 public final class AuthorizationController extends BaseController {
 
@@ -95,7 +101,8 @@ public final class AuthorizationController extends BaseController {
    * <p>RFC 6749, 3.1 Authorization Endpoint says that the authorization endpoint MUST support the
    * {@code GET} method. The query string is passed to Authlete exactly as received.
    *
-   * @see <a href="https://www.rfc-editor.org/rfc/rfc6749.html#section-3.1">RFC 6749, 3.1 Authorization Endpoint</a>
+   * @see <a href="https://www.rfc-editor.org/rfc/rfc6749.html#section-3.1">RFC 6749, 3.1
+   *     Authorization Endpoint</a>
    */
   public CompletionStage<Result> get(Http.Request request) {
     return async(() -> authorize(request, Requests.rawQuery(request)));
@@ -112,9 +119,7 @@ public final class AuthorizationController extends BaseController {
     return async(() -> authorize(request, Requests.encode(Requests.form(request))));
   }
 
-  /**
-   * Handle the authorization request.
-   */
+  /** Handle the authorization request. */
   private Result authorize(Http.Request request, String parameters) {
     // Call Authlete's /api/auth/authorization API.
     AuthorizationResponse response =
@@ -156,17 +161,21 @@ public final class AuthorizationController extends BaseController {
     Optional<LoginState> current = reusableSession(request, info);
     Optional<String> shown = current.map(loginState -> loginState.user().displayName());
     AuthorizationPage page =
-        AuthorizationPage.from(info, shown, identityProviders.links()).withObbConsent(obbConsent(info));
+        AuthorizationPage.from(info, shown, identityProviders.links())
+            .withObbConsent(obbConsent(info));
     // Signed in: what the user approved for this app before, so the page asks only for what's new.
     Optional<AppConsentStore.AppConsent> approved =
-        current.flatMap(state -> appConsents.find(state.user().getSubject(), info.getClient().getClientId()));
+        current.flatMap(
+            state -> appConsents.find(state.user().getSubject(), info.getClient().getClientId()));
     if (approved.isPresent()) {
       page = page.withApproved(approved.get().scopes(), approved.get().claims());
     }
     AuthorizationInteraction pending =
-        AuthorizationInteraction.from(info, page, current.map(loginState -> loginState.user().getSubject()).orElse(null));
+        AuthorizationInteraction.from(
+            info, page, current.map(loginState -> loginState.user().getSubject()).orElse(null));
     // Signed in and the app asks for nothing new: no page at all.
-    if (current.isPresent() && alreadyApproved(pending, current.get().user(), current.get().acr())) {
+    if (current.isPresent()
+        && alreadyApproved(pending, current.get().user(), current.get().acr())) {
       return issueApproved(request, pending, null, grant(current.get()), Map.of());
     }
     String browserId = sessions.browserId(request);
@@ -191,9 +200,9 @@ public final class AuthorizationController extends BaseController {
   }
 
   /**
-   * The current login session if the authorization request permits reusing it: not when
-   * {@code prompt=login} is included, not when the authentication is older than {@code max_age}, and
-   * not when a specific subject is requested and the logged-in user is someone else.
+   * The current login session if the authorization request permits reusing it: not when {@code
+   * prompt=login} is included, not when the authentication is older than {@code max_age}, and not
+   * when a specific subject is requested and the logged-in user is someone else.
    */
   private Optional<LoginState> reusableSession(Http.Request request, AuthorizationResponse info) {
     Optional<LoginState> current = sessions.current(request);
@@ -222,11 +231,11 @@ public final class AuthorizationController extends BaseController {
    * issued from the existing login session without showing any page, or the request must fail with
    * the precise reason ({@code login_required} etc.).
    *
-   * <p>When prompt=none is contained in an authorization request, response.getClaims() returns null.
-   * This means that user claims don't have to be collected. In other words, if an authorization
-   * request contains prompt=none and requests user claims at the same time, Authlete regards such a
-   * request as illegal, because Authlete does not provide any means to pre-configure consent for
-   * claims. See the description about prompt=none in "OpenID Connect Core 1.0, 3.1.2.1.
+   * <p>When prompt=none is contained in an authorization request, response.getClaims() returns
+   * null. This means that user claims don't have to be collected. In other words, if an
+   * authorization request contains prompt=none and requests user claims at the same time, Authlete
+   * regards such a request as illegal, because Authlete does not provide any means to pre-configure
+   * consent for claims. See the description about prompt=none in "OpenID Connect Core 1.0, 3.1.2.1.
    * Authentication Request" for details.
    */
   private Result noInteraction(Http.Request request, AuthorizationResponse info) {
@@ -252,22 +261,28 @@ public final class AuthorizationController extends BaseController {
     // Check 3. Consent: without a page, only what the user already approved for this app
     // (OpenID Connect Core 3.1.2.6, consent_required).
     if (!interaction.approvalCanBeRemembered()
-        || !appConsents.covers(state.user().getSubject(), interaction.clientId(), interaction.scopeSet(), interaction.claimSet())) {
+        || !appConsents.covers(
+            state.user().getSubject(),
+            interaction.clientId(),
+            interaction.scopeSet(),
+            interaction.claimSet())) {
       return service.fail(info.getTicket(), Reason.CONSENT_REQUIRED);
     }
     // Check 4. Subject and Check 5. ACR are performed by AuthorizationHandler.issue(): the
     // requested subject must match the current user, and an essential ACR must be satisfied.
     // Issue
     return service.issue(
-        interaction, new AuthorizationHandler.Grant(state.user(), state.authTime(), state.sessionId(), state.acr()));
+        interaction,
+        new AuthorizationHandler.Grant(
+            state.user(), state.authTime(), state.sessionId(), state.acr()));
   }
 
   /**
    * Processes a request from the sign-in or consent page.
    *
    * <ul>
-   *   <li>{@code login} (sign-in page): authenticate with {@code loginId} and {@code password}, then
-   *       show the consent page. A wrong pair shows the sign-in page again with an error.
+   *   <li>{@code login} (sign-in page): authenticate with {@code loginId} and {@code password},
+   *       then show the consent page. A wrong pair shows the sign-in page again with an error.
    *   <li>{@code switchAccount} (consent page): show the sign-in page for this request.
    *   <li>{@code denied}: reject the request.
    *   <li>{@code authorized}: issue for the signed-in user. A {@code loginId} and {@code password}
@@ -295,7 +310,8 @@ public final class AuthorizationController extends BaseController {
           request,
           400,
           "Request expired",
-          "This authorization request is no longer valid. Please start again from the application.");
+          "This authorization request is no longer valid. Please start again from the"
+              + " application.");
     }
     AuthorizationInteraction interaction = found.get();
 
@@ -303,7 +319,8 @@ public final class AuthorizationController extends BaseController {
     // just no longer offered for this authorization request.
     if (form.containsKey("switchAccount")) {
       AuthorizationInteraction anonymous =
-          interaction.withPage(interaction.page().withLoggedInAs(Optional.empty()).withError(null))
+          interaction
+              .withPage(interaction.page().withLoggedInAs(Optional.empty()).withError(null))
               .withShownSubject(null);
       interactions.put(KIND, ticket, browserId, anonymous);
       return rerender(request, anonymous, null, 200);
@@ -312,7 +329,8 @@ public final class AuthorizationController extends BaseController {
     // Email-first sign-in: a work email whose domain belongs to an identity provider goes to that
     // provider; anything else continues to the password step for that identifier.
     if (form.containsKey("identify")) {
-      String identifier = Optional.ofNullable(Requests.first(form, "identifier")).map(String::trim).orElse("");
+      String identifier =
+          Optional.ofNullable(Requests.first(form, "identifier")).map(String::trim).orElse("");
       if (identifier.isEmpty()) {
         return rerender(request, interaction, "Enter your email or login ID.", 400);
       }
@@ -320,7 +338,17 @@ public final class AuthorizationController extends BaseController {
       if (provider.isPresent()) {
         return Responses.of(
             200,
-            views.html.oidc.homeRealm.render(interaction.page(), identifier, provider.get().id(), provider.get().name(), request).body(),
+            views
+                .html
+                .oidc
+                .homeRealm
+                .render(
+                    interaction.page(),
+                    identifier,
+                    provider.get().id(),
+                    provider.get().name(),
+                    request)
+                .body(),
             Responses.HTML,
             null);
       }
@@ -331,7 +359,9 @@ public final class AuthorizationController extends BaseController {
     }
     if (form.containsKey("changeIdentifier")) {
       AuthorizationInteraction reset =
-          interaction.withPage(interaction.page().withIdentifier(null).withError(null)).withShownSubject(null);
+          interaction
+              .withPage(interaction.page().withIdentifier(null).withError(null))
+              .withShownSubject(null);
       interactions.put(KIND, ticket, browserId, reset);
       return rerender(request, reset, null, 200);
     }
@@ -340,7 +370,8 @@ public final class AuthorizationController extends BaseController {
     // the offer to create a passkey).
     if (form.containsKey("login")) {
       String loginId = Requests.first(form, "loginId");
-      LoginService.Result result = login.authenticate(loginId, Requests.first(form, "password"), request.remoteAddress());
+      LoginService.Result result =
+          login.authenticate(loginId, Requests.first(form, "password"), request.remoteAddress());
       auditLogin(request, loginId, result);
       if (result.outcome() != LoginService.Outcome.SUCCESS) {
         // Stay on the password step for the same identifier.
@@ -349,17 +380,32 @@ public final class AuthorizationController extends BaseController {
         interactions.put(KIND, ticket, browserId, retry);
         return rerender(request, retry, failureMessage(result), 401);
       }
-      // An authenticator app: ask for a code first; the sign-in continues in SecondFactorController.
+      // An authenticator app: ask for a code first; the sign-in continues in
+      // SecondFactorController.
       if (flow.needsSecondFactor(result.user().get())) {
         return flow.challenge(
-            request, result.user().get(), "Password", form.containsKey("rememberMe"), "authz:" + ticket, Optional.empty());
+            request,
+            result.user().get(),
+            "Password",
+            form.containsKey("rememberMe"),
+            "authz:" + ticket,
+            Optional.empty());
       }
       Map<String, String> sessionOut = new HashMap<>();
       long authTime = System.currentTimeMillis() / 1000L;
       String sessionId =
-          sessions.login(result.user().get(), authTime, null, sessionOut, request, "Password", form.containsKey("rememberMe"));
+          sessions.login(
+              result.user().get(),
+              authTime,
+              null,
+              sessionOut,
+              request,
+              "Password",
+              form.containsKey("rememberMe"));
       AuthorizationInteraction signedIn =
-          interaction.shownTo(result.user().get(), appConsents.find(result.user().get().getSubject(), interaction.clientId()));
+          interaction.shownTo(
+              result.user().get(),
+              appConsents.find(result.user().get().getSubject(), interaction.clientId()));
       interactions.put(KIND, ticket, browserId, signedIn);
       Optional<Result> gated = flow.gate(result.user().get(), "authz:" + ticket);
       if (gated.isPresent()) {
@@ -371,14 +417,24 @@ public final class AuthorizationController extends BaseController {
         return sessions.apply(
             Responses.of(
                 200,
-                views.html.oidc.passkeyOffer.render(signedIn.page(), result.user().get(), request).body(),
+                views
+                    .html
+                    .oidc
+                    .passkeyOffer
+                    .render(signedIn.page(), result.user().get(), request)
+                    .body(),
                 Responses.HTML,
                 null),
             request,
             sessionOut);
       }
       if (alreadyApproved(signedIn, result.user().get(), null)) {
-        return issueApproved(request, signedIn, browserId, new AuthorizationHandler.Grant(result.user().get(), authTime, sessionId), sessionOut);
+        return issueApproved(
+            request,
+            signedIn,
+            browserId,
+            new AuthorizationHandler.Grant(result.user().get(), authTime, sessionId),
+            sessionOut);
       }
       return sessions.apply(rerender(request, signedIn, null, 200), request, sessionOut);
     }
@@ -387,7 +443,8 @@ public final class AuthorizationController extends BaseController {
     // The end-user denied the authorization request.
     if (!form.containsKey("authorized")) {
       interactions.take(KIND, ticket, browserId, AuthorizationInteraction.class);
-      audit.record(request, AuditService.Event.CONSENT_DENIED, "client_id", interaction.clientIdentifier());
+      audit.record(
+          request, AuditService.Event.CONSENT_DENIED, "client_id", interaction.clientIdentifier());
       return service.fail(ticket, Reason.DENIED);
     }
 
@@ -397,16 +454,19 @@ public final class AuthorizationController extends BaseController {
     // or the one already logged in when the page was shown.
     String loginId = Requests.first(form, "loginId");
     if (loginId != null && !loginId.isBlank()) {
-      LoginService.Result result = login.authenticate(loginId, Requests.first(form, "password"), request.remoteAddress());
+      LoginService.Result result =
+          login.authenticate(loginId, Requests.first(form, "password"), request.remoteAddress());
       auditLogin(request, loginId, result);
       if (result.outcome() != LoginService.Outcome.SUCCESS) {
         return rerender(request, interaction.withShownSubject(null), failureMessage(result), 401);
       }
       if (flow.needsSecondFactor(result.user().get())) {
-        return flow.challenge(request, result.user().get(), "Password", false, "authz:" + ticket, Optional.empty());
+        return flow.challenge(
+            request, result.user().get(), "Password", false, "authz:" + ticket, Optional.empty());
       }
       long authTime = System.currentTimeMillis() / 1000L;
-      String sessionId = sessions.login(result.user().get(), authTime, null, sessionOut, request, "Password");
+      String sessionId =
+          sessions.login(result.user().get(), authTime, null, sessionOut, request, "Password");
       Optional<Result> gated = flow.gate(result.user().get(), "authz:" + ticket);
       if (gated.isPresent()) {
         flow.showSignedIn(ticket, sessionOut.get(UserSessions.BROWSER_ID), result.user().get());
@@ -420,7 +480,9 @@ public final class AuthorizationController extends BaseController {
           || !interaction.shownSubject().equals(current.get().user().getSubject())) {
         // The end-user is not authenticated: back to the sign-in page.
         AuthorizationInteraction anonymous =
-            interaction.withPage(interaction.page().withLoggedInAs(Optional.empty())).withShownSubject(null);
+            interaction
+                .withPage(interaction.page().withLoggedInAs(Optional.empty()))
+                .withShownSubject(null);
         interactions.put(KIND, ticket, browserId, anonymous);
         return rerender(request, anonymous, "Please sign in.", 401);
       }
@@ -430,7 +492,8 @@ public final class AuthorizationController extends BaseController {
         return gated.get();
       }
       // The app requires a passkey-level sign-in that this session doesn't have: step up first.
-      if (needsStepUp(interaction, loginState.acr()) && passkeys.hasPasskeys(loginState.user().getSubject())) {
+      if (needsStepUp(interaction, loginState.acr())
+          && passkeys.hasPasskeys(loginState.user().getSubject())) {
         return Responses.of(
             200,
             views.html.oidc.stepUp.render(interaction.page(), request).body(),
@@ -453,24 +516,30 @@ public final class AuthorizationController extends BaseController {
         "client_id",
         interaction.clientIdentifier());
     if (interaction.approvalCanBeRemembered()) {
-      appConsents.approve(grant.user().getSubject(), interaction.clientId(), interaction.scopeSet(), interaction.claimSet());
+      appConsents.approve(
+          grant.user().getSubject(),
+          interaction.clientId(),
+          interaction.scopeSet(),
+          interaction.claimSet());
     }
     return sessions.apply(service.issue(interaction, grant), request, sessionOut);
   }
 
   /**
-   * Shows the current step of a pending authorization request again: used after a passkey
-   * sign-in or "Not now" on the passkey offer. Only renders; it never issues.
+   * Shows the current step of a pending authorization request again: used after a passkey sign-in
+   * or "Not now" on the passkey offer. Only renders; it never issues.
    */
   public Result continueAuthorization(Http.Request request, String ticket) {
     String browserId = sessions.existingBrowserId(request).orElse(null);
-    Optional<AuthorizationInteraction> found = interactions.get(KIND, ticket, browserId, AuthorizationInteraction.class);
+    Optional<AuthorizationInteraction> found =
+        interactions.get(KIND, ticket, browserId, AuthorizationInteraction.class);
     if (found.isEmpty()) {
       return Pages.message(
           request,
           400,
           "Request expired",
-          "This authorization request is no longer valid. Please start again from the application.");
+          "This authorization request is no longer valid. Please start again from the"
+              + " application.");
     }
     AuthorizationInteraction interaction = found.get();
     Optional<LoginState> current = sessions.current(request);
@@ -478,10 +547,12 @@ public final class AuthorizationController extends BaseController {
         current.isPresent()
             && interaction.shownSubject() != null
             && interaction.shownSubject().equals(current.get().user().getSubject());
-    if (signedInAsShown && alreadyApproved(interaction, current.get().user(), current.get().acr())) {
+    if (signedInAsShown
+        && alreadyApproved(interaction, current.get().user(), current.get().acr())) {
       return issueApproved(request, interaction, browserId, grant(current.get()), Map.of());
     }
-    return rerender(request, signedInAsShown ? interaction : interaction.withShownSubject(null), null, 200);
+    return rerender(
+        request, signedInAsShown ? interaction : interaction.withShownSubject(null), null, 200);
   }
 
   /**
@@ -489,12 +560,17 @@ public final class AuthorizationController extends BaseController {
    * for, the app didn't send {@code prompt=consent}, and nothing else must be shown first (required
    * actions, a passkey step-up).
    */
-  private boolean alreadyApproved(AuthorizationInteraction interaction, User user, String sessionAcr) {
+  private boolean alreadyApproved(
+      AuthorizationInteraction interaction, User user, String sessionAcr) {
     return !interaction.consentPrompted()
         && interaction.approvalCanBeRemembered()
         && !needsStepUp(interaction, sessionAcr)
         && flow.gate(user, "authz:" + interaction.ticket()).isEmpty()
-        && appConsents.covers(user.getSubject(), interaction.clientId(), interaction.scopeSet(), interaction.claimSet());
+        && appConsents.covers(
+            user.getSubject(),
+            interaction.clientId(),
+            interaction.scopeSet(),
+            interaction.claimSet());
   }
 
   /** Issues on an earlier approval, without the consent page. */
@@ -518,7 +594,8 @@ public final class AuthorizationController extends BaseController {
   }
 
   private static AuthorizationHandler.Grant grant(LoginState state) {
-    return new AuthorizationHandler.Grant(state.user(), state.authTime(), state.sessionId(), state.acr());
+    return new AuthorizationHandler.Grant(
+        state.user(), state.authTime(), state.sessionId(), state.acr());
   }
 
   /** Whether the request essentially requires the passkey ACR and the session has a weaker one. */
@@ -541,7 +618,9 @@ public final class AuthorizationController extends BaseController {
     } else {
       // Signed in: required actions come before the consent page.
       Optional<Result> gated =
-          users.bySubject(interaction.shownSubject()).flatMap(user -> flow.gate(user, "authz:" + interaction.ticket()));
+          users
+              .bySubject(interaction.shownSubject())
+              .flatMap(user -> flow.gate(user, "authz:" + interaction.ticket()));
       if (gated.isPresent()) {
         return gated.get();
       }

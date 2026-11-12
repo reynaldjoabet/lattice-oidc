@@ -3,10 +3,10 @@ package com.lattice.oidc.stores.postgres;
 import com.lattice.oidc.common.JsonHelpers;
 import com.lattice.oidc.models.Consent;
 import com.lattice.oidc.stores.ConsentStore;
-import java.time.Instant;
-import java.util.Optional;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import java.time.Instant;
+import java.util.Optional;
 
 /** {@link ConsentStore} in PostgreSQL (table {@code obb_consents}). */
 @Singleton
@@ -26,7 +26,8 @@ public final class PostgresConsentStore implements ConsentStore {
         : database.queryOne(
             "SELECT consent::text FROM obb_consents WHERE consent_id = ? AND keep_until > ?",
             row -> JsonHelpers.read(row.getString(1), Consent.class),
-            consentId, Instant.now());
+            consentId,
+            Instant.now());
   }
 
   @Override

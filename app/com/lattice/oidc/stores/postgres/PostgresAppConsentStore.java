@@ -1,13 +1,13 @@
 package com.lattice.oidc.stores.postgres;
 
 import com.lattice.oidc.stores.AppConsentStore;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import java.util.Arrays;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 
 /** {@link AppConsentStore} in PostgreSQL (table {@code app_consents}). */
 @Singleton
@@ -23,7 +23,8 @@ public final class PostgresAppConsentStore implements AppConsentStore {
   @Override
   public Optional<AppConsent> find(String subject, long clientId) {
     return database.queryOne(
-        "SELECT subject, client_id, scopes, claims, granted_at FROM app_consents WHERE subject = ? AND client_id = ?",
+        "SELECT subject, client_id, scopes, claims, granted_at FROM app_consents WHERE subject = ?"
+            + " AND client_id = ?",
         row ->
             new AppConsent(
                 row.getString("subject"),
@@ -52,7 +53,8 @@ public final class PostgresAppConsentStore implements AppConsentStore {
 
   @Override
   public void delete(String subject, long clientId) {
-    database.update("DELETE FROM app_consents WHERE subject = ? AND client_id = ?", subject, clientId);
+    database.update(
+        "DELETE FROM app_consents WHERE subject = ? AND client_id = ?", subject, clientId);
   }
 
   @Override
@@ -66,6 +68,8 @@ public final class PostgresAppConsentStore implements AppConsentStore {
   }
 
   private static Set<String> words(String text) {
-    return text == null || text.isBlank() ? Set.of() : Set.copyOf(Arrays.asList(text.trim().split(" +")));
+    return text == null || text.isBlank()
+        ? Set.of()
+        : Set.copyOf(Arrays.asList(text.trim().split(" +")));
   }
 }

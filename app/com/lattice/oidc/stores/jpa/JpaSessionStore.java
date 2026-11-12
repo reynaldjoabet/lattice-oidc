@@ -25,7 +25,16 @@ public final class JpaSessionStore implements SessionStore {
   }
 
   private static Session session(SessionEntity s) {
-    return new Session(s.id, s.subject, s.userAgent, s.ip, s.method, s.createdAt, s.lastSeenAt, s.expiresAt, s.rememberMe);
+    return new Session(
+        s.id,
+        s.subject,
+        s.userAgent,
+        s.ip,
+        s.method,
+        s.createdAt,
+        s.lastSeenAt,
+        s.expiresAt,
+        s.rememberMe);
   }
 
   @Override
@@ -54,7 +63,9 @@ public final class JpaSessionStore implements SessionStore {
     }
     return database.transaction(
         em ->
-            em.createQuery("select s from SessionEntity s where s.id = :id and s.expiresAt > :now", SessionEntity.class)
+            em.createQuery(
+                    "select s from SessionEntity s where s.id = :id and s.expiresAt > :now",
+                    SessionEntity.class)
                 .setParameter("id", id)
                 .setParameter("now", Instant.now())
                 .getResultStream()
@@ -67,7 +78,9 @@ public final class JpaSessionStore implements SessionStore {
     // One bulk update: writes only when the last recorded activity is older than the interval.
     database.transaction(
         em ->
-            em.createQuery("update SessionEntity s set s.lastSeenAt = :now where s.id = :id and s.lastSeenAt < :since")
+            em.createQuery(
+                    "update SessionEntity s set s.lastSeenAt = :now where s.id = :id and"
+                        + " s.lastSeenAt < :since")
                 .setParameter("now", now)
                 .setParameter("id", id)
                 .setParameter("since", now.minus(interval))
@@ -79,7 +92,8 @@ public final class JpaSessionStore implements SessionStore {
     if (id == null) {
       return Optional.empty();
     }
-    // Native SQL: delete and return in one statement, so of two concurrent logouts only one gets the
+    // Native SQL: delete and return in one statement, so of two concurrent logouts only one gets
+    // the
     // session. session_clients rows go with it (ON DELETE CASCADE).
     return database.transaction(
         em ->
@@ -101,7 +115,8 @@ public final class JpaSessionStore implements SessionStore {
     return database.transaction(
         em ->
             em.createQuery(
-                    "select s from SessionEntity s where s.subject = :subject and s.expiresAt > :now order by s.lastSeenAt desc",
+                    "select s from SessionEntity s where s.subject = :subject and s.expiresAt >"
+                        + " :now order by s.lastSeenAt desc",
                     SessionEntity.class)
                 .setParameter("subject", subject)
                 .setParameter("now", Instant.now())
@@ -133,7 +148,8 @@ public final class JpaSessionStore implements SessionStore {
         em ->
             new LinkedHashSet<>(
                 em.createQuery(
-                        "select c.clientIdentifier from SessionClientEntity c where c.sessionId = :id order by c.clientIdentifier",
+                        "select c.clientIdentifier from SessionClientEntity c where c.sessionId ="
+                            + " :id order by c.clientIdentifier",
                         String.class)
                     .setParameter("id", id)
                     .getResultList()));
@@ -143,7 +159,8 @@ public final class JpaSessionStore implements SessionStore {
   public long countActive() {
     return database.transaction(
         em ->
-            em.createQuery("select count(s) from SessionEntity s where s.expiresAt > :now", Long.class)
+            em.createQuery(
+                    "select count(s) from SessionEntity s where s.expiresAt > :now", Long.class)
                 .setParameter("now", Instant.now())
                 .getSingleResult());
   }

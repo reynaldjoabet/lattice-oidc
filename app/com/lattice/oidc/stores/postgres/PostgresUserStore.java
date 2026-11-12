@@ -5,13 +5,13 @@ import com.lattice.oidc.common.LatticeConfig;
 import com.lattice.oidc.models.User;
 import com.lattice.oidc.stores.InMemoryUserStore;
 import com.lattice.oidc.stores.UserStore;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import play.Environment;
@@ -31,12 +31,16 @@ public final class PostgresUserStore implements UserStore {
   private final PostgresDatabase database;
 
   @Inject
-  public PostgresUserStore(PostgresDatabase database, LatticeConfig config, Environment environment) {
+  public PostgresUserStore(
+      PostgresDatabase database, LatticeConfig config, Environment environment) {
     this.database = database;
     if (config.demoUsers() && count() == 0) {
       List<User> demo = InMemoryUserStore.demoUsers(environment);
       demo.forEach(this::save);
-      LOG.warn("Seeded {} DEMO user accounts into an empty database; disable lattice.demo-users in production.", demo.size());
+      LOG.warn(
+          "Seeded {} DEMO user accounts into an empty database; disable lattice.demo-users in"
+              + " production.",
+          demo.size());
     }
   }
 
@@ -48,14 +52,18 @@ public final class PostgresUserStore implements UserStore {
         row.getString("password_hash"),
         JsonHelpers.readMap(row.getString("claims")),
         JsonHelpers.readMap(row.getString("attributes")),
-        (List<Map<String, Object>>) (List<?>) JsonHelpers.readList(row.getString("verified_claims")));
+        (List<Map<String, Object>>)
+            (List<?>) JsonHelpers.readList(row.getString("verified_claims")));
   }
 
   @Override
   public Optional<User> bySubject(String subject) {
     return subject == null
         ? Optional.empty()
-        : database.queryOne("SELECT " + COLUMNS + " FROM users WHERE subject = ?", PostgresUserStore::user, subject);
+        : database.queryOne(
+            "SELECT " + COLUMNS + " FROM users WHERE subject = ?",
+            PostgresUserStore::user,
+            subject);
   }
 
   @Override
@@ -63,7 +71,9 @@ public final class PostgresUserStore implements UserStore {
     return loginId == null
         ? Optional.empty()
         : database.queryOne(
-            "SELECT " + COLUMNS + " FROM users WHERE lower(login_id) = lower(?)", PostgresUserStore::user, loginId);
+            "SELECT " + COLUMNS + " FROM users WHERE lower(login_id) = lower(?)",
+            PostgresUserStore::user,
+            loginId);
   }
 
   @Override
@@ -111,7 +121,8 @@ public final class PostgresUserStore implements UserStore {
     }
     // One statement: the row changes only if its hash is still the one that was verified.
     return database.update(
-            "UPDATE users SET password_hash = ?, updated_at = now() WHERE subject = ? AND password_hash = ?",
+            "UPDATE users SET password_hash = ?, updated_at = now() WHERE subject = ? AND"
+                + " password_hash = ?",
             newHash,
             subject,
             expectedHash)

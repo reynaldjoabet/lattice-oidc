@@ -3,11 +3,11 @@ package com.lattice.oidc.stores.redis;
 import com.lattice.oidc.metrics.Metrics;
 import com.typesafe.config.Config;
 import io.micrometer.core.instrument.Gauge;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import java.net.URI;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import play.inject.ApplicationLifecycle;
@@ -18,10 +18,10 @@ import redis.clients.jedis.executors.CommandExecutor;
 import redis.clients.jedis.util.Pool;
 
 /**
- * The pooled Redis client ({@code lattice.redis.url}, for example {@code redis://:password@host:6379}
- * or {@code rediss://} for TLS). It is checked with a PING at startup, so a wrong address stops the
- * server at startup instead of the first sign-in. All keys start with {@code lattice.redis.key-prefix},
- * so one Redis can serve several deployments.
+ * The pooled Redis client ({@code lattice.redis.url}, for example {@code
+ * redis://:password@host:6379} or {@code rediss://} for TLS). It is checked with a PING at startup,
+ * so a wrong address stops the server at startup instead of the first sign-in. All keys start with
+ * {@code lattice.redis.key-prefix}, so one Redis can serve several deployments.
  */
 @Singleton
 public final class RedisConnection {

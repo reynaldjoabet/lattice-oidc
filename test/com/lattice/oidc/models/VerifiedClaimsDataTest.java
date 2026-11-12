@@ -36,15 +36,19 @@ public class VerifiedClaimsDataTest {
     assertProblem("\"text\"", "JSON array");
     assertProblem("[1]", "not a JSON object");
     assertProblem("[{\"claims\":{\"given_name\":\"Taro\"}}]", "no \"verification\" object");
-    assertProblem("[{\"verification\":{},\"claims\":{\"given_name\":\"Taro\"}}]", "trust_framework");
-    assertProblem("[{\"verification\":{\"trust_framework\":\"jp_aml\"},\"claims\":{}}]", "no \"claims\"");
+    assertProblem(
+        "[{\"verification\":{},\"claims\":{\"given_name\":\"Taro\"}}]", "trust_framework");
+    assertProblem(
+        "[{\"verification\":{\"trust_framework\":\"jp_aml\"},\"claims\":{}}]", "no \"claims\"");
     assertProblem("[" + DATASET + ",{\"verification\":{\"trust_framework\":\"x\"}}]", "Dataset 2");
   }
 
   private static void assertProblem(String json, String expected) {
     VerifiedClaimsData.Parsed parsed = VerifiedClaimsData.parse(json);
     assertFalse(json, parsed.ok());
-    assertTrue(parsed.problems().toString(), parsed.problems().stream().anyMatch(p -> p.contains(expected)));
+    assertTrue(
+        parsed.problems().toString(),
+        parsed.problems().stream().anyMatch(p -> p.contains(expected)));
     assertTrue("nothing is kept from refused data", parsed.datasets().isEmpty());
   }
 }

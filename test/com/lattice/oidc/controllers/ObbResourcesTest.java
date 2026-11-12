@@ -75,7 +75,8 @@ public class ObbResourcesTest {
                 .header("Content-Type", "application/json"));
     assertEquals(201, r.status());
     @SuppressWarnings("unchecked")
-    Map<String, Object> data = (Map<String, Object>) JsonHelpers.readMap(contentAsString(r)).get("data");
+    Map<String, Object> data =
+        (Map<String, Object>) JsonHelpers.readMap(contentAsString(r)).get("data");
     return (String) data.get("consentId");
   }
 
@@ -98,7 +99,8 @@ public class ObbResourcesTest {
     assertEquals(403, route(app, request("DELETE", "/api/obb/consents/" + id)).status());
 
     tokenOf(42L, "consents");
-    assertEquals("still there", 200, route(app, request("GET", "/api/obb/consents/" + id)).status());
+    assertEquals(
+        "still there", 200, route(app, request("GET", "/api/obb/consents/" + id)).status());
   }
 
   @Test
@@ -111,7 +113,11 @@ public class ObbResourcesTest {
   @Test
   public void consentWithoutDataIsRejected() {
     Result r =
-        route(app, request("POST", "/api/obb/consents").bodyText("{}").header("Content-Type", "application/json"));
+        route(
+            app,
+            request("POST", "/api/obb/consents")
+                .bodyText("{}")
+                .header("Content-Type", "application/json"));
     assertEquals(400, r.status());
   }
 
@@ -126,7 +132,9 @@ public class ObbResourcesTest {
     Result ok = route(app, request("GET", "/api/obb/accounts"));
     assertEquals(200, ok.status());
     assertTrue(contentAsString(ok).contains("accountId"));
-    assertArrayEquals(new String[] {"accounts"}, ((IntrospectionRequest) fake.lastRequest("introspection")).getScopes());
+    assertArrayEquals(
+        new String[] {"accounts"},
+        ((IntrospectionRequest) fake.lastRequest("introspection")).getScopes());
   }
 
   @Test
@@ -134,7 +142,8 @@ public class ObbResourcesTest {
     tokenOf(42L, "consent:urn:lattice:abc");
     route(app, request("GET", "/api/obb/fapi2base-accounts"));
     assertArrayEquals(
-        new String[] {"fapi2base-accounts"}, ((IntrospectionRequest) fake.lastRequest("introspection")).getScopes());
+        new String[] {"fapi2base-accounts"},
+        ((IntrospectionRequest) fake.lastRequest("introspection")).getScopes());
   }
 
   @Test
@@ -156,7 +165,12 @@ public class ObbResourcesTest {
   public void interactionIdIsGeneratedWhenAbsentAndMalformedOnesAreRejected() {
     tokenOf(42L, "resources", "consent:urn:lattice:abc");
     Result generated =
-        route(app, new Http.RequestBuilder().method("GET").uri("/api/obb/resources").header("Authorization", "Bearer at-1"));
+        route(
+            app,
+            new Http.RequestBuilder()
+                .method("GET")
+                .uri("/api/obb/resources")
+                .header("Authorization", "Bearer at-1"));
     assertEquals(200, generated.status());
     assertTrue(generated.header("x-fapi-interaction-id").isPresent());
 
