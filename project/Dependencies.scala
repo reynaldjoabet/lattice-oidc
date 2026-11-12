@@ -22,7 +22,7 @@ object Dependencies {
     // --- JSON ---
     val jsoniter  = "2.42.2"
     val circe     = "0.14.17"
-    val jackson3  = "3.2.4"
+    val jackson3  = "3.3.0"
     val jsonSmart = "2.6.1"
 
     // --- FP ---
