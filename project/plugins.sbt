@@ -14,3 +14,7 @@ addSbtPlugin("com.github.sbt" % "sbt-digest" % "2.2.0-M1")
 // A gzipped copy of each asset when packaging; Play serves it to clients that accept gzip.
 // A milestone release, the only one built for sbt 2.
 addSbtPlugin("com.github.sbt" % "sbt-gzip" % "2.1.0-M1")
+// google-java-format for the Java sources: `javafmtAll` formats, `javafmtCheckAll` is what CI runs.
+addSbtPlugin("com.github.sbt" % "sbt-java-formatter" % "0.14.0")
+// Test coverage of the Java code: `sbt --client jacoco` writes target/.../jacoco/report.
+addSbtPlugin("com.github.sbt" % "sbt-jacoco" % "3.7.0")

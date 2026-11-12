@@ -26,10 +26,12 @@ Tests and formatting, as CI runs them:
 
 ```sh
 sbt --client test
-sbt --client "scalafmtSbtCheck; scalafmtCheckAll"
+sbt --client fmtCheck               # `sbt --client fmt` fixes what it reports
 ```
 
 The PostgreSQL store tests need Docker running; see [Testing against PostgreSQL](#testing-against-postgresql).
+
+Test coverage: `sbt --client jacoco` runs the tests and writes an HTML report to `target/out/jvm/scala-3.9.0/lattice-oidc/jacoco/report/html/index.html`. It's a report, not a gate: no minimum percentage fails the build.
 
 ## Contents
 

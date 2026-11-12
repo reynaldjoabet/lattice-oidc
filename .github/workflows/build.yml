@@ -43,7 +43,7 @@ jobs:
         uses: sbt/setup-sbt@v1
 
       - name: Check formatting
-        run: sbt -v "scalafmtSbtCheck; scalafmtCheckAll"
+        run: sbt -v fmtCheck
 
   build:
     name: Java ${{ matrix.java }} (${{ matrix.distribution }})
