@@ -48,7 +48,7 @@ val jacksonLibs = Seq(
 
 // jackson-annotations is shared by both lines: Jackson 3 needs the 2.22 annotations, which is also
 // the version of the Jackson 2 line Play and Pekko use here.
-val jacksonAnnotationsVersion = "2.22"
+val jacksonAnnotationsVersion = "2.23"
 
 val jacksonOverrides =
   jacksonLibs.map(_ % jacksonVersion) :+

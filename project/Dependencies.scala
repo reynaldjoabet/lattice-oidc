@@ -11,7 +11,7 @@ object Dependencies {
     val zioLogging = "2.5.3"
     val zioConfig  = "4.1.0"
     val zioSchema  = "1.9.0"
-    val zioKafka   = "3.8.1"
+    val zioKafka   = "4.0.0"
 
     // --- HTTP ---
     val http4s  = "0.23.38"
@@ -47,7 +47,7 @@ object Dependencies {
     // Jakarta Persistence (JPA) annotations, for the Keycloak entities in docs/keycloak.
     val jakartaPersistence = "3.2.0"
     // Hibernate ORM: the JPA implementation.
-    val hibernate = "7.4.14.Final"
+    val hibernate = "7.4.15.Final"
     // A real PostgreSQL for the storage tests, in Docker.
     val testcontainers = "2.0.5"
 
@@ -59,7 +59,7 @@ object Dependencies {
     val nimbusJoseJwt    = "10.10"
     val nimbusOauth2Oidc = "11.39"
     val vault            = "5.1.0"
-    val authlete         = "4.49"
+    val authlete         = "4.50"
     val webauthn         = "2.10.1"
 
     // --- Logging ---
