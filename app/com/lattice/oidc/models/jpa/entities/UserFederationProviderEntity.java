@@ -20,10 +20,9 @@ public class UserFederationProviderEntity {
 
   @Id
   @Column(name = "ID", length = 36)
-  @Access(
-      AccessType
-          .PROPERTY) // we do this because relationships often fetch id, but not entity.  This
-                     // avoids an extra SQL
+  // Property access: relationships often fetch only the id, not the entity, and this avoids
+  // an extra SQL query.
+  @Access(AccessType.PROPERTY)
   protected String id;
 
   @ManyToOne(fetch = FetchType.LAZY)
