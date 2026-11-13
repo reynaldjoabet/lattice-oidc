@@ -12,6 +12,7 @@ import jakarta.inject.Inject;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletionStage;
 import play.mvc.BodyParser;
 import play.mvc.Http;
@@ -46,6 +47,11 @@ public final class CibaController extends BaseController {
   public CompletionStage<Result> authenticate(Http.Request request) {
     return async(
         () -> {
+          // RFC 10070: a JWT client assertion must name only this server's issuer as audience.
+          Optional<Result> refused = clientAssertions.refuse(Requests.form(request));
+          if (refused.isPresent()) {
+            return refused.get();
+          }
           BasicCredentials basic = Requests.basicCredentials(request);
           String[] chain = requests.clientCertificateChain(request);
           // Call Authlete's /api/backchannel/authentication API.

@@ -8,6 +8,7 @@ import com.lattice.oidc.common.Requests;
 import com.lattice.oidc.common.Responses;
 import com.lattice.oidc.common.WebException;
 import com.lattice.oidc.security.AuditService;
+import com.lattice.oidc.security.ClientAssertionAudience;
 import com.lattice.oidc.security.LoginService;
 import com.lattice.oidc.security.SecondFactors;
 import jakarta.inject.Inject;
@@ -34,6 +35,7 @@ public abstract class BaseController extends Controller {
   @Inject private AuthleteExecutionContext executionContext;
   @Inject protected AuditService audit;
   @Inject protected Requests requests;
+  @Inject protected ClientAssertionAudience clientAssertions;
   @Inject private SecondFactors secondFactors;
 
   protected AuthleteApi api() {

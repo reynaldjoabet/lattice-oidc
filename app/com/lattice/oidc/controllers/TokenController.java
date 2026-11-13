@@ -18,6 +18,7 @@ import jakarta.inject.Inject;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletionStage;
 import play.mvc.Http;
 import play.mvc.Result;
@@ -81,6 +82,11 @@ public final class TokenController extends BaseController {
 
   private Result process(Http.Request request) {
     Map<String, String[]> params = Requests.form(request);
+    // RFC 10070: a JWT client assertion must name only this server's issuer as audience.
+    Optional<Result> refused = clientAssertions.refuse(params);
+    if (refused.isPresent()) {
+      return refused.get();
+    }
     // The credential of the client application extracted from the Authorization header, if any:
     // the client ID and the client secret.
     BasicCredentials basic = Requests.basicCredentials(request);
