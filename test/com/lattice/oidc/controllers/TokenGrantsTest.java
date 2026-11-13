@@ -139,6 +139,61 @@ public class TokenGrantsTest {
     assertEquals(0, fake.count("tokenCreate"));
   }
 
+  private void exchangeIdToken(String idToken, String clientIdAlias) {
+    authleteSays(
+        TokenResponse.Action.TOKEN_EXCHANGE,
+        r -> {
+          r.setSubjectTokenType(TokenType.ID_TOKEN);
+          r.setSubjectToken(idToken);
+          r.setClientIdAlias(clientIdAlias);
+        });
+  }
+
+  @Test
+  public void exchangeOfAnIdTokenIssuedToTheRequestingClientSucceeds() {
+    exchangeIdToken(trusted.jwt(trusted.issuer, "alice", "42"), null);
+    assertEquals(200, tokenRequest().status());
+    assertEquals("alice", ((TokenCreateRequest) fake.lastRequest("tokenCreate")).getSubject());
+  }
+
+  @Test
+  public void exchangeOfAnIdTokenIssuedToTheClientsAliasSucceeds() {
+    exchangeIdToken(trusted.jwt(trusted.issuer, "alice", "billing-app"), "billing-app");
+    assertEquals(200, tokenRequest().status());
+  }
+
+  @Test
+  public void exchangeOfAnIdTokenIssuedToAnotherClientIsRefused() {
+    exchangeIdToken(trusted.jwt(trusted.issuer, "alice", "other-app"), "billing-app");
+    Result r = tokenRequest();
+    assertEquals(400, r.status());
+    assertTrue(contentAsString(r).contains("not issued to this client"));
+    assertEquals(0, fake.count("tokenCreate"));
+  }
+
+  @Test
+  public void exchangeOfAnIdTokenWithoutAudienceIsRefused() {
+    exchangeIdToken(trusted.jwt(trusted.issuer, "alice", null), null);
+    assertEquals(400, tokenRequest().status());
+    assertEquals(0, fake.count("tokenCreate"));
+  }
+
+  @Test
+  public void withStrictIdTokenAudienceOffAnotherClientsIdTokenIsOnlyLogged() {
+    Helpers.stop(app);
+    app =
+        app(
+            fake,
+            Map.of(
+                "lattice.trusted-jwt-issuers",
+                List.of(Map.of("issuer", trusted.issuer, "jwks-uri", trusted.jwksUri())),
+                "lattice.token-exchange.strict-id-token-audience",
+                false));
+    Helpers.start(app);
+    exchangeIdToken(trusted.jwt(trusted.issuer, "alice", "other-app"), null);
+    assertEquals(200, tokenRequest().status());
+  }
+
   @Test
   public void exchangeOfAccessTokenUsesTheSubjectAuthleteValidated() {
     authleteSays(

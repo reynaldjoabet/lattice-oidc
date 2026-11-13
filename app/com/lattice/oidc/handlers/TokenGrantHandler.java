@@ -9,12 +9,17 @@ import com.authlete.common.types.TokenType;
 import com.lattice.oidc.client.ServerMetadata;
 import com.lattice.oidc.security.JwtVerifier;
 import com.nimbusds.jwt.JWTClaimsSet;
+import com.typesafe.config.Config;
 import jakarta.inject.Inject;
 import jakarta.inject.Provider;
 import jakarta.inject.Singleton;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import play.mvc.Result;
 
 /**
@@ -46,15 +51,21 @@ public final class TokenGrantHandler {
 
   private static final String ACCESS_TOKEN_TYPE = "urn:ietf:params:oauth:token-type:access_token";
 
+  private static final Logger LOG = LoggerFactory.getLogger(TokenGrantHandler.class);
+
   private final Provider<AuthleteApi> api;
   private final JwtVerifier verifier;
   private final ServerMetadata server;
+  private final boolean strictIdTokenAudience;
 
   @Inject
-  public TokenGrantHandler(Provider<AuthleteApi> api, JwtVerifier verifier, ServerMetadata server) {
+  public TokenGrantHandler(
+      Provider<AuthleteApi> api, JwtVerifier verifier, ServerMetadata server, Config config) {
     this.api = api;
     this.verifier = verifier;
     this.server = server;
+    this.strictIdTokenAudience =
+        config.getBoolean("lattice.token-exchange.strict-id-token-audience");
   }
 
   /**
@@ -72,10 +83,10 @@ public final class TokenGrantHandler {
           case ACCESS_TOKEN, REFRESH_TOKEN ->
               token.getSubjectTokenInfo() == null ? null : token.getSubjectTokenInfo().getSubject();
           // The subject is the "sub" claim of the JWT, which must be signed (not encrypted) by a
-          // trusted
-          // issuer.
-          case JWT, ID_TOKEN ->
-              verifiedSubject(token.getSubjectToken(), null, headers, "invalid_request");
+          // trusted issuer.
+          case JWT -> verifiedSubject(token.getSubjectToken(), null, headers, "invalid_request");
+          // An ID token also has to have been issued to the client exchanging it.
+          case ID_TOKEN -> idTokenSubject(token, clientId, headers);
           // SAML 1.1 / SAML 2.0 assertions and other token types are not supported.
           default ->
               throw TokenResponses.error(
@@ -128,12 +139,62 @@ public final class TokenGrantHandler {
 
   private String verifiedSubject(
       String jwt, Set<String> audiences, Map<String, String> headers, String error) {
+    return verified(jwt, audiences, headers, error).getSubject();
+  }
+
+  private JWTClaimsSet verified(
+      String jwt, Set<String> audiences, Map<String, String> headers, String error) {
     try {
-      JWTClaimsSet claims = verifier.verify(jwt, audiences, false);
-      return claims.getSubject();
+      return verifier.verify(jwt, audiences, false);
     } catch (JwtVerifier.InvalidJwtException e) {
       throw TokenResponses.error(400, error, e.getMessage(), headers);
     }
+  }
+
+  /**
+   * The subject of an ID token presented as {@code subject_token}. Besides the signature, issuer
+   * and expiry checks, the ID token must have been issued to the client exchanging it: its {@code
+   * aud} includes the client's ID or alias here, and its {@code azp}, if any, names that client. An
+   * ID token is a statement to one client that the user signed in there; without this, any client
+   * holding someone else's ID token (from a log, a shared device, a malicious app the user also
+   * signed in to) could turn it into a token for that user.
+   */
+  private String idTokenSubject(TokenResponse token, long clientId, Map<String, String> headers) {
+    JWTClaimsSet claims = verified(token.getSubjectToken(), null, headers, "invalid_request");
+    Set<String> client = new HashSet<>();
+    client.add(Long.toString(clientId));
+    if (token.getClientIdAlias() != null) {
+      client.add(token.getClientIdAlias());
+    }
+    Optional<String> problem = idTokenAudienceProblem(claims, client);
+    if (problem.isPresent()) {
+      if (strictIdTokenAudience) {
+        LOG.info("Refused an ID token exchanged by client {}: {}", clientId, problem.get());
+        throw TokenResponses.error(
+            400, "invalid_request", "The ID token was not issued to this client.", headers);
+      }
+      LOG.warn(
+          "Exchanged an ID token for client {} although {} (strict-id-token-audience is off)",
+          clientId,
+          problem.get());
+    }
+    return claims.getSubject();
+  }
+
+  /** Why the ID token wasn't issued to one of {@code client}'s identifiers, or empty if it was. */
+  static Optional<String> idTokenAudienceProblem(JWTClaimsSet claims, Set<String> client) {
+    List<String> audience = claims.getAudience();
+    if (audience == null || audience.isEmpty()) {
+      return Optional.of("it has no audience");
+    }
+    if (audience.stream().noneMatch(client::contains)) {
+      return Optional.of("it was issued to " + audience);
+    }
+    Object azp = claims.getClaim("azp");
+    if (azp != null && !client.contains(azp.toString())) {
+      return Optional.of("its authorized party is " + azp);
+    }
+    return Optional.empty();
   }
 
   private static long requireClient(TokenResponse token, Map<String, String> headers) {
