@@ -6,7 +6,7 @@ addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.6.2")
 // Newer than the 1.11.7 the Play plugin brings.
 addSbtPlugin("com.github.sbt" % "sbt-native-packager" % "1.13.0")
 // Version and git commit compiled into the app (com.lattice.oidc.BuildInfo).
-addSbtPlugin("com.eed3si9n"       % "sbt-buildinfo" % "0.13.2")
+addSbtPlugin("com.eed3si9n"       % "sbt-buildinfo" % "0.14.0")
 addSbtPlugin("pl.project13.scala" % "sbt-jmh"       % "0.4.8")
 // Writes the ".md5" next to each asset when packaging, which Play needs to fingerprint asset URLs and to
 // cache their digests. A milestone release, built against sbt 2.0.0-RC11 and checked with 2.1.0-M3.
@@ -17,4 +17,4 @@ addSbtPlugin("com.github.sbt" % "sbt-gzip" % "2.1.0-M1")
 // google-java-format for the Java sources: `javafmtAll` formats, `javafmtCheckAll` is what CI runs.
 addSbtPlugin("com.github.sbt" % "sbt-java-formatter" % "0.14.0")
 // Test coverage of the Java code: `sbt --client jacoco` writes target/.../jacoco/report.
-addSbtPlugin("com.github.sbt" % "sbt-jacoco" % "3.7.0")
+addSbtPlugin("com.github.sbt" % "sbt-jacoco" % "3.8.0")

@@ -192,7 +192,7 @@ services:
 
   prometheus:
     profiles: ["monitoring"]
-    image: prom/prometheus:v3.15.1
+    image: prom/prometheus:v3.16.0
     restart: unless-stopped
     <<: *hardening
     command:
