@@ -151,8 +151,21 @@ The access token is sent as usual (`Authorization: Bearer …`, or DPoP with a `
 - **Tokens:** stored as hashes and linked to their grant, so a revocation, `merge` or `replace` can invalidate them.
 - **History:** for audit, since the API itself provides none.
 - **`grant_resource(grant_id)`:** builds the exact JSON of a query response.
+- **One function per operation:** `grant_create`, `grant_activate`, `grant_merge`, `grant_replace`, `grant_revoke` and `grant_cleanup`. Each changes the grant, its tokens and its history together, in one call.
 
-The file ends with every operation (create, activate, merge, replace, query, revoke and cleanup) on sample data, in a transaction that is rolled back. Run it with `psql -f grants.sql`.
+It needs PostgreSQL 19, and uses newer features where they help:
+- **`grant_merge`:** `INSERT … ON CONFLICT DO SELECT` (new in 19) adds the new scopes, claims and details, and in the same statement returns the ones the grant already had. The result separates `added` from `already_granted`, and only what was added goes into the history.
+- **`grant_revoke`:** reads the previous status with `RETURNING old.status` (PostgreSQL 18), so revoking twice records one revocation.
+- **Grant IDs:** `encode(gen_random_uuid()::bytea, 'base64url')`, 122 random bits in 22 URL-safe characters.
+- **Function bodies:** written in standard SQL (`BEGIN ATOMIC`), so they're checked when created and bound to their tables whatever the caller's `search_path`.
+
+And it's built to stay fast as the tables grow:
+- **Deleting a grant:** every foreign key has an index, so the cascade to scopes, claims, details and tokens never scans a whole table. Before, `grant_tokens` only indexed live tokens. Deleting 2,000 grants with 50 tokens each, next to 100,000 other tokens, took 16.5 seconds that way; it now takes 0.14 seconds.
+- **`grant_cleanup`:** finds each kind of obsolete grant through its own index, deletes in batches, and uses `FOR UPDATE SKIP LOCKED`, so several servers can run it at once.
+- **Write-heavy tables:** `grants` leaves free space on each page, so updates to `last_updated_at` are done in place. `grant_tokens` is vacuumed sooner than the default. The comments show how to reclaim space with `REPACK (CONCURRENTLY)`, new in 19.
+- **History:** a BRIN index on `changed_at` serves time ranges and retention for a few pages of index.
+
+The file ends with every operation (create, activate, merge, replace, query, revoke and cleanup) on sample data, in a transaction that is rolled back. Run it with `psql -f grants.sql`; on an older PostgreSQL it stops with a message before creating anything.
 
 ## What a grant is, inside Authlete
 
