@@ -266,7 +266,7 @@ The service runs `haproxy -f /opt/homebrew/etc/haproxy.cfg`, and that file doesn
 brew services stop haproxy
 ```
 
-To run haproxy all the time for something else, write that configuration first, check it, then restart the service. This minimal one forwards `127.0.0.1:8080` to Lattice on port 9000:
+To run haproxy all the time for something else, write that configuration first, check it, then restart the service. For Lattice in production, use [deploy/haproxy/haproxy.cfg](../deploy/haproxy/haproxy.cfg). For a quick local proxy, this minimal one forwards `127.0.0.1:8080` to Lattice on port 9000:
 
 ```
 global

@@ -12,6 +12,7 @@ DOCKER_REGISTRY=ghcr.io DOCKER_USERNAME=<you> \
 | --- | --- |
 | [config/production.conf](config/production.conf) | Production settings for both setups: trusted proxies, allowed host, PostgreSQL and Redis, secure cookies, HSTS, no demo users. Loaded with `-Dconfig.file`. |
 | [compose/](compose/) | One host: Caddy (TLS) → Lattice → PostgreSQL and Valkey, with optional Prometheus and Grafana. |
+| [haproxy/](haproxy/) | A production HAProxy configuration, for running your own load balancer in front of several Lattice servers: TLS with HTTP/2 and HTTP/3, mutual TLS for OAuth clients, per-client limits. |
 | [kubernetes/base/](kubernetes/base/) | Deployment, Service, PodDisruptionBudget, autoscaler, NetworkPolicy, ServiceAccount and namespace. |
 | [kubernetes/overlays/production/](kubernetes/overlays/production/) | One environment: image, host name, settings, secrets, Gateway API route, optional ServiceMonitor. |
 
