@@ -5,6 +5,11 @@ of Caddy in the Compose setup when you run your own load balancer: TLS, several 
 mutual TLS for OAuth clients, per-client limits and health checks. Every setting in it is
 commented with why it's there.
 
+**For a development machine** without certificates, use [haproxy-local.cfg](haproxy-local.cfg) instead:
+plain HTTP on `127.0.0.1:9080` in front of Lattice on port 9000, with the same header cleaning,
+request IDs, logging and health checks, and no HTTPS or mutual-TLS port. Its first lines show how to
+install it with Homebrew.
+
 ## What it does
 
 | Port | What it serves |
@@ -72,27 +77,62 @@ The paths can be changed without editing the file, through the environment:
 `quic` lines print a warning on macOS, which lacks the socket option HAProxy uses for UDP on Linux;
 remove them there.
 
-## How it was tested
+### How `brew services` runs HAProxy on macOS
 
-With HAProxy 3.4.7, a self-signed server certificate and a stub backend that echoes the headers it
-receives (on local ports, with the rate limit lowered to 40 to keep the test short):
+`brew services` is a front end for **launchd**, macOS's service manager (process 1, like systemd
+on Linux). `brew services start haproxy` writes `~/Library/LaunchAgents/sh.brew.haproxy.plist`
+and asks launchd to load it, so HAProxy runs as you and starts when you log in. With
+`sudo brew services start haproxy`, the file goes to `/Library/LaunchDaemons/` instead, so the
+service runs as root and starts at boot, before anyone logs in.
 
-| Check | Result |
-|---|---|
-| `haproxy -c` | Valid. The only warning is the macOS QUIC one above. |
-| `http://` | `308` to `https://` |
-| Forged `X-Forwarded-For`, `Forwarded`, `X-Forwarded-Proto`, `Client-Cert`, `X-Ssl-Cert`, `X-Ssl-Cert-Chain-1` on port 443 | Lattice sees the real address and `https`, and no certificate header |
-| `X-Request-ID: trace-123.abc:9` / `X-Request-ID: bad id <script>` | Kept / replaced with a UUIDv7 |
-| `/metrics`, a 2 MB body | `404`, `413` |
-| 45 requests from one address | 33 `200`, then `429` with `{"error":"too_many_requests",...}` (the earlier checks counted too) |
-| HTTP/2 | Negotiated |
-| Port 8443 with a client certificate, plus forged certificate headers | `Client-Cert` is exactly the presented certificate, as `:<base64 DER>:`; the forged headers are gone |
-| Port 8443 without a certificate, with forged headers | No certificate header reaches Lattice |
-| Port 8443, `/account/login` | `404` |
-| A request to `/cb?code=SECRET-CODE` | Logged as `GET "/cb"`; the code isn't in the log |
-| `127.0.0.1:8404/metrics` | Prometheus metrics |
+launchd reads service files from these folders:
 
-Not tested here: HTTP/3 (macOS), several Lattice servers, and the real Lattice behind it.
+| Folder | For | Runs as | Started when |
+|---|---|---|---|
+| `~/Library/LaunchAgents/` | You only (`brew services start`) | You | You log in |
+| `/Library/LaunchAgents/` | Every user of the Mac (needs an admin to install) | Each user who logs in | They log in |
+| `/Library/LaunchDaemons/` | The whole Mac (`sudo brew services start`) | Root | The Mac starts |
+| `/System/Library/LaunchAgents/` | Apple's own services, per user | Each user who logs in | They log in |
+| `/System/Library/LaunchDaemons/` | Apple's own services, for the whole Mac | Root | The Mac starts |
 
-macOS's built-in `curl` can't complete the handshake on port 8443 ("decode error"): it fails when a
-server asks for an optional client certificate. `openssl s_client` and other clients work.
+The two `/System/Library/` folders are for Apple's services only. They are on macOS's sealed system
+volume, read-only even for root while System Integrity Protection is on, and only macOS updates
+change them. Your own services go in one of the first three.
+
+For example, on a Mac with two accounts, `harmony` and `guest`:
+- **`~/Library/LaunchAgents/sh.brew.haproxy.plist`** (for `harmony`, that's
+  `/Users/harmony/Library/LaunchAgents/...`): HAProxy starts when `harmony` logs in. When `guest`
+  logs in, nothing happens.
+- **The same file in `/Library/LaunchAgents/`:** HAProxy starts for both. With both logged in at
+  once (fast user switching), two copies run, one as `harmony` and one as `guest`.
+- **The same file in `/Library/LaunchDaemons/`:** one copy for the whole Mac, as root, from boot,
+  whether or not anyone has logged in.
+
+So on a single-user Mac, `~/Library/LaunchAgents/` is the right place for anything you run for
+yourself. `/Library/LaunchAgents/` is mainly for software that every account on a shared Mac should
+get.
+
+Only the service file is in these folders. The program, its configuration and its logs stay under
+`/opt/homebrew` (for HAProxy: `opt/haproxy`, `etc/haproxy.cfg`, `var/log/haproxy.log`).
+
+The `.plist` file says what launchd does:
+
+| Key | In Homebrew's HAProxy service | Effect |
+|---|---|---|
+| `ProgramArguments` | `haproxy -f /opt/homebrew/etc/haproxy.cfg` | The command that runs |
+| `RunAtLoad` | `true` | Starts as soon as it's loaded, at every login |
+| `KeepAlive` | `true` | Restarted whenever it exits, even after an error |
+| `StandardOutPath`, `StandardErrorPath` | `/opt/homebrew/var/log/haproxy.log` | Where its output and errors go |
+
+Because of `KeepAlive`, a broken configuration doesn't stop the service: launchd starts HAProxy, it
+exits with an error, and launchd tries again. `brew services` then shows `error 1`, and the reason is
+in the log:
+
+```sh
+brew services                                   # status of every Homebrew service
+tail -5 /opt/homebrew/var/log/haproxy.log       # the error, e.g. a missing configuration file
+launchctl print gui/$(id -u)/sh.brew.haproxy    # launchd's view: state, last exit code, paths
+```
+
+Use `brew services start`, `stop` and `restart` rather than `launchctl` directly, so Homebrew's
+list stays in sync with launchd.

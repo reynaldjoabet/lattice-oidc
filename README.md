@@ -1065,7 +1065,7 @@ When a replica runs out of memory, stalls or slows down, the evidence is gone on
 - a continuous Java Flight Recorder (JFR) recording;
 - a heap dump when memory runs out.
 
-They cost little to keep on, so turn them on before you need them. Everything below was tested on Temurin 25 through Lattice's own start script, and in the `eclipse-temurin:25-jre-noble` base image, except where it says otherwise.
+They cost little to keep on, so turn them on before you need them.
 
 **What's already there:**
 - **Metrics.** Prometheus metrics include the JVM's heap use and GC pauses (`JvmMemoryMetrics`, `JvmGcMetrics`). Dashboards show the trend over days; GC logs and JFR explain a particular minute.
@@ -1122,13 +1122,13 @@ JAVA_OPTS="-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError -XX:+UseG1GC \
 
 | Flag | What it does |
 |---|---|
-| `HeapDumpOnOutOfMemoryError`, `HeapDumpPath` | Writes `java_pid<pid>.hprof` when the heap runs out. Tested: the dump is written **before** `ExitOnOutOfMemoryError` ends the JVM, so the two work together. |
+| `HeapDumpOnOutOfMemoryError`, `HeapDumpPath` | Writes `java_pid<pid>.hprof` when the heap runs out. The dump is written **before** `ExitOnOutOfMemoryError` ends the JVM, so the two work together. |
 | `ErrorFile` | Where a JVM crash writes its `hs_err` report (native frames, registers, flags). By default it goes to the working directory, which is read-only here. |
 | `-Xlog:gc*,gc+phases=debug:file=…` | GC logs with wall-clock time (`time`) and time since start (`uptime`), rotated across 5 files of 20 MiB. `gc+phases=debug` adds each pause's phases, the indented lines in the example below. |
 | `gc-%t.log` | `%t` is the start time, so each restart writes a new file instead of overwriting the one that explains the crash. The slide's `%p` (process ID) doesn't help in a container, where the JVM gets the same PID on every start. |
 | `FlightRecorderOptions:repository` | Keeps JFR's working files on the volume rather than in `/tmp`, so they survive the JVM exiting. |
 | `StartFlightRecording:disk=true,maxage=6h,maxsize=500m` | A continuous recording of the last 6 hours (or 500 MiB): GC, allocations, locks, I/O, CPU and exceptions. The default settings cost about 1% CPU. |
-| `+jdk.InitialEnvironmentVariable#enabled=false` | **Required for Lattice.** By default, JFR records every environment variable. Tested: `AUTHLETE_SERVICE_ACCESSTOKEN` appears in plain text in the recording. `APPLICATION_SECRET` and the database and SMTP passwords would too. |
+| `+jdk.InitialEnvironmentVariable#enabled=false` | **Required for Lattice.** By default, JFR records every environment variable: `AUTHLETE_SERVICE_ACCESSTOKEN` appears in plain text in the recording. `APPLICATION_SECRET` and the database and SMTP passwords would too. |
 | `-Xlog:jfr+startup=off` | JFR otherwise prints three lines to stdout at start, which breaks `LOG_FORMAT=json` parsing. |
 
 **Two corrections to the commonly shown version of these flags:**
@@ -1145,7 +1145,7 @@ The image is a JRE: it has `java` and `jfr`, but no `jcmd`, `jstack` or `jmap`.
 kubectl exec <pod> -c lattice -- kill -QUIT 1   # tini forwards SIGQUIT to the JVM
 ```
 
-**The JFR recording:** copy it off and join the pieces. The newest piece may be unreadable after an OOM exit (tested: `Recording file is stuck in locked stream state`); the earlier ones are complete.
+**The JFR recording:** copy it off and join the pieces. The newest piece may be unreadable after an OOM exit (`Recording file is stuck in locked stream state`); the earlier ones are complete.
 
 ```sh
 kubectl cp <pod>:/diagnostics/jfr ./jfr -c lattice
@@ -1158,7 +1158,7 @@ jfr assemble ./jfr/<directory> recording.jfr
 kubectl debug -it <pod> --target=lattice --image=eclipse-temurin:25-jdk-noble -- bash
 ```
 
-Run it as UID 1001, since attaching needs the same user as the JVM. This step isn't tested here.
+Run it as UID 1001, since attaching needs the same user as the JVM.
 
 #### 5. Reading a GC log
 
@@ -1216,7 +1216,7 @@ Lattice is an authorization server, so its memory holds what an attacker most wa
 | File | Contains secrets? | Handling |
 |---|---|---|
 | GC logs | No: sizes and times only. | Safe to share and to upload to online analysers. |
-| JFR recording | Command-line arguments, system properties, thread names and stack traces. With the flag above, no environment variables. | Before sharing, strip the startup values (tested): `jfr scrub --exclude-events jdk.InitialEnvironmentVariable,jdk.InitialSystemProperty in.jfr out.jfr`. |
+| JFR recording | Command-line arguments, system properties, thread names and stack traces. With the flag above, no environment variables. | Before sharing, strip the startup values: `jfr scrub --exclude-events jdk.InitialEnvironmentVariable,jdk.InitialSystemProperty in.jfr out.jfr`. |
 | Heap dump, core file | **Yes, everything** that was in memory. | Treat it as a credential: never upload it to an online analyser, keep it encrypted and access-controlled, and delete it after the investigation. If it may have leaked, rotate the Authlete token, `APPLICATION_SECRET` and the signing keys. |
 | `hs_err` report | Registers and some memory around the crash. | Treat it like a heap dump. |
 

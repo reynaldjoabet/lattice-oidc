@@ -260,7 +260,7 @@ $ tail -1 /opt/homebrew/var/log/haproxy.log
 [ALERT] config : Cannot open configuration file/directory /opt/homebrew/etc/haproxy.cfg : No such file or directory
 ```
 
-The service runs `haproxy -f /opt/homebrew/etc/haproxy.cfg`, and that file doesn't exist. The service is also set to restart whenever it exits, so it fails, tries again, and adds to the log each time. Stop it; the `haproxy` command stays installed and `run.sh` keeps working:
+The service runs `haproxy -f /opt/homebrew/etc/haproxy.cfg`, and that file doesn't exist. The service is also set to restart whenever it exits, so it fails, tries again, and adds to the log each time. ([How `brew services` runs HAProxy](../deploy/haproxy/README.md#how-brew-services-runs-haproxy-on-macos) explains why.) Stop it; the `haproxy` command stays installed and `run.sh` keeps working:
 
 ```sh
 brew services stop haproxy
