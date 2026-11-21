@@ -249,6 +249,48 @@ Needs `haproxy` or `nginx`, and for `SHARED_STATE=database` also `postgres`, `in
 
 **The `failover` scenario** runs last. Halfway through, it kills one server and counts the requests that failed. It needs `INSTANCES` of 2 or more.
 
+**You don't need haproxy running as a service.** `run.sh` writes its own configuration from `perf/proxy/haproxy.cfg.template` and starts `haproxy -f` itself, only for the test. If `brew services` shows haproxy with `error 1`, it's because Homebrew's service expects a configuration that Homebrew doesn't install:
+
+```sh
+$ brew services
+Name     Status  User   File
+haproxy  error  1 you   ~/Library/LaunchAgents/sh.brew.haproxy.plist
+
+$ tail -1 /opt/homebrew/var/log/haproxy.log
+[ALERT] config : Cannot open configuration file/directory /opt/homebrew/etc/haproxy.cfg : No such file or directory
+```
+
+The service runs `haproxy -f /opt/homebrew/etc/haproxy.cfg`, and that file doesn't exist. The service is also set to restart whenever it exits, so it fails, tries again, and adds to the log each time. Stop it; the `haproxy` command stays installed and `run.sh` keeps working:
+
+```sh
+brew services stop haproxy
+```
+
+To run haproxy all the time for something else, write that configuration first, check it, then restart the service. This minimal one forwards `127.0.0.1:8080` to Lattice on port 9000:
+
+```
+global
+    log stdout format raw local0
+
+defaults
+    mode http
+    timeout connect 5s
+    timeout client  30s
+    timeout server  30s
+
+frontend web
+    bind 127.0.0.1:8080
+    default_backend app
+
+backend app
+    server app1 127.0.0.1:9000 check
+```
+
+```sh
+haproxy -c -f /opt/homebrew/etc/haproxy.cfg   # checks the file
+brew services restart haproxy
+```
+
 ### What it showed (Apple M1, in-memory state per server, 3 servers)
 
 | Test | Result |
