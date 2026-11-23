@@ -47,7 +47,7 @@ object Dependencies {
     // Jakarta Persistence (JPA) annotations, for the Keycloak entities in docs/keycloak.
     val jakartaPersistence = "3.2.0"
     // Hibernate ORM: the JPA implementation.
-    val hibernate = "7.4.16.Final"
+    val hibernate = "7.4.17.Final"
     // A real PostgreSQL for the storage tests, in Docker.
     val testcontainers = "2.0.5"
 
@@ -65,7 +65,7 @@ object Dependencies {
     // --- Logging ---
     val scribe  = "3.19.1"
     val slf4j   = "2.0.20"
-    val logback = "1.6.7"
+    val logback = "1.6.8"
 
     // --- Cache ---
     val caffeine = "3.3.1"
@@ -88,7 +88,7 @@ object Dependencies {
     val snakeyaml        = "2.7"
 
     // --- Observability ---
-    val micrometer = "1.17.2"
+    val micrometer = "1.18.0"
     val datadog    = "2.62.0"
     val kamon      = "2.8.1"
     val otel4s     = "1.2.0"
