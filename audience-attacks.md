@@ -257,6 +257,15 @@ WARN  c.l.o.s.ClientAssertionAudience  Accepted a client assertion from client h
 
 When the warnings stop, remove the setting.
 
+**Clients built with the Nimbus OAuth 2.0 SDK** choose the audience themselves: it's the `audience`
+argument of `new PrivateKeyJWT(clientID, audience, ...)` (and of `ClientSecretJWT`). Pass the
+authorization server's issuer, as the SDK's own documentation suggests, not its token endpoint. The
+SDK doesn't add `typ: client-authentication+jwt`, which Lattice doesn't require.
+
+**Servers built with the same SDK** get this rule from `JWTAuthenticationClaimsSetVerifier` with
+`JWTAudienceCheck.STRICT` (a single audience) and only the issuer as the permitted audience. Its
+default, `LEGACY`, accepts a list that includes the expected value.
+
 ---
 
 ## 2. ID tokens in token exchange (RFC 8693)

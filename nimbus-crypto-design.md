@@ -6,9 +6,9 @@ Nimbus JOSE+JWT is the Java library behind most JWT handling on the JVM, Lattice
 - **What Nimbus does**, with the file under `src/main/java/com/nimbusds/jose/crypto/`.
 - **A port:** a self-contained version in plain JDK code.
 
-All the ports are in [docs/nimbus-crypto/Ports.java](docs/nimbus-crypto/Ports.java), with checks for each. Run them with `java docs/nimbus-crypto/Ports.java`; all 24 pass.
+All the ports are in [app/com/lattice/oidc/Ports.java](app/com/lattice/oidc/Ports.java), with checks for each. Run them with `java app/com/lattice/oidc/Ports.java`; all 24 pass.
 
-Read against Nimbus `d919f7bf` (2 April 2026).
+Checked against Nimbus JOSE+JWT 10.10 (September 2026), the version Lattice uses.
 
 ## 1. Fail closed on what you don't understand
 
@@ -82,7 +82,7 @@ static byte[] unwrapOrRandom(KeyUnwrap unwrap, byte[] wrapped, int keyBytes, Sec
 
 The general lesson: when an error path exposes secret-dependent information, don't hide the error message, remove the branch. RSA-OAEP fixes this at the protocol level, which is why `RSA1_5` is deprecated.
 
-**A bug in Nimbus here:** `RSADecrypter` stores the caught exception in `cekDecryptionException`, then sets that field to `null` two lines later, unconditionally. So the accessor meant for debugging never returns anything. It's harmless to security, but the debugging aid can't work.
+**A bug in Nimbus here, still present in 10.10:** `RSADecrypter` stores the caught exception in `cekDecryptionException`, then sets that field to `null` two lines later, unconditionally. So the accessor meant for debugging never returns anything. It's harmless to security, but the debugging aid can't work.
 
 ## 4. Authenticate before you decrypt, over length-framed input
 
@@ -155,7 +155,7 @@ This is worth copying anywhere a function judges untrusted input.
 
 **Nimbus** (`utils/ECChecks.java`): checks the equation for the sender's ephemeral key in `ECDHDecrypter`, for the public key in `ECDSAVerifier`, and in ECDH-1PU.
 
-**A gap:** it checks only the equation, not that the coordinates are field elements, from 0 to $p - 1$. Since $(x + p)^3 \equiv x^3 \pmod{p}$, the point $(x + p, y)$ passes too. In practice the JDK's own key validation catches this, but the check isn't complete by itself. The port adds the range and the point at infinity:
+**A gap, still present in 10.10:** it checks only the equation, not that the coordinates are field elements, from 0 to $p - 1$. Since $(x + p)^3 \equiv x^3 \pmod{p}$, the point $(x + p, y)$ passes too. In practice the JDK's own key validation catches this, but the check isn't complete by itself. The port adds the range and the point at infinity:
 
 ```java
 static boolean onCurve(ECPoint point, ECParameterSpec spec) {
@@ -177,9 +177,9 @@ The full check in NIST SP 800-56A §5.6.2.3.3 also requires $n \cdot Q = \mathca
 
 **Nimbus** has two:
 - **PBES2 iteration count** (`PasswordBasedDecrypter.java`): the `p2c` header sets how many PBKDF2 rounds to run. A token with `p2c` set to two billion would occupy a CPU for minutes. Nimbus refuses more than 1,000,000. This was CVE-2023-52428.
-- **Decompression** (`JWEObject.MAX_COMPRESSED_CIPHER_TEXT_LENGTH`, `opts/MaxCompressedCipherTextLength.java`): JWE can deflate the plaintext (`"zip": "DEF"`). Nimbus limits compressed ciphertext to 100,000 bytes.
+- **Decompression** (`JWEObject`, `util/DeflateUtils.java`): JWE can deflate the plaintext (`"zip": "DEF"`). Nimbus limits the compressed ciphertext to 100,000 bytes (`MAX_COMPRESSED_CIPHER_TEXT_LENGTH`), and since 10.10 also the decompressed output, to 1,000,000 bytes (`MAX_DECOMPRESSED_PLAIN_TEXT_LENGTH`).
 
-**A gap in the second one:** it limits the input, but a decompression bomb is about the output. `util/DeflateUtils.decompress` inflates until the stream ends. DEFLATE's maximum ratio is about 1,032:1, and the check in `Ports.java` shows 10 MB of zeros compressing to 9,732 bytes, well under the limit. So one token can make Nimbus allocate about 100 MB. Anyone with the server's public key can create such a token, because public-key JWE needs no secret to encrypt. The port caps the output instead:
+**Why the output limit matters:** a decompression bomb is about the output, not the input. DEFLATE's maximum ratio is about 1,032:1, and the check in `Ports.java` shows 10 MB of zeros compressing to 9,732 bytes, well under the input limit. Before 10.10, `DeflateUtils.decompress` inflated until the stream ended, so one token could make Nimbus allocate about 100 MB. Anyone with the server's public key can create such a token, because public-key JWE needs no secret to encrypt. 10.10 (issue #611) stops inflating once the output would pass the limit, and each decrypter takes a `MaxDecompressedPlainTextLength` option to lower or raise it. The port does the same:
 
 ```java
 static byte[] inflate(byte[] compressed, int maxBytes) throws DataFormatException {
@@ -270,7 +270,7 @@ iv.value = cipher.getParameters().getParameterSpec(GCMParameterSpec.class).getIV
 
 **The pattern.** `Arrays.equals` stops at the first difference, so its timing tells an attacker how many leading bytes they got right. MACs, tokens and API keys must be compared in time that doesn't depend on where they differ.
 
-**Nimbus** (`utils/ConstantTimeUtils.areEqual`): XORs every byte pair into an accumulator. But it returns `false` **early** when the lengths differ, which reveals the secret's length.
+**Nimbus** (`utils/ConstantTimeUtils.areEqual`): XORs every byte pair into an accumulator. But it returns `false` **early** when the lengths differ, which reveals the secret's length. 10.10 still does.
 
 **The JDK does better.** `MessageDigest.isEqual` (JDK 25 source) never returns early. It folds the length difference into the result, and loops over the first argument's length, reading the second with a branch-free index:
 
@@ -285,11 +285,12 @@ return result == 0;
 
 Its running time depends only on `lenA`. So **pass the attacker's value first**: then the timing reveals only something the attacker already knows.
 
-**In Lattice:** `MessageDigest.isEqual` is used everywhere, but two calls put the secret first, so the timing reveals the secret's length:
-- **[IntrospectionController.java:100](app/com/lattice/oidc/controllers/IntrospectionController.java#L100):** the resource server's secret.
+**In Lattice:** `MessageDigest.isEqual` is used everywhere, but three calls put the secret first, so the timing reveals the secret's length:
+- **[CibaHandler.java:166](app/com/lattice/oidc/handlers/CibaHandler.java#L166):** the user's CIBA user code. This one matters most: a user code is short and chosen by the user, so its length narrows the guesses.
+- **[IntrospectionController.java:159](app/com/lattice/oidc/controllers/IntrospectionController.java#L159):** the resource server's secret.
 - **[MetricsController.java:37](app/com/lattice/oidc/controllers/MetricsController.java#L37):** the metrics token.
 
-The risk is low: both secrets are long and random, so knowing the length doesn't help guess them. The fix is to swap the arguments.
+The resource server secret and the metrics token are long and random, so knowing their length doesn't help guess them. The fix is the same for all three: pass the presented value first. The other calls (`DPoP`, `Thumbprints`, `PasswordHasher`, `Totp`, `HS256`) compare values of fixed length, so their order doesn't matter.
 
 ## 13. Separate domains
 
@@ -324,7 +325,7 @@ Lattice's pairwise `sub` is the same idea: an HMAC keyed per deployment, over th
 | 5 | Signature shape checked before verifying | `impl/ECDSA` | |
 | 6 | False for bad input, throw for broken setup | `ECDSAVerifier` | |
 | 7 | Untrusted points checked against the curve | `utils/ECChecks` | No coordinate range check |
-| 8 | Ceilings on attacker-sized work | `PasswordBasedDecrypter`, `JWEObject` | Bomb limit on input, not output |
+| 8 | Ceilings on attacker-sized work | `PasswordBasedDecrypter`, `JWEObject` | Bomb limit on input only, fixed in 10.10 |
 | 9 | Exact AEAD IV and tag sizes | `impl/AESGCM` | |
 | 10 | Key validated at construction, capabilities from the key | `impl/MACProvider` | |
 | 11 | Report the IV the provider used | `impl/AESGCM` | |
